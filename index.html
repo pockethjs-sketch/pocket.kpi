@@ -122,13 +122,26 @@
   .period-head .ph-eyebrow{font-size:12px;font-weight:700;color:var(--brand);background:#e9f0ff;border:1px solid #d4e2ff;padding:4px 11px;border-radius:100px}
   .period-head .ph-period{font-family:var(--pop);font-size:22px;font-weight:700;color:var(--ink);letter-spacing:-.4px}
   .period-head .ph-cnt{font-size:12.5px;color:var(--gray);font-weight:600;margin-left:auto}
+  .ctype-toggle{display:inline-flex;gap:4px;background:#eef2f7;border-radius:100px;padding:3px}
+  .ct-btn{border:none;background:transparent;color:var(--gray);font-family:inherit;font-size:12px;font-weight:700;padding:5px 14px;border-radius:100px;cursor:pointer;transition:.12s}
+  .ct-btn:hover{color:var(--ink)}
+  .ct-btn.on{background:#fff;color:var(--brand);box-shadow:0 1px 4px rgba(15,23,42,.10)}
+  .kpi-card{position:relative}
+  .kpi-edit{position:absolute;top:12px;right:12px;background:#eef2f7;border:none;width:27px;height:27px;border-radius:8px;cursor:pointer;font-size:12px;opacity:0;transition:.15s;z-index:3}
+  .kpi-card:hover .kpi-edit{opacity:1}
+  .sv-form{display:flex;flex-direction:column;gap:14px}
+  .sv-f{display:flex;flex-direction:column;gap:5px}
+  .sv-f label{font-size:12px;font-weight:700;color:var(--gray)}
+  .sv-f .inp{width:100%}
+  .sv-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:4px}
+  .sv-hint{font-size:11.5px;color:var(--gray-l);line-height:1.6;background:var(--bg);border-radius:10px;padding:10px 12px}
   /* clickable stat + breakdown modal */
   .stat.clickable{cursor:pointer}
   .stat .st-go{position:absolute;top:14px;right:15px;font-size:16px;font-weight:800;color:var(--gray-l);opacity:0;transition:.15s;z-index:2}
   .stat.clickable:hover .st-go{opacity:1;color:var(--brand)}
   .modal-overlay{position:fixed;inset:0;z-index:200;background:rgba(14,20,30,.45);display:flex;align-items:center;justify-content:center;padding:20px}
   .modal-overlay.hide{display:none}
-  .modal-card{background:#fff;border-radius:18px;box-shadow:0 30px 80px rgba(14,20,30,.32);width:100%;max-width:460px;max-height:82vh;display:flex;flex-direction:column;overflow:hidden}
+  .modal-card{background:#fff;border-radius:18px;box-shadow:0 30px 80px rgba(14,20,30,.32);width:100%;max-width:720px;max-height:85vh;display:flex;flex-direction:column;overflow:hidden}
   .modal-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:17px 22px;border-bottom:1px solid var(--border)}
   .modal-head h3{font-size:16px;font-weight:800;color:var(--ink)}
   .modal-x{border:none;background:#f0f3f8;width:30px;height:30px;border-radius:8px;cursor:pointer;color:var(--gray);font-size:12px;font-weight:700;flex-shrink:0}
@@ -139,7 +152,7 @@
   .bd-pill{display:inline-block;background:#e9f0ff;color:var(--brand);font-weight:700;padding:2px 9px;border-radius:100px;font-size:11.5px;margin-right:4px}
   .bd-big{font-family:var(--pop);font-size:30px;font-weight:700;color:var(--brand);letter-spacing:-.5px;margin-bottom:3px}
   .bd-count{font-size:11.5px;color:var(--gray-l);margin-bottom:14px;font-weight:600}
-  .bd-list{display:flex;flex-direction:column;border-top:1px solid var(--border)}
+  .bd-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:0 26px}
   .bd-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 2px;border-bottom:1px solid #f1f3f7;font-size:13px}
   .bd-l{color:var(--ink);font-weight:600;display:flex;flex-direction:column;gap:2px;min-width:0}
   .bd-l .bd-sub{font-size:11px;color:var(--gray-l);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -358,6 +371,7 @@ function loadState(){
   if(!s) s=clone(SEED);
   s.deals = s.deals||[]; s.services = s.services||[]; s.logs = s.logs||[];
   s.deals.forEach(d=>{ if(!d._id) d._id=newId(); });
+  s.services.forEach(sv=>{ if(!sv._id) sv._id=newSvcId(); });
   return s;
 }
 function save(){
@@ -388,12 +402,14 @@ function _s(v){ return v==null?'':String(v); }
 function _b(v){ return v===true||v===1||v==='TRUE'||v==='true'||v==='Yes'||v==='Y'; }
 function newId(){ return 'd'+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
 function normDeal(d){ return { _id:String(d._id||newId()), name:_s(d.name), rep:_s(d.rep), service:_s(d.service), prob:_s(d.prob), ctype:_s(d.ctype), amount:Number(d.amount)||0, paid:Number(d.paid)||0, contract:_b(d.contract), ccount:Number(d.ccount)||0, meetings:Number(d.meetings)||0, date:_s(d.date), push:_b(d.push) }; }
-function normSvc(s){ var t=_s(s.target); var m=t.match(/^(\d{4})-(\d{2})-(\d{2})$/); if(m)t=(+m[2])+'/'+(+m[3]); return { name:_s(s.name), target:t, price:_s(s.price), rr:_s(s.rr), edited:_s(s.edited) }; }
+function newSvcId(){ return 's'+Date.now().toString(36)+Math.random().toString(36).slice(2,5); }
+function normSvc(s){ var t=_s(s.target); var m=t.match(/^(\d{4})-(\d{2})-(\d{2})$/); if(m)t=(+m[2])+'/'+(+m[3]); return { _id:_s(s._id)||newSvcId(), name:_s(s.name), target:t, price:_s(s.price), rr:_s(s.rr), edited:_s(s.edited) }; }
 function cloudGet(){ return fetch(SHEET_URL+'?token='+encodeURIComponent(SHEET_TOKEN)).then(r=>{ if(!r.ok)throw new Error('HTTP '+r.status); return r.json(); }); }
 function cloudPost(p){ p.token=SHEET_TOKEN; return fetch(SHEET_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(p)}).then(r=>{ if(!r.ok)throw new Error('HTTP '+r.status); return r.json(); }); }
 function pushDeal(d){ if(!CLOUD)return; outbox[d._id]={op:'up',deal:JSON.parse(JSON.stringify(d))}; saveOutbox(); flushOutbox(); }
 function pushDel(id){ if(!CLOUD)return; outbox[id]={op:'del'}; saveOutbox(); flushOutbox(); }
 function pushLog(l){ if(!CLOUD||!l)return; cloudPost({action:'appendLog',log:l}).catch(e=>console.warn('log sync fail',e)); }
+function pushService(s){ if(!CLOUD)return; outbox[s._id]={op:'svc',service:JSON.parse(JSON.stringify(s))}; saveOutbox(); flushOutbox(); }
 async function flushOutbox(){
   if(!CLOUD||_flushing)return;
   if(!outboxN()){ setSync('ok'); return; }
@@ -402,7 +418,7 @@ async function flushOutbox(){
   try{
     for(const id of Object.keys(outbox)){
       const e=outbox[id]; let o;
-      try{ o = e.op==='del' ? await cloudPost({action:'deleteDeal',id:id}) : await cloudPost({action:'upsertDeal',deal:e.deal}); }
+      try{ o = e.op==='del' ? await cloudPost({action:'deleteDeal',id:id}) : e.op==='svc' ? await cloudPost({action:'upsertService',service:e.service}) : await cloudPost({action:'upsertDeal',deal:e.deal}); }
       catch(err){ break; }
       if(o&&o.ok){ delete outbox[id]; saveOutbox(); } else break;
     }
@@ -410,6 +426,7 @@ async function flushOutbox(){
 }
 function applyOutbox(){ for(const id in outbox){ const e=outbox[id];
   if(e.op==='del'){ state.deals=state.deals.filter(d=>d._id!==id); }
+  else if(e.op==='svc'&&e.service){ const i=state.services.findIndex(s=>s._id===id); if(i>=0)state.services[i]=e.service; else state.services.push(e.service); }
   else if(e.deal){ const i=state.deals.findIndex(d=>d._id===id); if(i>=0)state.deals[i]=e.deal; else state.deals.unshift(e.deal); } } }
 async function cloudLoad(){
   if(!CLOUD)return;
@@ -492,6 +509,7 @@ const TABS=[
 ];
 let cur='dash';
 let dashMonth='';
+let dashCtype='';
 function renderNav(){
   document.getElementById('nav').innerHTML = TABS.map(t=>
     `<div class="tab ${t.id===cur?'active':''}" onclick="go('${t.id}')">${t.icon} ${t.label}</div>`).join('');
@@ -573,6 +591,7 @@ function renderMonthSelect(){
   sel.value=dashMonth;
 }
 function setDashMonth(m){ dashMonth=m; if(m)calYM=m; render(); }
+function setDashCtype(c){ dashCtype=c; render(); }
 function monthLabel(m){ if(!m)return '전체 기간'; const ms=monthsList(); const yrs=[...new Set(ms.map(x=>x.slice(0,4)))]; return (yrs.length===1?yrs[0]+'년 ':m.slice(0,4)+'.')+(+m.slice(5,7))+'월'; }
 let _lastFocus=null;
 function openModalShell(){ _lastFocus=document.activeElement; const m=document.getElementById('modal'); m.classList.remove('hide'); const x=m.querySelector('.modal-x'); if(x){try{x.focus()}catch(e){}} }
@@ -595,10 +614,6 @@ function showBreakdown(key){
     const ds=dl.filter(d=>d.contract&&(+d.amount||0)>0).sort((a,b)=>(+b.amount||0)-(+a.amount||0));
     bdModal('계약 금액', pfx+' <b>계약=Y</b>(성사)인 딜의 금액만 더한 값이에요.', won(t.camount),
       ds.map(d=>({label:d.name||'(이름없음)',sub:sv(d.service),value:won(d.amount)})), ds.length+'건 계약 합산');
-  } else if(key==='paid'){
-    const ds=dl.filter(d=>(+d.paid||0)>0).sort((a,b)=>(+b.paid||0)-(+a.paid||0));
-    bdModal('결제완료 금액', pfx+' 딜별 <b>결제완료 금액</b>을 더한 값이에요.', won(t.paid),
-      ds.map(d=>({label:d.name||'(이름없음)',sub:sv(d.service),value:won(d.paid)})), ds.length+'건 합산');
   } else if(key==='cm'){
     const ds=dl.filter(d=>(+d.ccount||0)>0||(+d.meetings||0)>0).sort((a,b)=>(+b.meetings||0)-(+a.meetings||0));
     bdModal('총 계약 / 미팅', pfx+' <b>계약수</b>=신규계약 합, <b>미팅</b>=미팅 횟수 합. 딜별 기여분이에요.', `${t.ccount} 계약 · ${t.meetings} 미팅`,
@@ -644,7 +659,8 @@ function showServiceDetail(name){
 document.addEventListener('click',e=>{ const c=e.target.closest('.kpi-card[data-svc]'); if(c)showServiceDetail(c.dataset.svc); });
 document.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ const t=e.target; if(t&&t.classList&&t.classList.contains('clickable')&&(t.classList.contains('stat')||t.classList.contains('kpi-card'))){ e.preventDefault(); t.click(); } } });
 function viewDash(){
-  const dl = periodDeals();
+  let dl = periodDeals();
+  if(dashCtype) dl = dl.filter(d=>(d.ctype||'')===dashCtype);
   const t=totals(dl); const r=rollup(dl);
   const stat=(label,value,delta,accent,ic,key)=>`<div class="stat clickable" role="button" tabindex="0" aria-label="${label} 상세" style="--accent:${accent}" onclick="showBreakdown('${key}')"><span class="st-go">›</span><div class="st-ic">${ic||''}</div><div class="label">${label}</div><div class="value">${value}</div>${delta?`<div class="delta">${delta}</div>`:''}</div>`;
   const svcAmt=Object.values(r).filter(x=>x.amount>0).sort((a,b)=>b.amount-a.amount).slice(0,9)
@@ -664,11 +680,12 @@ function viewDash(){
   const periodTxt=dashMonth?plabel(dashMonth):'전체 기간';
 
   return `
-  <div class="period-head"><span class="ph-eyebrow">성과 요약</span><span class="ph-period">${periodTxt}</span><span class="ph-cnt">${dl.length}건 · 파이프라인 ${won(t.amount)}</span></div>
+  <div class="period-head"><span class="ph-eyebrow">성과 요약</span><span class="ph-period">${periodTxt}</span>
+    <div class="ctype-toggle">${['','신규','기존'].map(c=>`<button class="ct-btn ${dashCtype===c?'on':''}" onclick="setDashCtype('${c}')">${c||'전체'}</button>`).join('')}</div>
+    <span class="ph-cnt">${dl.length}건 · 파이프라인 ${won(t.amount)}</span></div>
   <div class="grid stat-grid" style="margin-bottom:22px">
     ${stat('총 파이프라인 금액',won(t.amount),dl.length+'개 딜',' var(--blue)','💰','pipeline')}
     ${stat('계약 금액',won(t.camount),pct(t.amount?t.camount/t.amount:0)+' 성약',' var(--gold)','🤝','contracted')}
-    ${stat('결제완료 금액',won(t.paid),pct(t.camount?t.paid/t.camount:0)+' 수금',' var(--green)','💳','paid')}
     ${stat('총 계약 / 미팅',t.ccount+' / '+t.meetings,'신규계약 기준',' var(--purple)','📌','cm')}
     ${stat('전체 전환율',pct(t.conv),'계약 ÷ 미팅',' var(--brand)','🎯','conv')}
     ${stat('신규 : 기존',t.신규+' : '+t.기존,'고객 구성',' var(--cyan)','👥','ctype')}
@@ -693,7 +710,6 @@ const DEAL_COLS=[
   {key:'prob',label:'가능성',type:'select',opts:()=>['',...PROBS]},
   {key:'ctype',label:'고객',type:'select',opts:()=>['',...CTYPES]},
   {key:'amount',label:'금액',type:'won'},
-  {key:'paid',label:'결제완료',type:'won'},
   {key:'contract',label:'계약',type:'bool'},
   {key:'ccount',label:'계약수',type:'num'},
   {key:'meetings',label:'미팅',type:'num'},
@@ -852,6 +868,7 @@ function kpiCard(s,r){
   const cc=convColor(x.conv);
   const tm=(s.target||'').match(/(\d+)\s*\/\s*(\d+)/); const tg=tm?Math.min(100,(+tm[1]/(+tm[2]||1))*100):0;
   return `<div class="kpi-card clickable" role="button" tabindex="0" aria-label="${esc(s.name)} 계약·미팅 상세" data-svc="${esc(s.name)}">
+    <button class="kpi-edit" onclick="event.stopPropagation();openServiceEdit('${esc(s._id)}')" title="수정" aria-label="서비스 수정">✏️</button>
     <div class="top">
       <div><div class="nm">${esc(s.name)}</div>${s.price?`<div class="price">💵 ${esc(s.price)}</div>`:''}${s.rr?`<div class="rr">👤 ${esc(s.rr)}</div>`:''}</div>
       <div class="conv-ring" style="background:conic-gradient(${cc} ${x.conv*100}%, #eef1f6 0)"><span style="color:${cc}">${Math.round(x.conv*100)}%</span></div>
@@ -862,7 +879,7 @@ function kpiCard(s,r){
       <div class="kpi-metric"><div class="m-v" style="font-size:13px">${won(x.camount)}</div><div class="m-l">계약금액</div></div>
     </div>
     ${s.target?`<div><div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:5px"><span>월 KPI 목표</span><span style="font-weight:700;color:var(--text)">${esc(s.target)}</span></div><div class="target-bar"><i style="width:${tg}%"></i></div></div>`:''}
-    <div style="font-size:11px;color:var(--muted-2)">연결된 딜 ${x.deals}건 · 파이프라인 ${won(x.amount)} · 결제완료 ${won(x.paid)}</div>
+    <div style="font-size:11px;color:var(--muted-2)">연결된 딜 ${x.deals}건 · 파이프라인 ${won(x.amount)}</div>
   </div>`;
 }
 function viewKPI(){
@@ -878,8 +895,44 @@ function viewKPI(){
       <div class="kpi-row">${arr.map(s=>kpiCard(s,r)).join('')}</div>
     </div>`;
   }).join('');
-  return `<div class="phase-banner">🎯 <span><b>빌드업 서비스</b>를 <b>지원사업·투자유치·브랜딩·개발</b> 카테고리로 묶었어요(제안 미선택 등은 기타). 카드의 계약수·미팅·계약금액은 딜에서 자동 집계, <b>전환율 = 계약수 ÷ 미팅</b>. <b>카드를 누르면 계약·미팅 상세</b>가 열려요.</span></div>
+  return `<div class="phase-banner">🎯 <span><b>빌드업 서비스</b>를 카테고리로 묶었어요. 카드 클릭=계약·미팅 상세, <b>✏️=수정</b>, 우측 <b>+ 빌드업 추가</b>로 새 서비스 생성. 전환율=계약수÷미팅.</span></div>
+  <div class="toolbar" style="margin-bottom:14px"><span class="grow"></span><button class="btn primary" onclick="openServiceEdit(null)">+ 빌드업 추가</button></div>
   ${sections}`;
+}
+
+function openServiceEdit(id){
+  const s = id ? state.services.find(x=>x._id===id) : null;
+  document.getElementById('modalTitle').textContent = s ? '빌드업 수정' : '빌드업 추가';
+  document.getElementById('modalBody').innerHTML = `
+    <div class="sv-form">
+      <div class="sv-f"><label>서비스명 (앞 번호로 카테고리 분류)</label><input id="sv-name" class="inp" value="${s?esc(s.name):''}" placeholder="예: 17. 신규 서비스"></div>
+      <div class="sv-f"><label>월 KPI 목표</label><input id="sv-target" class="inp" value="${s?esc(s.target):''}" placeholder="예: 2/10"></div>
+      <div class="sv-f"><label>가격정책</label><input id="sv-price" class="inp" value="${s?esc(s.price):''}" placeholder="예: 월 관리 280"></div>
+      <div class="sv-f"><label>담당 R&R</label><input id="sv-rr" class="inp" value="${s?esc(s.rr):''}" placeholder="담당자명"></div>
+      <div class="sv-actions"><button class="btn" onclick="closeModal()">취소</button><button class="btn primary" onclick="saveService(${s?("'"+esc(s._id)+"'"):'null'})">저장</button></div>
+      <div class="sv-hint">카테고리: 앞 번호 1~4 지원사업 · 5~8 투자유치 · 9~12 브랜딩 · 13~16 개발 · 그 외 기타. 서비스명을 바꾸면 연결된 딜들도 새 이름으로 함께 갱신됩니다.</div>
+    </div>`;
+  openModalShell();
+  setTimeout(()=>{ const n=document.getElementById('sv-name'); if(n)n.focus(); },0);
+}
+function saveService(id){
+  const g=x=>document.getElementById(x);
+  const name=(g('sv-name').value||'').trim();
+  if(!name){ alert('서비스명을 입력하세요'); return; }
+  const target=(g('sv-target').value||'').trim(), price=(g('sv-price').value||'').trim(), rr=(g('sv-rr').value||'').trim();
+  if(id){
+    const s=state.services.find(x=>x._id===id); if(!s){ closeModal(); return; }
+    const oldName=s.name; s.name=name; s.target=target; s.price=price; s.rr=rr;
+    if(oldName!==name){ state.deals.forEach(d=>{ if(d.service===oldName){ d.service=name; pushDeal(d); } }); }
+    logChange('수정','빌드업: '+name, oldName!==name?('이름 '+oldName+' → '+name):'정보 수정');
+    pushService(s);
+  } else {
+    const s={_id:newSvcId(),name:name,target:target,price:price,rr:rr,edited:''};
+    state.services.push(s);
+    logChange('추가','빌드업: '+name,'');
+    pushService(s);
+  }
+  save(); closeModal(); render();
 }
 
 /* ===================== CHANGE LOG ===================== */
@@ -1010,7 +1063,7 @@ function download(name,content,type){ const b=new Blob([content],{type}); const 
 function exportJSON(){ download('포켓성과관리_'+today()+'.json',JSON.stringify(state,null,2),'application/json'); }
 function exportCSV(){
   const cols=DEAL_COLS.map(c=>c.key);
-  const head=['이름','영업자','서비스','가능성','고객','금액','결제완료','계약','계약수','미팅','날짜','push'];
+  const head=['이름','영업자','서비스','가능성','고객','금액','계약','계약수','미팅','날짜','push'];
   const rows=state.deals.map(d=>cols.map(k=>{ let v=d[k]; if(typeof v==='boolean')v=v?'Yes':'No'; v=String(v==null?'':v); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }).join(','));
   download('포켓딜_'+today()+'.csv','﻿'+head.join(',')+'\n'+rows.join('\n'),'text/csv');
 }
