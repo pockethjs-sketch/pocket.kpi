@@ -317,6 +317,7 @@
   <div class="tools">
     <span class="user-chip" id="userChip" onclick="changeUser()" title="이름 변경"></span>
     <span class="save-dot" id="saveDot"><i></i>자동저장됨</span>
+    <button class="btn ghost" onclick="cloudRefresh()" title="시트에서 새로고침">🔄</button>
     <span class="hd-period"><span class="hd-period-ic">📅</span><select class="hd-month" id="hdMonth" onchange="setDashMonth(this.value)" title="기간(월) 선택"></select></span>
     <button class="btn ghost" onclick="document.getElementById('importFile').click()">⬆ 가져오기</button>
     <button class="btn danger ghost" onclick="resetData()">↺ 원본복원</button>
@@ -342,6 +343,10 @@ const LS_KEY = 'pocket_perf_v1';
 const PASSWORD = 'pocket0510';
 const AUTH_KEY = 'pocket_perf_auth';
 const USER_KEY = 'pocket_perf_user';
+/* === Google Sheets 연동 (비우면 localStorage 단독 모드) === */
+const SHEET_URL = 'https://script.google.com/macros/s/AKfycbwlL4iveTbVVAwjhvU21vMJptgMd2_NAtDt5zR8-PpxyolXGRJQdPdTIzUgkhvyaBME/exec';
+const SHEET_TOKEN = 'pocketperf26x9f3';
+const CLOUD = !!SHEET_URL;
 let currentUser = localStorage.getItem(USER_KEY) || '';
 let uid = 1;
 let state = loadState();
@@ -352,7 +357,7 @@ function loadState(){
   try{ const raw=localStorage.getItem(LS_KEY); if(raw) s=JSON.parse(raw); }catch(e){}
   if(!s) s=clone(SEED);
   s.deals = s.deals||[]; s.services = s.services||[]; s.logs = s.logs||[];
-  s.deals.forEach(d=>{ if(!d._id) d._id='d'+(uid++); });
+  s.deals.forEach(d=>{ if(!d._id) d._id=newId(); });
   return s;
 }
 function save(){
@@ -360,9 +365,73 @@ function save(){
 }
 let saveTimer;
 function flashSave(){
+  if(CLOUD)return;
   const d=document.getElementById('saveDot');
+  if(!d)return;
   d.style.opacity='1'; clearTimeout(saveTimer);
   saveTimer=setTimeout(()=>{ d.style.opacity='.6'; },1200);
+}
+/* ===================== GOOGLE SHEETS SYNC ===================== */
+let outbox = (()=>{ try{ return JSON.parse(localStorage.getItem('pocket_perf_outbox')||'{}'); }catch(e){ return {}; } })();
+let _flushing=false, _lastLoadFail=false;
+function saveOutbox(){ try{ localStorage.setItem('pocket_perf_outbox', JSON.stringify(outbox)); }catch(e){} }
+function outboxN(){ return Object.keys(outbox).length; }
+function setSync(s){ const d=document.getElementById('saveDot'); if(!d||!CLOUD)return; d.style.opacity='1'; const n=outboxN();
+  if(s==='load'){ d.innerHTML='<i style="background:#f5a524;box-shadow:none"></i>불러오는 중…'; return; }
+  if(s==='sync'){ d.innerHTML='<i style="background:#f5a524;box-shadow:none"></i>동기화 중…'; return; }
+  if(s==='offline'){ d.innerHTML='<i style="background:#f5a524;box-shadow:none"></i>오프라인 · 로컬저장'+(n?(' ('+n+')'):''); return; }
+  if(n>0){ d.innerHTML='<i style="background:#f5a524;box-shadow:none"></i>미동기화 '+n+'건 · 재시도'; return; }
+  if(_lastLoadFail){ d.innerHTML='<i style="background:#ef4444;box-shadow:none"></i>⚠ 불러오기 실패(로컬)'; return; }
+  d.innerHTML='<i></i>☁ 동기화됨';
+}
+function _s(v){ return v==null?'':String(v); }
+function _b(v){ return v===true||v===1||v==='TRUE'||v==='true'||v==='Yes'||v==='Y'; }
+function newId(){ return 'd'+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+function normDeal(d){ return { _id:String(d._id||newId()), name:_s(d.name), rep:_s(d.rep), service:_s(d.service), prob:_s(d.prob), ctype:_s(d.ctype), amount:Number(d.amount)||0, paid:Number(d.paid)||0, contract:_b(d.contract), ccount:Number(d.ccount)||0, meetings:Number(d.meetings)||0, date:_s(d.date), push:_b(d.push) }; }
+function normSvc(s){ var t=_s(s.target); var m=t.match(/^(\d{4})-(\d{2})-(\d{2})$/); if(m)t=(+m[2])+'/'+(+m[3]); return { name:_s(s.name), target:t, price:_s(s.price), rr:_s(s.rr), edited:_s(s.edited) }; }
+function cloudGet(){ return fetch(SHEET_URL+'?token='+encodeURIComponent(SHEET_TOKEN)).then(r=>{ if(!r.ok)throw new Error('HTTP '+r.status); return r.json(); }); }
+function cloudPost(p){ p.token=SHEET_TOKEN; return fetch(SHEET_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(p)}).then(r=>{ if(!r.ok)throw new Error('HTTP '+r.status); return r.json(); }); }
+function pushDeal(d){ if(!CLOUD)return; outbox[d._id]={op:'up',deal:JSON.parse(JSON.stringify(d))}; saveOutbox(); flushOutbox(); }
+function pushDel(id){ if(!CLOUD)return; outbox[id]={op:'del'}; saveOutbox(); flushOutbox(); }
+function pushLog(l){ if(!CLOUD||!l)return; cloudPost({action:'appendLog',log:l}).catch(e=>console.warn('log sync fail',e)); }
+async function flushOutbox(){
+  if(!CLOUD||_flushing)return;
+  if(!outboxN()){ setSync('ok'); return; }
+  if(navigator&&navigator.onLine===false){ setSync('offline'); return; }
+  _flushing=true; setSync('sync');
+  try{
+    for(const id of Object.keys(outbox)){
+      const e=outbox[id]; let o;
+      try{ o = e.op==='del' ? await cloudPost({action:'deleteDeal',id:id}) : await cloudPost({action:'upsertDeal',deal:e.deal}); }
+      catch(err){ break; }
+      if(o&&o.ok){ delete outbox[id]; saveOutbox(); } else break;
+    }
+  } finally { _flushing=false; setSync(outboxN()?'pending':'ok'); }
+}
+function applyOutbox(){ for(const id in outbox){ const e=outbox[id];
+  if(e.op==='del'){ state.deals=state.deals.filter(d=>d._id!==id); }
+  else if(e.deal){ const i=state.deals.findIndex(d=>d._id===id); if(i>=0)state.deals[i]=e.deal; else state.deals.unshift(e.deal); } } }
+async function cloudLoad(){
+  if(!CLOUD)return;
+  setSync('load');
+  try{
+    const o=await cloudGet();
+    if(o.error) throw new Error(o.error);
+    state.deals=(o.deals||[]).map(normDeal);
+    state.services=(o.services||[]).map(normSvc);
+    state.logs=(o.logs||[]).map(l=>({ts:_s(l.ts),user:_s(l.user),action:_s(l.action),target:_s(l.target),detail:_s(l.detail)}))
+                 .sort((a,b)=>String(b.ts).localeCompare(String(a.ts)));
+    _lastLoadFail=false;
+    applyOutbox();   /* 아직 시트에 못 보낸 로컬 변경을 시트 최신본 위에 보존 */
+    save();
+    flushOutbox();   /* 미동기화분 재전송 시도 */
+  }catch(e){ _lastLoadFail=true; setSync('err'); console.warn('cloudLoad fail',e); }
+}
+function cloudRefresh(){ if(CLOUD){ cloudLoad().then(()=>render()); } else { render(); } }
+if(CLOUD){
+  window.addEventListener('online', flushOutbox);
+  window.addEventListener('beforeunload', function(e){ if(outboxN()){ e.preventDefault(); e.returnValue=''; } });
+  setInterval(function(){ if(outboxN()) flushOutbox(); }, 20000);
 }
 
 /* ===================== HELPERS ===================== */
@@ -386,6 +455,7 @@ function logChange(action,target,detail){
   state.logs = state.logs||[];
   state.logs.unshift({ts:new Date().toISOString(), user:(currentUser||'익명'), action:action, target:target||'', detail:detail||''});
   if(state.logs.length>2000) state.logs.length=2000;
+  pushLog(state.logs[0]);
 }
 function fmtLog(col,v){ if(col.type==='won')return won(v); if(col.type==='bool')return v?'Y':'N'; if(v===''||v==null)return '(빈값)'; return String(v); }
 
@@ -711,8 +781,8 @@ function refreshTbody(){
     }).join('')+`<td class="center"><span class="row-del" onclick="delDeal('${d._id}')" title="삭제">✕</span></td></tr>`).join('');
 }
 function setSort(k){ if(sortKey===k)sortDir*=-1; else{sortKey=k;sortDir=1;} renderDeals(document.getElementById('view')); }
-function addDeal(){ state.deals.unshift({_id:'d'+(uid++),name:'새 딜',rep:'',service:'',prob:'',ctype:'신규',amount:0,paid:0,contract:false,ccount:0,meetings:0,date:(dashMonth?dashMonth+'-01':''),push:false}); logChange('추가','새 딜',''); save(); renderDeals(document.getElementById('view')); }
-function delDeal(id){ const dd=deal(id); if(!confirm('이 딜을 삭제할까요?'))return; logChange('삭제', dd?dd.name||'(이름없음)':'', ''); state.deals=state.deals.filter(d=>d._id!==id); save(); refreshTbody(); }
+function addDeal(){ const d={_id:newId(),name:'새 딜',rep:'',service:'',prob:'',ctype:'신규',amount:0,paid:0,contract:false,ccount:0,meetings:0,date:(dashMonth?dashMonth+'-01':''),push:false}; state.deals.unshift(d); logChange('추가','새 딜',''); save(); pushDeal(d); renderDeals(document.getElementById('view')); }
+function delDeal(id){ const dd=deal(id); if(!confirm('이 딜을 삭제할까요?'))return; logChange('삭제', dd?dd.name||'(이름없음)':'', ''); state.deals=state.deals.filter(d=>d._id!==id); save(); pushDel(id); refreshTbody(); }
 function todayISO(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function toggleAddForm(){ addOpen=!addOpen; renderDeals(document.getElementById('view')); if(addOpen){ const n=document.getElementById('af-name'); if(n)n.focus(); } }
 function flashAdd(name){ const m=document.getElementById('af-msg'); if(!m)return; m.textContent='✓ '+name+' 추가됨'; m.style.opacity='1'; clearTimeout(_afT); _afT=setTimeout(()=>{m.style.opacity='0';},1800); }
@@ -722,10 +792,11 @@ function submitAddDeal(){
   const amount=Math.round(Number(String((g('af-amount')||{}).value||'').replace(/[^\d.-]/g,''))||0);
   const meetings=Math.round(Number((g('af-meet')||{}).value)||0);
   const contract=(g('af-contract')||{}).value==='1';
-  const d={_id:'d'+(uid++),name:name,rep:(g('af-rep')||{}).value||'',service:(g('af-svc')||{}).value||'',prob:(g('af-prob')||{}).value||'',ctype:(g('af-ctype')||{}).value||'신규',amount:amount,paid:0,contract:contract,ccount:contract?1:0,meetings:meetings,date:(g('af-date')||{}).value||'',push:false};
+  const d={_id:newId(),name:name,rep:(g('af-rep')||{}).value||'',service:(g('af-svc')||{}).value||'',prob:(g('af-prob')||{}).value||'',ctype:(g('af-ctype')||{}).value||'신규',amount:amount,paid:0,contract:contract,ccount:contract?1:0,meetings:meetings,date:(g('af-date')||{}).value||'',push:false};
   state.deals.unshift(d);
   logChange('추가', name, (d.service?d.service.replace(/^\d+\.\s*/,'')+' · ':'')+won(amount));
   save();
+  pushDeal(d);
   refreshTbody();
   ['af-name','af-amount','af-meet'].forEach(id=>{ const el=g(id); if(el)el.value=''; });
   flashAdd(name);
@@ -737,7 +808,7 @@ function resetFilters(){ flt.reps=[];flt.probs=[];flt.ctypes=[];flt.contract=[];
 document.addEventListener('click',e=>{
   const td=e.target.closest('td[data-key]'); if(!td)return;
   const col=DEAL_COLS.find(c=>c.key===td.dataset.key); const d=deal(td.dataset.id); if(!col||!d)return;
-  if(col.type==='bool'){ const old=d[col.key]; d[col.key]=!d[col.key]; if(col.key==='contract')d.ccount=d.contract?Math.max(1,Number(d.ccount)||0):0; logChange('수정', d.name||'(이름없음)', `${col.label}: ${old?'Y':'N'} → ${d[col.key]?'Y':'N'}`); save(); refreshTbody(); return; }
+  if(col.type==='bool'){ const old=d[col.key]; const oldCc=d.ccount; d[col.key]=!d[col.key]; if(col.key==='contract')d.ccount=d.contract?Math.max(1,Number(d.ccount)||0):0; let det=`${col.label}: ${old?'Y':'N'} → ${d[col.key]?'Y':'N'}`; if(col.key==='contract'&&oldCc!==d.ccount)det+=` · 계약수: ${oldCc}→${d.ccount}`; logChange('수정', d.name||'(이름없음)', det); save(); pushDeal(d); refreshTbody(); return; }
   if(td.querySelector('input,select'))return;
   openEditor(td,d,col);
 });
@@ -757,7 +828,7 @@ function openEditor(td,d,col){
     if(col.type==='won'||col.type==='num')val=Math.round(Number(String(val).replace(/[^\d.-]/g,''))||0);
     const old=d[col.key];
     if(String(old)!==String(val)) logChange('수정', d.name||'(이름없음)', `${col.label}: ${fmtLog(col,old)} → ${fmtLog(col,val)}`);
-    d[col.key]=val; save(); td.innerHTML=cellDisplay(d,col);
+    d[col.key]=val; save(); pushDeal(d); td.innerHTML=cellDisplay(d,col);
   };
   ed.addEventListener('blur',commit,{once:true});
   ed.addEventListener('keydown',e=>{ if(e.key==='Enter'){ed.blur();} if(e.key==='Escape'){ed.removeEventListener('blur',commit);td.innerHTML=cellDisplay(d,col);} });
@@ -893,7 +964,7 @@ function bindKanDnD(){
       let val=col.dataset.col; if(val==='미지정')val='';
       const old=d[kanField]; const flabel=(KAN_FIELDS.find(f=>f.k===kanField)||{}).l||kanField;
       if(String(old)!==String(val)) logChange('이동', d.name||'(이름없음)', `${flabel}: ${old||'(빈값)'} → ${val||'(빈값)'}`);
-      d[kanField]=val; save(); renderKanban(document.getElementById('view'));
+      d[kanField]=val; save(); pushDeal(d); renderKanban(document.getElementById('view'));
     });
   });
 }
@@ -943,13 +1014,25 @@ function exportCSV(){
   const rows=state.deals.map(d=>cols.map(k=>{ let v=d[k]; if(typeof v==='boolean')v=v?'Yes':'No'; v=String(v==null?'':v); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }).join(','));
   download('포켓딜_'+today()+'.csv','﻿'+head.join(',')+'\n'+rows.join('\n'),'text/csv');
 }
-function importJSON(e){ const f=e.target.files[0]; if(!f)return; const r=new FileReader(); r.onload=()=>{ try{ const o=JSON.parse(r.result); if(!o.deals)throw 0; state=o; state.deals.forEach(d=>{ if(!d._id)d._id='d'+(uid++); d.amount=Number(d.amount)||0; d.paid=Number(d.paid)||0; d.ccount=Number(d.ccount)||0; d.meetings=Number(d.meetings)||0; d.contract=!!d.contract; d.push=!!d.push; }); state.services=state.services||[]; state.logs=state.logs||[]; logChange('가져오기','JSON 파일 불러옴',`딜 ${state.deals.length}건`); save(); render(); alert('가져오기 완료'); }catch(err){ alert('불러오기 실패: 올바른 JSON이 아니에요'); } }; r.readAsText(f); e.target.value=''; }
-function resetData(){ if(!confirm('모든 수정을 버리고 노션 원본 데이터로 되돌릴까요? (변경 로그는 보존됩니다)'))return; const keepLogs=state.logs||[]; localStorage.removeItem(LS_KEY); uid=1; state=loadState(); state.logs=keepLogs; logChange('초기화','노션 원본으로 복원',''); save(); render(); }
+function importJSON(e){ const f=e.target.files[0]; if(!f)return; const r=new FileReader(); r.onload=()=>{ try{
+  const o=JSON.parse(r.result); if(!o.deals)throw 0;
+  if(CLOUD){
+    if(!confirm('가져온 딜을 시트에 병합할까요?\n같은 _id는 갱신되고, 시트의 다른 항목은 그대로 유지됩니다.'))return;
+    const imp=(o.deals||[]).map(normDeal);
+    imp.forEach(d=>{ const i=state.deals.findIndex(x=>x._id===d._id); if(i>=0)state.deals[i]=d; else state.deals.unshift(d); pushDeal(d); });
+    logChange('가져오기','JSON 병합',`딜 ${imp.length}건`); save(); render(); alert('가져오기(병합) 완료: '+imp.length+'건');
+  } else {
+    state=o; state.deals.forEach(d=>{ if(!d._id)d._id=newId(); d.amount=Number(d.amount)||0; d.paid=Number(d.paid)||0; d.ccount=Number(d.ccount)||0; d.meetings=Number(d.meetings)||0; d.contract=!!d.contract; d.push=!!d.push; }); state.services=state.services||[]; state.logs=state.logs||[]; logChange('가져오기','JSON 파일 불러옴',`딜 ${state.deals.length}건`); save(); render(); alert('가져오기 완료');
+  }
+ }catch(err){ alert('불러오기 실패: 올바른 JSON이 아니에요'); } }; r.readAsText(f); e.target.value=''; }
+function resetData(){
+  if(CLOUD){ if(!confirm('시트에서 데이터를 다시 불러올까요?\n동기화되지 않은 로컬 변경은 사라집니다.'))return; cloudRefresh(); return; }
+  if(!confirm('모든 수정을 버리고 노션 원본 데이터로 되돌릴까요? (변경 로그는 보존됩니다)'))return; const keepLogs=state.logs||[]; localStorage.removeItem(LS_KEY); uid=1; state=loadState(); state.logs=keepLogs; logChange('초기화','노션 원본으로 복원',''); save(); render(); }
 function today(){ const d=new Date(); return d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0'); }
 
 /* ===================== AUTH GATE ===================== */
 function updateUserChip(){ const c=document.getElementById('userChip'); if(c)c.textContent='👤 '+(currentUser||'익명'); }
-function showApp(){ document.getElementById('gate').classList.add('hide'); updateUserChip(); renderNav(); render(); }
+async function showApp(){ document.getElementById('gate').classList.add('hide'); updateUserChip(); renderNav(); render(); if(CLOUD){ await cloudLoad(); render(); } }
 function tryUnlock(){
   const pw=document.getElementById('gatePw').value;
   const nm=document.getElementById('gateName').value.trim();
