@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -221,6 +221,9 @@
   tbody td.num,tbody td.won{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--pop);font-weight:500}
   tbody td.center{text-align:center;cursor:pointer}
   td .cell-input,td .cell-select{width:100%;background:#fff;border:1px solid var(--brand);color:var(--ink);padding:5px 7px;border-radius:6px;font-family:inherit;font-size:12.5px;outline:none}
+  td .cell-date{width:100%;background:transparent;border:1px solid transparent;color:var(--ink);padding:4px 5px;border-radius:6px;font-family:inherit;font-size:12.5px;outline:none;cursor:pointer;transition:.12s}
+  td .cell-date:hover{border-color:var(--border-2);background:#fff}
+  td .cell-date:focus{border-color:var(--brand);background:#fff;box-shadow:0 0 0 3px rgba(9,85,249,.10)}
   .row-del{color:#c2c8d2;cursor:pointer;font-weight:800;padding:0 4px}
   .row-del:hover{color:var(--red)}
   .badge-y{background:#e7faf0;color:#0f9b52}
@@ -302,10 +305,18 @@
   /* ---------- user chip + log ---------- */
   .user-chip{font-size:12px;color:var(--brand);background:#e9f0ff;border:1px solid #d4e2ff;padding:5px 11px;border-radius:100px;font-weight:700;cursor:pointer;transition:.15s}
   .user-chip:hover{background:#dbe8ff}
-  .hd-period{display:flex;align-items:center;gap:5px;background:#fff;border:1px solid var(--border-2);border-radius:9px;padding:0 8px 0 11px;transition:.15s}
+  .hd-period{display:flex;align-items:center;gap:4px;background:#fff;border:1px solid var(--border-2);border-radius:11px;padding:3px 5px;transition:.15s;flex-wrap:wrap}
   .hd-period:focus-within{border-color:var(--brand);box-shadow:0 0 0 3px rgba(9,85,249,.12)}
-  .hd-period-ic{font-size:13px}
-  .hd-month{border:none;background:transparent;color:var(--ink);font-family:inherit;font-size:12.5px;font-weight:700;padding:8px 2px;outline:none;cursor:pointer}
+  .hd-arrow{border:none;background:transparent;color:var(--gray);font-size:17px;line-height:1;width:22px;height:27px;border-radius:7px;cursor:pointer;transition:.12s}
+  .hd-arrow:hover{background:#eef2fb;color:var(--brand)}
+  .hd-quick{display:flex;gap:2px;background:#f4f6fb;border-radius:8px;padding:2px}
+  .hq{border:none;background:transparent;color:var(--gray);font-family:inherit;font-size:11.5px;font-weight:700;padding:5px 9px;border-radius:6px;cursor:pointer;transition:.12s;white-space:nowrap}
+  .hq:hover{color:var(--ink)}
+  .hq.on{background:#fff;color:var(--brand);box-shadow:0 1px 3px rgba(9,85,249,.18)}
+  .hd-range{display:flex;align-items:center;gap:3px;padding:0 2px}
+  .hd-date{border:1px solid var(--border-2);background:#fff;color:var(--ink);font-family:var(--pop);font-size:11.5px;font-weight:600;padding:5px 6px;border-radius:7px;outline:none;cursor:pointer}
+  .hd-date:focus{border-color:var(--brand)}
+  .hd-tilde{color:var(--gray-l);font-size:11px}
   td.lg-t{white-space:nowrap;color:var(--gray);font-family:var(--pop)}
   td.lg-d{white-space:normal;max-width:380px}
   /* trend chart + motion (ref: 리피시 관리 / 포켓 색감 유지) */
@@ -350,12 +361,20 @@
   <div class="tools">
     <span class="user-chip" id="userChip" onclick="changeUser()" title="이름 변경"></span>
     <span class="save-dot" id="saveDot"><i></i>자동저장됨</span>
-    <button class="btn ghost" onclick="cloudRefresh()" title="시트에서 새로고침">🔄</button>
-    <span class="hd-period"><span class="hd-period-ic">📅</span><select class="hd-month" id="hdMonth" onchange="setDashMonth(this.value)" title="기간(월) 선택"></select></span>
-    <button class="btn ghost" onclick="document.getElementById('importFile').click()">⬆ 가져오기</button>
-    <button class="btn danger ghost" onclick="resetData()">↺ 원본복원</button>
+    <span class="hd-period">
+      <button class="hd-arrow" onclick="shiftPeriod(-1)" title="이전 기간">‹</button>
+      <span class="hd-quick" id="hdQuick">
+        <button class="hq" data-k="today" onclick="setQuickRange('today')">오늘</button>
+        <button class="hq" data-k="week" onclick="setQuickRange('week')">주간</button>
+        <button class="hq" data-k="month" onclick="setQuickRange('month')">이번달</button>
+        <button class="hq" data-k="lastMonth" onclick="setQuickRange('lastMonth')">지난달</button>
+        <button class="hq" data-k="all" onclick="setQuickRange('all')">전체</button>
+      </span>
+      <span class="hd-range"><input type="date" id="hdStart" class="hd-date" onchange="setRangeStart(this.value)" title="시작일"><span class="hd-tilde">~</span><input type="date" id="hdEnd" class="hd-date" onchange="setRangeEnd(this.value)" title="종료일"></span>
+      <button class="hd-arrow" onclick="shiftPeriod(1)" title="다음 기간">›</button>
+    </span>
+    <button class="btn ghost" onclick="syncNow()" title="시트와 동기화 (최신본 불러오기 + 미반영 변경 전송)">🔄 데이터 동기화</button>
     <button class="btn ghost" onclick="lock()" title="잠그기">🔒</button>
-    <input type="file" id="importFile" accept=".json" style="display:none" onchange="importJSON(event)">
   </div>
 </header>
 
@@ -467,6 +486,7 @@ async function cloudLoad(){
   }catch(e){ _lastLoadFail=true; setSync('err'); console.warn('cloudLoad fail',e); }
 }
 function cloudRefresh(){ if(CLOUD){ cloudLoad().then(()=>render()); } else { render(); } }
+function syncNow(){ if(!CLOUD){ save(); render(); return; } flushOutbox().then(()=>cloudRefresh()); }
 if(CLOUD){
   window.addEventListener('online', flushOutbox);
   window.addEventListener('beforeunload', function(e){ if(outboxN()){ e.preventDefault(); e.returnValue=''; } });
@@ -530,7 +550,7 @@ const TABS=[
   {id:'log',label:'변경 로그',icon:'📜'},
 ];
 let cur='dash';
-let dashMonth='';
+let dashStart='', dashEnd='';
 let dashCtype='';
 function renderNav(){
   document.getElementById('nav').innerHTML = TABS.map(t=>
@@ -538,7 +558,7 @@ function renderNav(){
 }
 function go(id){ cur=id; renderNav(); render(); const v=document.getElementById('view'); if(v){ v.style.animation='none'; void v.offsetWidth; v.style.animation='fadeUp .34s ease'; } }
 function render(){
-  renderMonthSelect();
+  renderPeriodBar();
   const v=document.getElementById('view');
   if(cur==='dash')v.innerHTML=viewDash();
   else if(cur==='deals')renderDeals(v);
@@ -596,25 +616,53 @@ function drawTrend(){
   const baseY=padT+plotH;
   const area=line+` L ${pts[n-1].x.toFixed(1)} ${baseY} L ${pts[0].x.toFixed(1)} ${baseY} Z`;
   const grids=[0,.5,1].map(f=>{const y=baseY-f*plotH;return `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W-padR}" y2="${y.toFixed(1)}" class="tc-grid"/><text x="${padL-8}" y="${(y+3).toFixed(1)}" class="tc-yl">${won(max*f)}</text>`;}).join('');
-  const dots=pts.map(p=>{const sel=dashMonth&&p.d.month===dashMonth;return `<g class="tc-pt" onclick="setDashMonth('${p.d.month}')" style="cursor:pointer"><text x="${p.x.toFixed(1)}" y="${(p.y-13).toFixed(1)}" class="tc-vl ${sel?'sel':''}">${won(p.d.value)}</text><circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${sel?6:4.5}" class="${sel?'tc-dot-sel':'tc-dot'}"/><circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="14" fill="transparent"><title>${esc(p.d.label)} · ${won(p.d.value)}</title></circle><text x="${p.x.toFixed(1)}" y="${H-12}" class="tc-xl ${sel?'sel':''}">${esc(p.d.label)}</text></g>`;}).join('');
+  const dots=pts.map(p=>{const sel=selMonth()&&p.d.month===selMonth();return `<g class="tc-pt" onclick="setDashMonth('${p.d.month}')" style="cursor:pointer"><text x="${p.x.toFixed(1)}" y="${(p.y-13).toFixed(1)}" class="tc-vl ${sel?'sel':''}">${won(p.d.value)}</text><circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${sel?6:4.5}" class="${sel?'tc-dot-sel':'tc-dot'}"/><circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="14" fill="transparent"><title>${esc(p.d.label)} · ${won(p.d.value)}</title></circle><text x="${p.x.toFixed(1)}" y="${H-12}" class="tc-xl ${sel?'sel':''}">${esc(p.d.label)}</text></g>`;}).join('');
   box.innerHTML=`<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" class="tc-svg" preserveAspectRatio="xMidYMid meet">
     <defs><linearGradient id="tcfill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(9,85,249,.20)"/><stop offset="1" stop-color="rgba(9,85,249,0)"/></linearGradient></defs>
     ${grids}<path d="${area}" fill="url(#tcfill)" class="tc-area"/><path d="${line}" fill="none" class="tc-line"/>${dots}
   </svg>`;
 }
 window.addEventListener('resize',()=>{ if(cur==='dash')drawTrend(); });
-function periodDeals(){ return dashMonth? state.deals.filter(d=>d.date&&d.date.slice(0,7)===dashMonth) : state.deals; }
+function periodDeals(){ return state.deals.filter(d=>inPeriod(d.date)); }
+function periodActive(){ return !!(dashStart||dashEnd); }
+function inPeriod(ds){ if(!periodActive())return true; if(!ds)return false; if(dashStart&&ds<dashStart)return false; if(dashEnd&&ds>dashEnd)return false; return true; }
 function monthsList(){ return [...new Set(state.deals.map(d=>d.date&&d.date.slice(0,7)).filter(Boolean))].sort(); }
-function renderMonthSelect(){
-  const sel=document.getElementById('hdMonth'); if(!sel)return;
-  const ms=monthsList(); const yrs=[...new Set(ms.map(m=>m.slice(0,4)))];
-  const lbl=m=>(yrs.length===1?yrs[0]+'년 ':m.slice(0,4)+'.')+(+m.slice(5,7))+'월';
-  sel.innerHTML='<option value="">전체 기간</option>'+ms.map(m=>`<option value="${m}">${lbl(m)}</option>`).join('');
-  sel.value=dashMonth;
+function _fmtD(dt){ return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0'); }
+function isFullMonth(s,e){ if(!s||!e||s.slice(0,7)!==e.slice(0,7)||s.slice(8,10)!=='01')return false; const y=+s.slice(0,4),m=+s.slice(5,7); return e===_fmtD(new Date(y,m,0)); }
+function selMonth(){ return isFullMonth(dashStart,dashEnd)?dashStart.slice(0,7):''; }
+function periodLabel(){
+  if(!periodActive())return '전체 기간';
+  if(dashStart&&dashStart===dashEnd)return dashStart;
+  if(isFullMonth(dashStart,dashEnd)){ const m=dashStart.slice(0,7); return m.slice(0,4)+'년 '+(+m.slice(5,7))+'월'; }
+  return (dashStart||'처음')+' ~ '+(dashEnd||'지금');
 }
-function setDashMonth(m){ dashMonth=m; if(m)calYM=m; render(); }
+function applyRange(s,e){ dashStart=s||''; dashEnd=e||''; if(dashStart)calYM=dashStart.slice(0,7); render(); }
+function clearRange(){ dashStart=''; dashEnd=''; render(); }
+function setMonthRange(ym){ if(!ym){clearRange();return;} const y=+ym.slice(0,4),m=+ym.slice(5,7); applyRange(ym+'-01',_fmtD(new Date(y,m,0))); }
+function setDashMonth(m){ setMonthRange(m); }
+function setRangeStart(v){ dashStart=v||''; if(dashStart&&dashEnd&&dashStart>dashEnd)dashEnd=dashStart; if(dashStart)calYM=dashStart.slice(0,7); render(); }
+function setRangeEnd(v){ dashEnd=v||''; if(dashStart&&dashEnd&&dashEnd<dashStart)dashStart=dashEnd; render(); }
+function setQuickRange(kind){
+  if(kind==='all'){ applyRange('',''); return; }
+  const t=todayISO(); const d=new Date(t+'T00:00:00');
+  if(kind==='today'){ applyRange(t,t); return; }
+  if(kind==='week'){ const wd=(d.getDay()+6)%7; const st=new Date(d); st.setDate(d.getDate()-wd); const en=new Date(st); en.setDate(st.getDate()+6); applyRange(_fmtD(st),_fmtD(en)); return; }
+  if(kind==='month'){ const y=d.getFullYear(),m=d.getMonth(); applyRange(_fmtD(new Date(y,m,1)),_fmtD(new Date(y,m+1,0))); return; }
+  if(kind==='lastMonth'){ const y=d.getFullYear(),m=d.getMonth(); applyRange(_fmtD(new Date(y,m-1,1)),_fmtD(new Date(y,m,0))); return; }
+}
+function shiftPeriod(dir){
+  if(!periodActive()){ setQuickRange('month'); if(dir<0)shiftPeriod(-1); return; }
+  if(isFullMonth(dashStart,dashEnd)){ const y=+dashStart.slice(0,4),m=+dashStart.slice(5,7)-1+dir; applyRange(_fmtD(new Date(y,m,1)),_fmtD(new Date(y,m+1,0))); return; }
+  const s=new Date((dashStart||dashEnd)+'T00:00:00'), e=new Date((dashEnd||dashStart)+'T00:00:00');
+  const span=Math.round((e-s)/86400000)+1; s.setDate(s.getDate()+dir*span); e.setDate(e.getDate()+dir*span); applyRange(_fmtD(s),_fmtD(e));
+}
+function renderPeriodBar(){
+  const si=document.getElementById('hdStart'), ei=document.getElementById('hdEnd'), qs=document.getElementById('hdQuick');
+  if(si)si.value=dashStart; if(ei)ei.value=dashEnd;
+  if(qs){ const tm=todayISO().slice(0,7); const act=!periodActive()?'all':(selMonth()===tm?'month':''); [...qs.querySelectorAll('.hq')].forEach(b=>b.classList.toggle('on', b.dataset.k===act)); }
+}
 function setDashCtype(c){ dashCtype=c; render(); }
-function monthLabel(m){ if(!m)return '전체 기간'; const ms=monthsList(); const yrs=[...new Set(ms.map(x=>x.slice(0,4)))]; return (yrs.length===1?yrs[0]+'년 ':m.slice(0,4)+'.')+(+m.slice(5,7))+'월'; }
+function monthLabel(m){ return periodLabel(); }
 let _lastFocus=null;
 function openModalShell(){ _lastFocus=document.activeElement; const m=document.getElementById('modal'); m.classList.remove('hide'); const x=m.querySelector('.modal-x'); if(x){try{x.focus()}catch(e){}} }
 function closeModal(){ document.getElementById('modal').classList.add('hide'); if(_lastFocus&&_lastFocus.focus){try{_lastFocus.focus()}catch(e){}} }
@@ -626,7 +674,7 @@ function bdModal(title,desc,big,rows,countNote){
 }
 function showBreakdown(key){
   const dl=periodDeals(); const r=rollup(dl); const t=totals(dl);
-  const pfx = dashMonth? `<span class="bd-pill">${monthLabel(dashMonth)}</span>` : '';
+  const pfx = periodActive()? `<span class="bd-pill">${periodLabel()}</span>` : '';
   const sv=s=>(s||'').replace(/^\d+\.\s*/,'')||'(미지정)';
   if(key==='pipeline'){
     const ds=dl.filter(d=>(+d.amount||0)>0).sort((a,b)=>(+b.amount||0)-(+a.amount||0));
@@ -663,7 +711,7 @@ function showServiceDetail(name){
   const mcount=deals.reduce((a,d)=>a+(+d.meetings||0),0);
   const camount=contracts.reduce((a,d)=>a+(+d.amount||0),0);
   const nNew=contracts.filter(d=>d.ctype==='신규').length;
-  const pfx=dashMonth?`<span class="bd-pill">${monthLabel(dashMonth)}</span> `:'';
+  const pfx=periodActive()?`<span class="bd-pill">${periodLabel()}</span> `:'';
   const dt=d=>d?String(d).replace(/-/g,'.'):'-';
   const ctBadge=d=>d.ctype==='신규'?'신규':(d.ctype==='기존'?'기존':'-');
   const cRows=contracts.length?contracts.map(d=>`<div class="bd-row"><div class="bd-l">${esc(d.name||'(이름없음)')}<span class="bd-sub">${esc(d.rep||'-')} · ${ctBadge(d)}</span></div><div class="bd-r">${won(d.amount)}</div></div>`).join(''):'<div class="bd-empty">계약 건이 없어요</div>';
@@ -705,7 +753,7 @@ function viewDash(){
   const t=totals(dl); const r=rollup(dl);
   const stat=(label,value,delta,accent,ic,key)=>`<div class="stat clickable" role="button" tabindex="0" aria-label="${label} 상세" style="--accent:${accent}" onclick="showBreakdown('${key}')"><span class="st-go">›</span><div class="st-ic">${ic||''}</div><div class="label">${label}</div><div class="value">${value}</div>${delta?`<div class="delta">${delta}</div>`:''}</div>`;
   const svcAmt=Object.values(r).filter(x=>x.amount>0).sort((a,b)=>b.amount-a.amount).slice(0,9)
-    .map((x,i)=>({label:x.svc.name.replace(/^\d+\.\s*/,''),value:x.amount,color:C[i%C.length]}));
+    .map((x,i)=>({label:x.svc.name.replace(/^\d+\.\s*/,''),value:x.amount,color:C[i%C.length],onclick:"showServiceDetail('"+String(x.svc.name).replace(/'/g,"\\'")+"')"}));
   const repMap={}; dl.forEach(d=>{ if(!d.rep)return; (repMap[d.rep]=repMap[d.rep]||{amount:0,c:0}); repMap[d.rep].amount+=Number(d.amount)||0; repMap[d.rep].c+=Number(d.ccount)||0; });
   const repAmt=Object.entries(repMap).sort((a,b)=>b[1].amount-a[1].amount).map((e,i)=>({label:e[0]+' ('+e[1].c+'계약)',value:e[1].amount,color:C[i%C.length],onclick:"showRepDeals('"+String(e[0]).replace(/'/g,"\\'")+"')"}));
   const probMap={'높음':0,'중간':0,'낮음':0,'미지정':0}; dl.forEach(d=>{ probMap[d.prob&&PROBS.includes(d.prob)?d.prob:'미지정']++; });
@@ -719,10 +767,8 @@ function viewDash(){
   const plabel=m=>(yrs.length>1?m.slice(0,4)+'.':'')+(+m.slice(5,7))+'월';
   const months=allMonths.slice(-12).map(m=>({label:plabel(m),value:mMap[m].amount,month:m}));
   _trend=months;
-  const periodTxt=dashMonth?plabel(dashMonth):'전체 기간';
-
   return `
-  <div class="period-head"><span class="ph-eyebrow">성과 요약</span><span class="ph-period">${periodTxt}</span>
+  <div class="period-head"><span class="ph-eyebrow">성과 요약</span>
     <div class="ctype-toggle">${['','신규','기존'].map(c=>`<button class="ct-btn ${dashCtype===c?'on':''}" onclick="setDashCtype('${c}')">${c||'전체'}</button>`).join('')}</div>
     <span class="ph-cnt">${dl.length}건 · 파이프라인 ${won(t.amount)}</span></div>
   <div class="grid stat-grid" style="margin-bottom:22px">
@@ -762,7 +808,7 @@ let flt={q:'',svc:'',reps:[],probs:[],ctypes:[],contract:[]}, sortKey='date', so
 let addOpen=false, _afT;
 function filteredDeals(){
   let arr=state.deals.filter(d=>{
-    if(dashMonth && !(d.date&&d.date.slice(0,7)===dashMonth))return false;
+    if(!inPeriod(d.date))return false;
     if(flt.q && !((d.name||'').toLowerCase().includes(flt.q.toLowerCase())))return false;
     if(flt.svc && d.service!==flt.svc)return false;
     if(flt.reps.length && !flt.reps.includes(d.rep||''))return false;
@@ -783,6 +829,7 @@ function cellDisplay(d,col){
   if(col.type==='won')return won(v);
   if(col.type==='num')return v||0;
   if(col.type==='bool')return v?`<span class="chip badge-y">✓</span>`:`<span class="badge-n">·</span>`;
+  if(col.type==='date')return `<input class="cell-date" type="date" value="${esc(v||'')}" onchange="setDealDate('${d._id}',this.value)" onclick="event.stopPropagation()">`;
   if(col.key==='prob'&&v)return `<span class="chip" style="color:${probColor(v)}">${esc(v)}</span>`;
   if(col.key==='service')return esc((v||'').replace(/^\d+\.\s*/,''))||'<span class="badge-n">미지정</span>';
   return esc(v)|| (col.type==='text'?'':'<span class="badge-n">—</span>');
@@ -812,7 +859,7 @@ function renderDeals(v){
     <div class="toolbar">
       <input class="inp search" placeholder="🔍 이름 검색…" value="${esc(flt.q)}" oninput="flt.q=this.value;refreshTbody()">
       <select class="inp" onchange="flt.svc=this.value;refreshTbody()"><option value="">서비스 전체</option>${serviceNames().map(s=>`<option ${flt.svc===s?'selected':''}>${esc(s)}</option>`).join('')}</select>
-      ${dashMonth?`<span class="active-period">📅 ${monthLabel(dashMonth)}<span class="ap-x" onclick="setDashMonth('')" role="button" tabindex="0" title="기간 해제" aria-label="기간 필터 해제">✕</span></span>`:''}
+      ${periodActive()?`<span class="active-period">📅 ${periodLabel()}<span class="ap-x" onclick="clearRange()" role="button" tabindex="0" title="기간 해제" aria-label="기간 필터 해제">✕</span></span>`:''}
       <span class="grow"></span>
       <span class="pill-cnt" id="dealCnt"></span>
       <button class="btn primary" onclick="toggleAddForm()">${addOpen?'✕ 입력 닫기':'+ 딜 추가'}</button>
@@ -837,9 +884,10 @@ function refreshTbody(){
     }).join('')+`<td class="center"><span class="row-del" onclick="delDeal('${d._id}')" title="삭제">✕</span></td></tr>`).join('');
 }
 function setSort(k){ if(sortKey===k)sortDir*=-1; else{sortKey=k;sortDir=1;} renderDeals(document.getElementById('view')); }
-function addDeal(){ const d={_id:newId(),name:'새 딜',rep:'',service:'',prob:'',ctype:'신규',amount:0,paid:0,contract:false,ccount:0,meetings:0,date:(dashMonth?dashMonth+'-01':''),push:false}; state.deals.unshift(d); logChange('추가','새 딜',''); save(); pushDeal(d); renderDeals(document.getElementById('view')); }
+function addDeal(){ const d={_id:newId(),name:'새 딜',rep:'',service:'',prob:'',ctype:'신규',amount:0,paid:0,contract:false,ccount:0,meetings:0,date:(dashStart||todayISO()),push:false}; state.deals.unshift(d); logChange('추가','새 딜',''); save(); pushDeal(d); renderDeals(document.getElementById('view')); }
 function delDeal(id){ const dd=deal(id); if(!confirm('이 딜을 삭제할까요?'))return; logChange('삭제', dd?dd.name||'(이름없음)':'', ''); state.deals=state.deals.filter(d=>d._id!==id); save(); pushDel(id); refreshTbody(); }
 function todayISO(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function setDealDate(id,val){ const d=deal(id); if(!d)return; const old=d.date||''; if(String(old)===String(val))return; logChange('수정', d.name||'(이름없음)', `날짜: ${old||'—'} → ${val||'—'}`); d.date=val; save(); pushDeal(d); }
 function toggleAddForm(){ addOpen=!addOpen; renderDeals(document.getElementById('view')); if(addOpen){ const n=document.querySelector('#af-rows .af-name'); if(n)n.focus(); } }
 function flashAdd(name){ const m=document.getElementById('af-msg'); if(!m)return; m.textContent='✓ '+name+' 추가됨'; m.style.opacity='1'; clearTimeout(_afT); _afT=setTimeout(()=>{m.style.opacity='0';},1800); }
 function afRowHtml(){
@@ -851,7 +899,7 @@ function afRowHtml(){
     <select class="inp af-ctype"><option value="신규">신규</option><option value="기존">기존</option></select>
     <input class="inp af-amount" type="number" placeholder="금액" onkeydown="if(event.key==='Enter')submitAddDeals()">
     <input class="inp af-meet" type="number" placeholder="미팅">
-    <input class="inp af-date" type="date" value="${dashMonth?dashMonth+'-01':todayISO()}">
+    <input class="inp af-date" type="date" value="${dashStart||todayISO()}">
     <select class="inp af-contract"><option value="">미계약</option><option value="1">계약</option></select>
     <button class="af-rowx" onclick="this.closest('.af-row').remove()" title="이 행 삭제">✕</button>
   </div>`;
@@ -1057,7 +1105,7 @@ function renderKanban(v){
   v.innerHTML=`<div class="card" style="background:transparent;border:none;box-shadow:none;padding:0">
     <div class="toolbar"><span style="font-weight:700">그룹 기준:</span>
       ${KAN_FIELDS.map(f=>`<button class="btn ${kanField===f.k?'primary':'ghost'}" onclick="kanField='${f.k}';renderKanban(document.getElementById('view'))">${f.l}</button>`).join('')}
-      ${dashMonth?`<span class="active-period">📅 ${monthLabel(dashMonth)}<span class="ap-x" onclick="setDashMonth('')" role="button" tabindex="0" title="기간 해제" aria-label="기간 필터 해제">✕</span></span>`:''}
+      ${periodActive()?`<span class="active-period">📅 ${periodLabel()}<span class="ap-x" onclick="clearRange()" role="button" tabindex="0" title="기간 해제" aria-label="기간 필터 해제">✕</span></span>`:''}
       <span class="grow"></span><span class="hint" style="margin:0">카드를 다른 칸으로 끌어다 놓으면 값이 바뀌고 자동저장돼요</span>
     </div>
     <div class="kanban">${colHtml}</div>
