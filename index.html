@@ -135,7 +135,7 @@
   .sv-f label{font-size:12px;font-weight:700;color:var(--gray)}
   .sv-f .inp{width:100%}
   .sv-sub{font-weight:600;color:var(--gray-l);font-size:11px}
-  textarea.sv-note{resize:vertical;min-height:84px;line-height:1.6;font-family:inherit}
+  textarea.sv-note{resize:vertical;min-height:260px;line-height:1.6;font-family:inherit}
   .sv-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:4px}
   .sv-hint{font-size:11.5px;color:var(--gray-l);line-height:1.6;background:var(--bg);border-radius:10px;padding:10px 12px}
   thead th.num{text-align:right}
@@ -506,10 +506,12 @@ function wonFull(n){ return '₩'+(Number(n)||0).toLocaleString('ko-KR'); }
 function won(n){ n=Number(n)||0; if(n>=100000000)return '₩'+(n/1e8).toFixed(n%1e8?1:0)+'억'; if(n>=10000)return '₩'+Math.round(n/1e4).toLocaleString('ko-KR')+'만'; if(n===0)return '₩0'; return '₩'+n.toLocaleString('ko-KR'); }
 function pct(n){ return (Math.round(n*1000)/10)+'%'; }
 function reps(){ return [...new Set(state.deals.map(d=>d.rep).filter(Boolean))].sort(); }
+function svcNum(n){ const m=String(n==null?'':n).match(/^\s*(\d+)/); if(!m)return 1e6; const x=+m[1]; return x===0?900:x; }
+function svcOrder(a,b){ return svcNum(a)-svcNum(b) || String(a).localeCompare(String(b),'ko'); }
 function serviceNames(){
   const fromSvc = state.services.map(s=>s.name);
   const fromDeals = [...new Set(state.deals.map(d=>d.service).filter(Boolean))];
-  return [...new Set([...fromSvc,...fromDeals])];
+  return [...new Set([...fromSvc,...fromDeals])].filter(Boolean).sort(svcOrder);
 }
 const PROBS=['높음','중간','낮음']; const CTYPES=['신규','기존'];
 const probColor=p=>({'높음':'var(--green)','중간':'var(--gold)','낮음':'var(--red)'}[p]||'var(--muted-2)');
@@ -1033,7 +1035,7 @@ function openServiceEdit(id){
       <div class="sv-f"><label>월 KPI 목표</label><input id="sv-target" class="inp" value="${s?esc(s.target):''}" placeholder="예: 2/10"></div>
       <div class="sv-f"><label>가격정책</label><input id="sv-price" class="inp" value="${s?esc(s.price):''}" placeholder="예: 월 관리 280"></div>
       <div class="sv-f"><label>담당 R&R</label><input id="sv-rr" class="inp" value="${s?esc(s.rr):''}" placeholder="담당자명"></div>
-      <div class="sv-f"><label>비고 · 빌드업 완료 후 안내 멘트 <span class="sv-sub">자유 입력 · 톡 발송용</span></label><textarea id="sv-note" class="inp sv-note" rows="4" placeholder="예) ○○님, 빌드업 완료되었습니다! 결과물 전달드리고, 다음 단계는 …">${s?esc(s.note||''):''}</textarea></div>
+      <div class="sv-f"><label>비고 · 빌드업 완료 후 안내 멘트 <span class="sv-sub">자유 입력 · 톡 발송용</span></label><textarea id="sv-note" class="inp sv-note" rows="11" placeholder="예) ○○님, 빌드업 완료되었습니다! 결과물 전달드리고, 다음 단계는 …">${s?esc(s.note||''):''}</textarea></div>
       <div class="sv-actions">${s?`<button class="btn danger ghost" style="margin-right:auto" onclick="deleteService('${esc(s._id)}')">삭제</button>`:''}<button class="btn" onclick="closeModal()">취소</button><button class="btn primary" onclick="saveService(${s?("'"+esc(s._id)+"'"):'null'})">저장</button></div>
       <div class="sv-hint">카테고리: 앞 번호 1~4 지원사업 · 5~8 투자유치 · 9~12 브랜딩 · 13~16 개발 · 그 외 기타. 서비스명을 바꾸면 연결된 딜들도 새 이름으로 함께 갱신됩니다.</div>
     </div>`;
