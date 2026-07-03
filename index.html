@@ -1,4 +1,5 @@
-﻿<!DOCTYPE html>
+
+<!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -123,6 +124,7 @@
   .period-head .ph-period{font-family:var(--pop);font-size:22px;font-weight:700;color:var(--ink);letter-spacing:-.4px}
   .period-head .ph-cnt{font-size:12.5px;color:var(--gray);font-weight:600;margin-left:auto}
   .ctype-toggle{display:inline-flex;gap:4px;background:#eef2f7;border-radius:100px;padding:3px}
+  .new-badge{display:inline-flex;align-items:center;font-size:12px;font-weight:800;color:var(--brand);background:#e9f0ff;border:1px solid #d4e2ff;border-radius:100px;padding:5px 12px}
   .ct-btn{border:none;background:transparent;color:var(--gray);font-family:inherit;font-size:12px;font-weight:700;padding:5px 14px;border-radius:100px;cursor:pointer;transition:.12s}
   .ct-btn:hover{color:var(--ink)}
   .ct-btn.on{background:#fff;color:var(--brand);box-shadow:0 1px 4px rgba(15,23,42,.10)}
@@ -190,7 +192,7 @@
   .af-row .inp{padding:8px 10px;font-size:13px}
   .af-row .af-name{flex:1;min-width:130px}
   .af-row .af-svc{min-width:150px}
-  .af-row .af-amount{width:96px} .af-row .af-meet{width:64px}
+  .af-row .af-amount{width:96px}
   .af-rowx{border:none;background:#fff1f1;color:#c2410c;width:30px;height:34px;border-radius:8px;cursor:pointer;flex-shrink:0;font-weight:700}
   .af-rowx:hover{background:#ffe2e2;color:var(--red)}
   .af-foot{display:flex;align-items:center;gap:10px;margin-top:4px;border-top:1px dashed #c9ddff;padding-top:12px}
@@ -228,7 +230,8 @@
   tbody td.num,tbody td.won{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--pop);font-weight:500}
   tbody td.center{text-align:center;cursor:pointer}
   td .cell-input,td .cell-select{width:100%;background:#fff;border:1px solid var(--brand);color:var(--ink);padding:5px 7px;border-radius:6px;font-family:inherit;font-size:12.5px;outline:none}
-  td .cell-date{width:100%;background:transparent;border:1px solid transparent;color:var(--ink);padding:4px 5px;border-radius:6px;font-family:inherit;font-size:12.5px;outline:none;cursor:pointer;transition:.12s}
+  td .cell-date{width:112px;max-width:100%;background:transparent;border:1px solid transparent;color:var(--ink);padding:4px 6px;border-radius:6px;font-family:inherit;font-size:12.5px;outline:none;cursor:pointer;transition:.12s}
+  td .cell-date::-webkit-calendar-picker-indicator{display:none}
   td .cell-date:hover{border-color:var(--border-2);background:#fff}
   td .cell-date:focus{border-color:var(--brand);background:#fff;box-shadow:0 0 0 3px rgba(9,85,249,.10)}
   .row-del{color:#c2c8d2;cursor:pointer;font-weight:800;padding:0 4px}
@@ -312,6 +315,9 @@
   /* ---------- user chip + log ---------- */
   .user-chip{font-size:12px;color:var(--brand);background:#e9f0ff;border:1px solid #d4e2ff;padding:5px 11px;border-radius:100px;font-weight:700;cursor:pointer;transition:.15s}
   .user-chip:hover{background:#dbe8ff}
+  .new-toggle{font-size:12px;font-weight:800;color:var(--gray);background:#fff;border:1px solid var(--border-2);padding:6px 12px;border-radius:100px;cursor:pointer;transition:.15s;white-space:nowrap}
+  .new-toggle:hover{border-color:var(--brand);color:var(--brand)}
+  .new-toggle.on{background:var(--brand);border-color:var(--brand);color:#fff;box-shadow:0 2px 8px rgba(9,85,249,.28)}
   .hd-period{display:flex;align-items:center;gap:4px;background:#fff;border:1px solid var(--border-2);border-radius:11px;padding:3px 5px;transition:.15s;flex-wrap:wrap}
   .hd-period:focus-within{border-color:var(--brand);box-shadow:0 0 0 3px rgba(9,85,249,.12)}
   .hd-arrow{border:none;background:transparent;color:var(--gray);font-size:17px;line-height:1;width:22px;height:27px;border-radius:7px;cursor:pointer;transition:.12s}
@@ -367,6 +373,7 @@
   <div class="grow"></div>
   <div class="tools">
     <span class="user-chip" id="userChip" onclick="changeUser()" title="이름 변경"></span>
+    <button class="new-toggle" id="newToggle" onclick="toggleNewOnly()" title="신규 고객 성과만 보기 (전체 화면 적용)">✨ 신규만</button>
     <span class="save-dot" id="saveDot"><i></i>자동저장됨</span>
     <span class="hd-period">
       <button class="hd-arrow" onclick="shiftPeriod(-1)" title="이전 기간">‹</button>
@@ -536,7 +543,8 @@ function rollup(deals){
     const k=d.service; if(!k||!m[k])return;
     m[k].amount+=Number(d.amount)||0; m[k].paid+=Number(d.paid)||0;
     if(d.contract)m[k].camount+=Number(d.amount)||0;
-    m[k].ccount+=Number(d.ccount)||0; m[k].meetings+=Number(d.meetings)||0; m[k].deals++;
+    if(d.ctype==='신규'){ m[k].ccount+=Number(d.ccount)||0; m[k].meetings+=1; }  /* 미팅=신규 딜 1건당 1 · 기존/미지정 제외 */
+    m[k].deals++;
   });
   Object.values(m).forEach(r=>{ r.conv = r.meetings? r.ccount/r.meetings : 0; });
   return m;
@@ -544,7 +552,7 @@ function rollup(deals){
 function totals(deals){
   deals=deals||state.deals;
   const t={amount:0,paid:0,camount:0,ccount:0,meetings:0,n:deals.length,신규:0,기존:0};
-  deals.forEach(d=>{ t.amount+=Number(d.amount)||0; t.paid+=Number(d.paid)||0; if(d.contract)t.camount+=Number(d.amount)||0; t.ccount+=Number(d.ccount)||0; t.meetings+=Number(d.meetings)||0; if(d.ctype==='신규')t.신규++; else if(d.ctype==='기존')t.기존++; });
+  deals.forEach(d=>{ t.amount+=Number(d.amount)||0; t.paid+=Number(d.paid)||0; if(d.contract)t.camount+=Number(d.amount)||0; if(d.ctype==='신규'){ t.ccount+=Number(d.ccount)||0; t.meetings+=1; } if(d.ctype==='신규')t.신규++; else if(d.ctype==='기존')t.기존++; });
   t.conv = t.meetings? t.ccount/t.meetings : 0;
   return t;
 }
@@ -561,6 +569,9 @@ const TABS=[
 let cur='dash';
 let dashStart='', dashEnd='';
 let dashCtype='';
+let newOnly=false;
+function baseDeals(){ return newOnly ? state.deals.filter(d=>d.ctype==='신규') : state.deals; }
+function toggleNewOnly(){ newOnly=!newOnly; if(newOnly)dashCtype=''; const b=document.getElementById('newToggle'); if(b)b.classList.toggle('on',newOnly); render(); }
 function renderNav(){
   document.getElementById('nav').innerHTML = TABS.map(t=>
     `<div class="tab ${t.id===cur?'active':''}" onclick="go('${t.id}')">${t.icon} ${t.label}</div>`).join('');
@@ -632,7 +643,7 @@ function drawTrend(){
   </svg>`;
 }
 window.addEventListener('resize',()=>{ if(cur==='dash')drawTrend(); });
-function periodDeals(){ return state.deals.filter(d=>inPeriod(d.date)); }
+function periodDeals(){ return baseDeals().filter(d=>inPeriod(d.date)); }
 function periodActive(){ return !!(dashStart||dashEnd); }
 function inPeriod(ds){ if(!periodActive())return true; if(!ds)return false; if(dashStart&&ds<dashStart)return false; if(dashEnd&&ds>dashEnd)return false; return true; }
 function monthsList(){ return [...new Set(state.deals.map(d=>d.date&&d.date.slice(0,7)).filter(Boolean))].sort(); }
@@ -694,12 +705,12 @@ function showBreakdown(key){
     bdModal('계약 금액', pfx+' <b>계약=Y</b>(성사)인 딜의 금액만 더한 값이에요.', won(t.camount),
       ds.map(d=>({label:d.name||'(이름없음)',sub:sv(d.service),value:won(d.amount)})), ds.length+'건 계약 합산');
   } else if(key==='cm'){
-    const ds=dl.filter(d=>(+d.ccount||0)>0||(+d.meetings||0)>0).sort((a,b)=>(+b.meetings||0)-(+a.meetings||0));
-    bdModal('총 계약 / 미팅', pfx+' <b>계약수</b>=신규계약 합, <b>미팅</b>=미팅 횟수 합. 딜별 기여분이에요.', `${t.ccount} 계약 · ${t.meetings} 미팅`,
-      ds.map(d=>({label:d.name||'(이름없음)',sub:sv(d.service),value:`계약 ${d.ccount||0} · 미팅 ${d.meetings||0}`})), ds.length+'개 딜 기여');
+    const ds=dl.filter(d=>d.ctype==='신규').sort((a,b)=>(+b.ccount||0)-(+a.ccount||0));
+    bdModal('총 계약 / 미팅', pfx+' <b>계약수</b>=신규계약 합, <b>미팅</b>=신규 딜 수 (딜 1건=미팅 1, 기존고객 제외). 딜별 기여분이에요.', `${t.ccount} 계약 · ${t.meetings} 미팅`,
+      ds.map(d=>({label:d.name||'(이름없음)',sub:sv(d.service),value:`계약 ${d.ccount||0} · 미팅 1`})), ds.length+'개 신규 딜');
   } else if(key==='conv'){
     const rows=Object.values(r).filter(x=>x.meetings>0).sort((a,b)=>b.conv-a.conv).map(x=>({label:sv(x.svc.name),sub:`${x.ccount}계약 / ${x.meetings}미팅`,value:Math.round(x.conv*100)+'%'}));
-    bdModal('전체 전환율', pfx+` 전환율 = <b>계약수 ÷ 미팅</b> = ${t.ccount} ÷ ${t.meetings}`, pct(t.conv), rows, '서비스별 전환율 (높은 순)');
+    bdModal('전체 전환율', pfx+` 전환율 = <b>신규계약 ÷ 신규미팅</b> = ${t.ccount} ÷ ${t.meetings} <span style="color:var(--gray-l)">(기존고객 제외)</span>`, pct(t.conv), rows, '서비스별 전환율 (높은 순)');
   } else if(key==='ctype'){
     const mp={'신규':0,'기존':0,'미지정':0}; dl.forEach(d=>{ mp[d.ctype==='신규'?'신규':(d.ctype==='기존'?'기존':'미지정')]++; });
     const tot=dl.length||1;
@@ -716,25 +727,25 @@ function showServiceDetail(name){
   const svc=state.services.find(x=>x.name===name);
   const deals=periodDeals().filter(d=>d.service===name);
   const contracts=deals.filter(d=>d.contract).sort((a,b)=>(+b.amount||0)-(+a.amount||0));
-  const meetings=deals.filter(d=>(+d.meetings||0)>0).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
-  const ccount=deals.reduce((a,d)=>a+(+d.ccount||0),0);
-  const mcount=deals.reduce((a,d)=>a+(+d.meetings||0),0);
+  const meetings=deals.filter(d=>d.ctype==='신규').sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+  const ccount=deals.reduce((a,d)=>a+(d.ctype==='신규'?(+d.ccount||0):0),0);
+  const mcount=meetings.length;
   const camount=contracts.reduce((a,d)=>a+(+d.amount||0),0);
   const nNew=contracts.filter(d=>d.ctype==='신규').length;
   const pfx=periodActive()?`<span class="bd-pill">${periodLabel()}</span> `:'';
   const dt=d=>d?String(d).replace(/-/g,'.'):'-';
   const ctBadge=d=>d.ctype==='신규'?'신규':(d.ctype==='기존'?'기존':'-');
   const cRows=contracts.length?contracts.map(d=>`<div class="bd-row"><div class="bd-l">${esc(d.name||'(이름없음)')}<span class="bd-sub">${esc(d.rep||'-')} · ${ctBadge(d)}</span></div><div class="bd-r">${won(d.amount)}</div></div>`).join(''):'<div class="bd-empty">계약 건이 없어요</div>';
-  const mRows=meetings.length?meetings.map(d=>`<div class="bd-row"><div class="bd-l">${esc(d.name||'(이름없음)')}<span class="bd-sub">${esc(d.rep||'-')}</span></div><div class="bd-r">${dt(d.date)}${(+d.meetings||0)>1?` <span class="bd-x">×${d.meetings}</span>`:''}</div></div>`).join(''):'<div class="bd-empty">미팅 건이 없어요</div>';
+  const mRows=meetings.length?meetings.map(d=>`<div class="bd-row"><div class="bd-l">${esc(d.name||'(이름없음)')}<span class="bd-sub">${esc(d.rep||'-')}</span></div><div class="bd-r">${dt(d.date)}</div></div>`).join(''):'<div class="bd-empty">신규 딜이 없어요</div>';
   const conv=mcount?Math.round(ccount/mcount*100):0;
   document.getElementById('modalTitle').textContent=name;
   document.getElementById('modalBody').innerHTML=`
-    <div class="bd-desc">${pfx}이 서비스에 연결된 <b>계약·미팅</b> 내역이에요. 전환율 <b>${conv}%</b> = 계약수 ${ccount} ÷ 미팅 ${mcount} <span style="color:var(--gray-l)">(계약수=신규계약)</span></div>
+    <div class="bd-desc">${pfx}이 서비스에 연결된 <b>계약·미팅</b> 내역이에요. 전환율 <b>${conv}%</b> = 계약수 ${ccount} ÷ 미팅 ${mcount} <span style="color:var(--gray-l)">(신규 계약·미팅 기준 · 기존고객 제외)</span></div>
     ${svc&&svc.note?`<div class="bd-note"><div class="bd-note-h">📝 빌드업 완료 안내 멘트<button class="bd-copy" onclick="copyNote(this)">📋 복사</button></div><pre class="bd-note-body">${esc(svc.note)}</pre></div>`:''}
     <div class="bd-sec"><div class="bd-sec-h">✅ 계약 딜 <span class="c">${contracts.length}건${contracts.length?` (신규 ${nNew}·기존 ${contracts.length-nNew})`:''} · ${won(camount)}</span></div>
       <div class="bd-sec-cols"><span>업체명 / 담당자·구분</span><span>계약금액</span></div><div class="bd-list">${cRows}</div></div>
-    <div class="bd-sec"><div class="bd-sec-h">🤝 미팅 <span class="c">${mcount}회 · ${meetings.length}개사</span></div>
-      <div class="bd-sec-cols"><span>업체명 / 담당자</span><span>미팅날짜</span></div><div class="bd-list">${mRows}</div></div>`;
+    <div class="bd-sec"><div class="bd-sec-h">🤝 미팅 <span class="c">${meetings.length}건 · 신규 딜</span></div>
+      <div class="bd-sec-cols"><span>업체명 / 담당자</span><span>딜 날짜</span></div><div class="bd-list">${mRows}</div></div>`;
   openModalShell();
 }
 function copyNote(btn){
@@ -756,7 +767,7 @@ function showRepDeals(rep){
   openModalShell();
 }
 function showDayDeals(date){
-  const ds=state.deals.filter(d=>d.date===date).sort((a,b)=>(+b.amount||0)-(+a.amount||0));
+  const ds=baseDeals().filter(d=>d.date===date).sort((a,b)=>(+b.amount||0)-(+a.amount||0));
   const tot=ds.reduce((a,d)=>a+(+d.amount||0),0);
   const sv=s=>(s||'').replace(/^\d+\.\s*/,'')||'(미지정)';
   const rows=ds.length?ds.map(d=>`<div class="bd-row"><div class="bd-l">${esc(d.name||'(이름없음)')}<span class="bd-sub">${esc(d.rep||'-')} · ${esc(sv(d.service))}${d.contract?' · 계약':''}</span></div><div class="bd-r">${won(d.amount)}</div></div>`).join(''):'<div class="bd-empty">이 날짜에 딜이 없어요</div>';
@@ -780,7 +791,7 @@ function viewDash(){
   const ctData=[{label:'신규',value:t.신규,color:'#0955f9'},{label:'기존',value:t.기존,color:'#8b5cf6'}];
   let camtNew=0,camtOld=0; dl.forEach(d=>{ const a=Number(d.amount)||0; if(d.ctype==='신규')camtNew+=a; else if(d.ctype==='기존')camtOld+=a; });
   // monthly trend — always all months; selected highlighted, click a bar to filter
-  const mMap={}; state.deals.forEach(d=>{ if(!d.date)return; const m=d.date.slice(0,7); (mMap[m]=mMap[m]||{amount:0,n:0}); mMap[m].amount+=Number(d.amount)||0; mMap[m].n++; });
+  const mMap={}; baseDeals().forEach(d=>{ if(!d.date)return; const m=d.date.slice(0,7); (mMap[m]=mMap[m]||{amount:0,n:0}); mMap[m].amount+=Number(d.amount)||0; mMap[m].n++; });
   const allMonths=Object.keys(mMap).sort();
   const yrs=[...new Set(allMonths.map(m=>m.slice(0,4)))];
   const plabel=m=>(yrs.length>1?m.slice(0,4)+'.':'')+(+m.slice(5,7))+'월';
@@ -788,13 +799,13 @@ function viewDash(){
   _trend=months;
   return `
   <div class="period-head"><span class="ph-eyebrow">성과 요약</span>
-    <div class="ctype-toggle">${['','신규','기존'].map(c=>`<button class="ct-btn ${dashCtype===c?'on':''}" onclick="setDashCtype('${c}')">${c||'전체'}</button>`).join('')}</div>
+    ${newOnly?`<span class="new-badge">✨ 신규 고객만</span>`:`<div class="ctype-toggle">${['','신규','기존'].map(c=>`<button class="ct-btn ${dashCtype===c?'on':''}" onclick="setDashCtype('${c}')">${c||'전체'}</button>`).join('')}</div>`}
     <span class="ph-cnt">${dl.length}건 · 파이프라인 ${won(t.amount)}</span></div>
   <div class="grid stat-grid" style="margin-bottom:22px">
     ${stat('총 파이프라인 금액',won(t.amount),dl.length+'개 딜',' var(--blue)','💰','pipeline')}
     ${stat('계약 금액',won(t.camount),pct(t.amount?t.camount/t.amount:0)+' 성약',' var(--gold)','🤝','contracted')}
-    ${stat('총 계약 / 미팅',t.ccount+' / '+t.meetings,'신규계약 기준',' var(--purple)','📌','cm')}
-    ${stat('전체 전환율',pct(t.conv),'계약 ÷ 미팅',' var(--brand)','🎯','conv')}
+    ${stat('총 계약 / 미팅',t.ccount+' / '+t.meetings,'신규 기준 (기존 제외)',' var(--purple)','📌','cm')}
+    ${stat('전체 전환율',pct(t.conv),'신규계약 ÷ 신규미팅',' var(--brand)','🎯','conv')}
     ${stat('신규 : 기존',t.신규+' : '+t.기존,'고객 구성',' var(--cyan)','👥','ctype')}
     ${stat('서비스(빌드업)',state.services.length+'개','담당 R&R 배정',' var(--orange)','🧩','service')}
   </div>
@@ -819,14 +830,12 @@ const DEAL_COLS=[
   {key:'amount',label:'금액',type:'won'},
   {key:'contract',label:'계약',type:'bool'},
   {key:'ccount',label:'계약수',type:'num'},
-  {key:'meetings',label:'미팅',type:'num'},
   {key:'date',label:'날짜',type:'date'},
-  {key:'push',label:'push',type:'bool'},
 ];
 let flt={q:'',svc:'',reps:[],probs:[],ctypes:[],contract:[]}, sortKey='date', sortDir=-1;
 let addOpen=false, _afT;
 function filteredDeals(){
-  let arr=state.deals.filter(d=>{
+  let arr=baseDeals().filter(d=>{
     if(!inPeriod(d.date))return false;
     if(flt.q && !((d.name||'').toLowerCase().includes(flt.q.toLowerCase())))return false;
     if(flt.svc && d.service!==flt.svc)return false;
@@ -848,7 +857,7 @@ function cellDisplay(d,col){
   if(col.type==='won')return won(v);
   if(col.type==='num')return v||0;
   if(col.type==='bool')return v?`<span class="chip badge-y">✓</span>`:`<span class="badge-n">·</span>`;
-  if(col.type==='date')return `<input class="cell-date" type="date" value="${esc(v||'')}" onchange="setDealDate('${d._id}',this.value)" onclick="event.stopPropagation()">`;
+  if(col.type==='date')return `<input class="cell-date" type="date" value="${esc(v||'')}" onchange="setDealDate('${d._id}',this.value)" onclick="event.stopPropagation();try{this.showPicker()}catch(e){}">`;
   if(col.key==='prob'&&v)return `<span class="chip" style="color:${probColor(v)}">${esc(v)}</span>`;
   if(col.key==='service')return esc((v||'').replace(/^\d+\.\s*/,''))||'<span class="badge-n">미지정</span>';
   return esc(v)|| (col.type==='text'?'':'<span class="badge-n">—</span>');
@@ -858,9 +867,9 @@ function renderDeals(v){
   const addFormHtml = addOpen ? `<div class="add-form">
     <div class="af-rows" id="af-rows">${afRowHtml()}</div>
     <div class="af-foot">
-      <button class="af-plus" onclick="addAfRow()" title="입력 행 추가">＋ 행 추가</button>
       <span id="af-msg" class="af-msg"></span>
       <span class="grow"></span>
+      <button class="af-plus" onclick="addAfRow()" title="입력 행 추가">＋ 행 추가</button>
       <button class="btn" onclick="toggleAddForm()">취소</button>
       <button class="btn primary" onclick="submitAddDeals()">＋ 생성</button>
     </div>
@@ -917,7 +926,6 @@ function afRowHtml(){
     <select class="inp af-prob"><option value="">가능성</option>${PROBS.map(p=>`<option>${p}</option>`).join('')}</select>
     <select class="inp af-ctype"><option value="신규">신규</option><option value="기존">기존</option></select>
     <input class="inp af-amount" type="number" placeholder="금액" onkeydown="if(event.key==='Enter')submitAddDeals()">
-    <input class="inp af-meet" type="number" placeholder="미팅">
     <input class="inp af-date" type="date" value="${dashStart||todayISO()}">
     <select class="inp af-contract"><option value="">미계약</option><option value="1">계약</option></select>
     <button class="af-rowx" onclick="this.closest('.af-row').remove()" title="이 행 삭제">✕</button>
@@ -931,9 +939,8 @@ function submitAddDeals(){
     const q=sel=>row.querySelector(sel);
     const name=(q('.af-name').value||'').trim(); if(!name)return;
     const amount=Math.round(Number(String(q('.af-amount').value||'').replace(/[^\d.-]/g,''))||0);
-    const meetings=Math.round(Number(q('.af-meet').value)||0);
     const contract=q('.af-contract').value==='1';
-    const d={_id:newId(),name:name,rep:q('.af-rep').value||'',service:q('.af-svc').value||'',prob:q('.af-prob').value||'',ctype:q('.af-ctype').value||'신규',amount:amount,paid:0,contract:contract,ccount:contract?1:0,meetings:meetings,date:q('.af-date').value||'',push:false};
+    const d={_id:newId(),name:name,rep:q('.af-rep').value||'',service:q('.af-svc').value||'',prob:q('.af-prob').value||'',ctype:q('.af-ctype').value||'신규',amount:amount,paid:0,contract:contract,ccount:contract?1:0,meetings:0,date:q('.af-date').value||'',push:false};
     state.deals.unshift(d);
     logChange('추가', name, (d.service?d.service.replace(/^\d+\.\s*/,'')+' · ':'')+won(amount));
     pushDeal(d); n++;
@@ -1171,7 +1178,7 @@ function renderCal(v){
   if(!calYM)calYM=defaultYM();
   const [y,mo]=calYM.split('-').map(Number);
   const first=new Date(y,mo-1,1); const startDow=first.getDay(); const days=new Date(y,mo,0).getDate();
-  const byDay={}; state.deals.forEach(d=>{ if(d.date&&d.date.slice(0,7)===calYM){ const dd=+d.date.slice(8,10); (byDay[dd]=byDay[dd]||[]).push(d); } });
+  const byDay={}; baseDeals().forEach(d=>{ if(d.date&&d.date.slice(0,7)===calYM){ const dd=+d.date.slice(8,10); (byDay[dd]=byDay[dd]||[]).push(d); } });
   const dow=['일','월','화','수','목','금','토'];
   let cells='';
   for(let i=0;i<startDow;i++)cells+=`<div class="cal-cell empty"></div>`;
@@ -1180,7 +1187,7 @@ function renderCal(v){
     const evs=ds.slice(0,3).map(d=>`<div class="cal-ev" title="${esc(d.name)} · ${wonFull(d.amount)}">${esc(d.name)}</div>`).join('');
     cells+=`<div class="cal-cell${ds.length?' cal-click':''}"${ds.length?` onclick="showDayDeals('${calYM}-${String(dnum).padStart(2,'0')}')"`:''}><div class="dnum"><span>${dnum}</span>${ds.length?`<span class="dsum">${won(sum)}</span>`:''}</div>${evs}${ds.length>3?`<div class="cal-more">+${ds.length-3}건 더</div>`:''}</div>`;
   }
-  const monthDeals=state.deals.filter(d=>d.date&&d.date.slice(0,7)===calYM);
+  const monthDeals=baseDeals().filter(d=>d.date&&d.date.slice(0,7)===calYM);
   const mAmt=monthDeals.reduce((a,b)=>a+(Number(b.amount)||0),0);
   v.innerHTML=`<div class="card">
     <div class="cal-head">
@@ -1202,7 +1209,7 @@ function download(name,content,type){ const b=new Blob([content],{type}); const 
 function exportJSON(){ download('포켓성과관리_'+today()+'.json',JSON.stringify(state,null,2),'application/json'); }
 function exportCSV(){
   const cols=DEAL_COLS.map(c=>c.key);
-  const head=['이름','영업자','서비스','가능성','고객','금액','계약','계약수','미팅','날짜','push'];
+  const head=['이름','영업자','서비스','가능성','고객','금액','계약','계약수','날짜'];
   const rows=state.deals.map(d=>cols.map(k=>{ let v=d[k]; if(typeof v==='boolean')v=v?'Yes':'No'; v=String(v==null?'':v); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }).join(','));
   download('포켓딜_'+today()+'.csv','﻿'+head.join(',')+'\n'+rows.join('\n'),'text/csv');
 }
