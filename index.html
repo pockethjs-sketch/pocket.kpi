@@ -699,15 +699,15 @@ function showBreakdown(key){
   if(key==='pipeline'){
     const ds=dl.filter(d=>(+d.amount||0)>0).sort((a,b)=>(+b.amount||0)-(+a.amount||0));
     bdModal('총 파이프라인 금액', pfx+' 모든 딜의 <b>금액</b>을 더한 값이에요.', won(t.amount),
-      ds.map(d=>({label:d.name||'(이름없음)',sub:sv(d.service),value:won(d.amount)})), ds.length+'개 딜 합산');
+      ds.map(d=>({label:d.name||'(이름없음)',sub:sv(d.service)+(d.date?' · '+d.date.replace(/-/g,'.'):''),value:won(d.amount)})), ds.length+'개 딜 합산');
   } else if(key==='contracted'){
     const ds=dl.filter(d=>d.contract&&(+d.amount||0)>0).sort((a,b)=>(+b.amount||0)-(+a.amount||0));
     bdModal('계약 금액', pfx+' <b>계약=Y</b>(성사)인 딜의 금액만 더한 값이에요.', won(t.camount),
-      ds.map(d=>({label:d.name||'(이름없음)',sub:sv(d.service),value:won(d.amount)})), ds.length+'건 계약 합산');
+      ds.map(d=>({label:d.name||'(이름없음)',sub:sv(d.service)+(d.date?' · '+d.date.replace(/-/g,'.'):''),value:won(d.amount)})), ds.length+'건 계약 합산');
   } else if(key==='cm'){
-    const ds=dl.filter(d=>d.ctype==='신규').sort((a,b)=>(+b.ccount||0)-(+a.ccount||0));
-    bdModal('총 계약 / 미팅', pfx+' <b>계약수</b>=신규계약 합, <b>미팅</b>=신규 딜 수 (딜 1건=미팅 1, 기존고객 제외). 딜별 기여분이에요.', `${t.ccount} 계약 · ${t.meetings} 미팅`,
-      ds.map(d=>({label:d.name||'(이름없음)',sub:sv(d.service),value:`계약 ${d.ccount||0} · 미팅 1`})), ds.length+'개 신규 딜');
+    const ds=dl.filter(d=>d.ctype==='신규').sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+    bdModal('총 계약 / 미팅', pfx+' <b>계약수</b>=신규계약 합, <b>미팅</b>=신규 딜 수 (딜 1건=미팅 1, 기존고객 제외). 오른쪽은 <b>미팅날짜</b>예요.', `${t.ccount} 계약 · ${t.meetings} 미팅`,
+      ds.map(d=>({label:d.name||'(이름없음)',sub:sv(d.service)+((+d.ccount||0)>0?' · ✓계약':''),value:d.date?d.date.replace(/-/g,'.'):'날짜없음'})), ds.length+'개 신규 딜');
   } else if(key==='conv'){
     const rows=Object.values(r).filter(x=>x.meetings>0).sort((a,b)=>b.conv-a.conv).map(x=>({label:sv(x.svc.name),sub:`${x.ccount}계약 / ${x.meetings}미팅`,value:Math.round(x.conv*100)+'%'}));
     bdModal('전체 전환율', pfx+` 전환율 = <b>신규계약 ÷ 신규미팅</b> = ${t.ccount} ÷ ${t.meetings} <span style="color:var(--gray-l)">(기존고객 제외)</span>`, pct(t.conv), rows, '서비스별 전환율 (높은 순)');
