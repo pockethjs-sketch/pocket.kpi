@@ -3837,12 +3837,10 @@ function DealsView() {
   const [crmImportOpen, setCrmImportOpen] = useState(false);
   const [crmImportValue, setCrmImportValue] = useState("");
   const [crmImportBusy, setCrmImportBusy] = useState(false);
-  const [contractReview, setContractReview] = useState({ items: [], pending: 0, summary: { safe: 0, conflict: 0, newCompanies: 0, ambiguous: 0 }, checkedAt: "", sourceSpreadsheetId: "" });
+  const [contractReview, setContractReview] = useState({ items: [], pending: 0, summary: { newCompanies: 0 }, checkedAt: "", sourceSpreadsheetId: "", sourceCutoff: "2026-08-01" });
   const [contractReviewOpen, setContractReviewOpen] = useState(false);
   const [contractReviewBusy, setContractReviewBusy] = useState(false);
   const [contractReviewError, setContractReviewError] = useState("");
-  const [contractReviewFilter, setContractReviewFilter] = useState("전체");
-  const [contractTargetSelections, setContractTargetSelections] = useState({});
   const [contractApplyingId, setContractApplyingId] = useState("");
   const refreshContractReview = async (showToast = false) => {
     if (!window.crmFetchContractSheetChanges || contractReviewBusy) return;
@@ -3851,11 +3849,11 @@ function DealsView() {
       const payload = await window.crmFetchContractSheetChanges();
       setContractReview(payload);
       setContractReviewError("");
-      if (showToast) toast(payload.pending ? "계약 시트 변경 " + payload.pending + "건을 확인했습니다" : "새 계약 시트 변경이 없습니다");
+      if (showToast) toast(payload.pending ? "8월 이후 미등록 계약 업체 " + payload.pending + "곳을 확인했습니다" : "추가할 신규 계약 업체가 없습니다");
     } catch (error) {
       const message = String(error && error.message || error || "contract_review_failed");
       setContractReviewError(message);
-      if (showToast) toast(message === "contract_review_not_deployed" ? "계약 변경 검토 기능이 Apps Script에 아직 배포되지 않았습니다" : "계약 시트 변경 확인 실패 · " + message);
+      if (showToast) toast(message === "contract_review_not_deployed" ? "신규 계약 업체 확인 기능이 Apps Script에 아직 배포되지 않았습니다" : "계약 시트 신규 업체 확인 실패 · " + message);
     } finally {
       setContractReviewBusy(false);
     }
@@ -4110,18 +4108,7 @@ function DealsView() {
   const resetPush = (l) => up((d) => { const x = d.leads.find((y) => y.id === l.id); if (!x) return; x.pushLog = []; x.history.push({ date: todayISO(), type: "푸시", note: "결제 푸시 기록 초기화" }); });
   const toggleWin = (l, on) => up((d) => { const x = d.leads.find((y) => y.id === l.id); if (!x) return; if (on) { applyLeadStatus(d, x, "계약 완료"); } else { x.status = "견적·제안 발송"; x.history.push({ date: todayISO(), type: "상태", note: "계약 해제 — 견적·제안 발송으로 되돌림" }); } });
   const contractReviewActor = (currentAccount && (currentAccount.displayName || currentAccount.username)) || "사용자";
-  const contractReviewVisible = (contractReview.items || []).filter((item) => {
-    if (contractReviewFilter === "전체") return true;
-    if (contractReviewFilter === "안전") return item.risk === "safe";
-    if (contractReviewFilter === "충돌") return item.risk === "conflict";
-    return item.matchType === "new";
-  });
-  const formatContractReviewValue = (key, value) => {
-    if (value == null || value === "") return "-";
-    if (["contractAmount", "paid"].includes(key) && Number.isFinite(Number(value))) return fmtWon(Number(value));
-    if (Array.isArray(value)) return value.join(", ") || "-";
-    return String(value);
-  };
+  const contractReviewVisible = contractReview.items || [];
   const contractCompanyAliases = (value) => {
     const raw = String(value || "");
     const parts = [raw, raw.replace(/\([^)]*\)/g, " ")];
@@ -4137,44 +4124,35 @@ function DealsView() {
       items,
       pending: items.length,
       summary: {
-        safe: items.filter((item) => item.risk === "safe").length,
-        conflict: items.filter((item) => item.risk === "conflict").length,
-        newCompanies: items.filter((item) => item.matchType === "new").length,
-        ambiguous: items.filter((item) => item.matchType === "ambiguous").length,
+        newCompanies: items.length,
       },
     };
   });
   const applyContractReviewItem = (item) => {
-    const selectedTargetId = item.targetId || contractTargetSelections[item.id] || "";
-    if (item.matchType === "ambiguous" && !selectedTargetId) {
-      toast("반영할 계약현황 업체를 먼저 선택하세요");
+    const sourceAliases = contractCompanyAliases(item.company);
+    const alreadyExists = (db.leads || []).some((row) => contractCompanyAliases(row.company).some((alias) => sourceAliases.includes(alias)));
+    if (alreadyExists) {
+      toast("이미 계약현황에 등록된 업체입니다 · 목록을 다시 확인합니다");
+      refreshContractReview(false);
       return;
     }
     setContractApplyingId(item.id);
     try {
       up((d) => {
-        let lead = selectedTargetId ? (d.leads || []).find((row) => String(row.id) === String(selectedTargetId)) : null;
+        const leadId = "contract-sheet-" + String(item.sourceKey || item.sourceHash).slice(0, 40);
+        let lead = (d.leads || []).find((row) => row.id === leadId);
         if (!lead) {
-          const sourceAliases = contractCompanyAliases(item.company);
-          const localMatches = (d.leads || []).filter((row) => contractCompanyAliases(row.company).some((alias) => sourceAliases.includes(alias)));
-          if (localMatches.length === 1) lead = localMatches[0];
-        }
-        if (!lead) {
-          const leadId = "contract-sheet-" + String(item.sourceKey || item.sourceHash).slice(0, 40);
-          lead = (d.leads || []).find((row) => row.id === leadId);
-          if (!lead) {
-            lead = {
-              id: leadId, manualEntry: false, contractSheetImported: true,
-              company: item.company || "(업체명 미확인)", contact: "", phone: "", email: "",
-              channel: "계약 프로세스 시트", creative: "", buildup: "", buildups: [], lineItems: [],
-              grade: "", status: "계약 완료", ctype: item.ctype || "신규", tmOwner: "",
-              salesOwner: item.owner || "", expected: 0, contractAmount: 0, paid: 0, payments: [],
-              sent: {}, newsletter: false, pushLog: [], premeetingAt: "", premeetingDoneAt: "",
-              bookedAt: "", contractAt: item.firstDate || todayISO(), createdAt: item.firstDate || todayISO(),
-              memo: "", history: [],
-            };
-            d.leads.unshift(lead);
-          }
+          lead = {
+            id: leadId, manualEntry: false, contractSheetImported: true,
+            company: item.company || "(업체명 미확인)", contact: "", phone: "", email: "",
+            channel: "계약 프로세스 시트", creative: "", buildup: "", buildups: [], lineItems: [],
+            grade: "", status: "계약 완료", ctype: item.ctype || "신규", tmOwner: "",
+            salesOwner: item.owner || "", expected: 0, contractAmount: 0, paid: 0, payments: [],
+            sent: {}, newsletter: false, pushLog: [], premeetingAt: "", premeetingDoneAt: "",
+            bookedAt: "", contractAt: item.firstDate || todayISO(), createdAt: item.firstDate || todayISO(),
+            memo: "", history: [],
+          };
+          d.leads.unshift(lead);
         }
         lead.history = Array.isArray(lead.history) ? lead.history : [];
         lead.payments = Array.isArray(lead.payments) ? lead.payments : [];
@@ -4248,7 +4226,7 @@ function DealsView() {
         if (!Number(lead.expected || 0) && Number(lead.contractAmount || 0) > 0) lead.expected = Number(lead.contractAmount || 0);
       }, { reason: "contract_sheet_change_approved" });
       removeContractReviewItem(item.id);
-      toast((item.matchType === "new" ? "계약현황에 새 업체를 추가했습니다" : "계약현황에 변경을 반영했습니다") + " · " + item.company);
+      toast("계약현황에 신규 업체를 생성했습니다 · " + item.company);
       setTimeout(() => refreshContractReview(false), 2500);
     } finally {
       setContractApplyingId("");
@@ -4277,7 +4255,7 @@ function DealsView() {
             <RefreshCw size={13} className={crmSyncBusy ? "animate-spin" : ""} />{crmSyncBusy ? "CRM 확인 중" : "내방완료 갱신"}
           </Btn>
           <Btn kind="ghost" disabled={contractReviewBusy} onClick={() => refreshContractReview(true)} cls="border-amber-200 text-amber-700 hover:bg-amber-50">
-            <RefreshCw size={13} className={contractReviewBusy ? "animate-spin" : ""} />{contractReviewBusy ? "계약 시트 확인 중" : "계약 시트 확인"}{contractReview.pending > 0 ? " " + contractReview.pending : ""}
+            <RefreshCw size={13} className={contractReviewBusy ? "animate-spin" : ""} />{contractReviewBusy ? "신규 업체 확인 중" : "신규 계약 업체"}{contractReview.pending > 0 ? " " + contractReview.pending : ""}
           </Btn>
           <Btn kind="ghost" onClick={() => setCrmImportOpen(true)} cls="border-indigo-200 text-indigo-700 hover:bg-indigo-50"><Link2 size={13} />CRM 링크 추가</Btn>
           <Btn kind="primary" onClick={() => setAddOpen(true)}><Plus size={13} />딜 추가</Btn>
@@ -4291,11 +4269,11 @@ function DealsView() {
                 {contractReviewError ? <AlertCircle size={16} /> : <RefreshCw size={15} />}
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-extrabold text-slate-800">{contractReviewError ? "계약 시트 변경 확인 필요" : "계약 시트에서 변경 " + contractReview.pending + "건 감지"}</p>
-                <p className="text-xs text-slate-500 mt-0.5 truncate">{contractReviewError ? "연동 상태를 다시 확인합니다" : "안전 반영 " + (contractReview.summary.safe || 0) + " · 충돌 확인 " + (contractReview.summary.conflict || 0) + " · 신규 업체 " + (contractReview.summary.newCompanies || 0) + " · 승인 전에는 계약현황을 바꾸지 않습니다"}</p>
+                <p className="text-sm font-extrabold text-slate-800">{contractReviewError ? "신규 계약 업체 확인 필요" : "8월 이후 계약현황에 없는 업체 " + contractReview.pending + "곳"}</p>
+                <p className="text-xs text-slate-500 mt-0.5 truncate">{contractReviewError ? "연동 상태를 다시 확인합니다" : "생성될 계약 정보를 확인한 뒤 신규업체 생성 또는 제외를 선택하세요"}</p>
               </div>
             </div>
-            <span className="text-xs font-bold text-amber-700 flex items-center gap-1">{contractReviewError ? "다시 확인" : "변경 검토"}<ArrowRight size={13} /></span>
+            <span className="text-xs font-bold text-amber-700 flex items-center gap-1">{contractReviewError ? "다시 확인" : "업체 확인"}<ArrowRight size={13} /></span>
           </div>
         </button>
       )}
@@ -4564,66 +4542,53 @@ function DealsView() {
           <div className="flex justify-end gap-2"><Btn disabled={crmImportBusy} onClick={() => setCrmImportOpen(false)}>취소</Btn><Btn kind="primary" disabled={crmImportBusy} onClick={importCrmDeal}><RefreshCw size={13} className={crmImportBusy ? "animate-spin" : ""} />{crmImportBusy ? "CRM 확인 중" : "불러와서 추가"}</Btn></div>
         </div>
       </Modal>
-      <Modal open={contractReviewOpen} onClose={() => { if (!contractApplyingId) setContractReviewOpen(false); }} wide title={"계약 시트 변경 검토 · " + (contractReview.pending || 0) + "건"}>
+      <Modal open={contractReviewOpen} onClose={() => { if (!contractApplyingId) setContractReviewOpen(false); }} wide title={"신규 계약 업체 확인 · " + (contractReview.pending || 0) + "곳"}>
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {[
-                ["전체", (contractReview.items || []).length],
-                ["안전", (contractReview.summary && contractReview.summary.safe) || 0],
-                ["충돌", (contractReview.summary && contractReview.summary.conflict) || 0],
-                ["신규", (contractReview.summary && contractReview.summary.newCompanies) || 0],
-              ].map(([key, count]) => (
-                <button key={key} onClick={() => setContractReviewFilter(key)} className={"px-2.5 py-1 text-xs font-bold border transition-colors " + (contractReviewFilter === key ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50")}>{key} {count}</button>
-              ))}
-            </div>
+            <p className="text-xs font-bold text-slate-500">{contractReview.sourceCutoff || "2026-08-01"} 이후 · 계약현황 미등록 업체만 표시</p>
             <div className="flex items-center gap-2">
               {contractReview.sourceSpreadsheetId && <a href={"https://docs.google.com/spreadsheets/d/" + contractReview.sourceSpreadsheetId + "/edit"} target="_blank" rel="noreferrer" className="text-xs font-bold text-indigo-600 hover:underline inline-flex items-center gap-1">원본 계약 시트<ExternalLink size={11} /></a>}
               <Btn size="xs" disabled={contractReviewBusy} onClick={() => refreshContractReview(true)}><RefreshCw size={11} className={contractReviewBusy ? "animate-spin" : ""} />새로고침</Btn>
             </div>
           </div>
           <div className="border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
-            원본 시트의 업체별 계약 행을 현재 계약현황과 비교합니다. <b>반영</b>을 누르기 전에는 기존 금액·입금·담당자를 바꾸지 않습니다. 입금란이 체크(✔)뿐이고 숫자가 없으면 입금액으로 추정하지 않습니다.
+            아래 값 그대로 계약현황에 새 업체가 생성됩니다. 이미 계약현황에 있는 업체의 값은 비교하거나 수정하지 않습니다. 입금란이 체크(✔)뿐이고 숫자가 없으면 입금액은 0원으로 두고 금액 미확인으로 표시합니다.
           </div>
           <div className="space-y-3 max-h-[62vh] overflow-y-auto pr-1">
             {contractReviewVisible.map((item) => {
-              const tone = item.matchType === "new" ? "border-indigo-200" : item.risk === "conflict" ? "border-red-200" : "border-emerald-200";
-              const badge = item.matchType === "new" ? ["신규", "bg-indigo-50 text-indigo-700 border-indigo-200"] : item.risk === "conflict" ? ["확인 필요", "bg-red-50 text-red-700 border-red-200"] : ["안전 보완", "bg-emerald-50 text-emerald-700 border-emerald-200"];
-              const selectedTargetId = item.targetId || contractTargetSelections[item.id] || "";
+              const previewRows = [
+                ["업체명", item.company || "-"],
+                ["상태", "계약 완료"],
+                ["계약일", item.firstDate || "미확인"],
+                ["영업담당", item.owner || "미지정"],
+                ["신규/기존", item.ctype || "신규"],
+                ["계약 빌드업", (item.services || []).join(", ") || "미지정"],
+                ["계약금액", Number(item.sourceAmount || 0) > 0 ? fmtWon(Number(item.sourceAmount || 0)) : "금액 미확인 · 0원"],
+                ["확인 입금액", Number(item.numericPaid || 0) > 0 ? fmtWon(Number(item.numericPaid || 0)) : (item.paymentChecked ? "완료표시만 있음 · 0원" : "0원")],
+              ];
               return (
-                <div key={item.id} className={"border bg-white p-4 " + tone}>
+                <div key={item.id} className="border border-indigo-200 bg-white p-4">
                   <div className="flex items-start justify-between gap-3 flex-wrap">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-sm font-extrabold text-slate-900">{item.company}</p>
-                        <Chip cls={badge[1]}>{badge[0]}</Chip>
-                        <Chip cls="bg-slate-50 text-slate-600 border-slate-200">{item.changeType}</Chip>
+                        <Chip cls="bg-indigo-50 text-indigo-700 border-indigo-200">계약현황 미등록</Chip>
                       </div>
-                      <p className="text-xs text-slate-400 mt-1">원본 {item.firstDate || "날짜 없음"}{item.lastDate && item.lastDate !== item.firstDate ? " ~ " + item.lastDate : ""} · 계약 행 {(item.sourceRows || []).length}건 · 합계 {fmtWon(Number(item.sourceAmount || 0))}</p>
+                      <p className="text-xs text-slate-400 mt-1">원본 {item.firstDate || "날짜 없음"}{item.lastDate && item.lastDate !== item.firstDate ? " ~ " + item.lastDate : ""} · 계약 행 {(item.sourceRows || []).length}건</p>
                     </div>
-                    {item.matchType === "ambiguous" && (
-                      <Fld label="반영 대상 선택">
-                        <Sel value={selectedTargetId} onChange={(e) => setContractTargetSelections((previous) => ({ ...previous, [item.id]: e.target.value }))}
-                          options={[{ value: "", label: "업체를 선택하세요" }, ...(item.candidates || []).map((candidate) => ({ value: candidate.id, label: candidate.company + " · " + fmtWon(Number(candidate.contractAmount || 0)) }))]} />
-                      </Fld>
-                    )}
                   </div>
-                  <div className="mt-3 overflow-x-auto border border-slate-100">
-                    <table className="w-full text-xs min-w-[620px]">
-                      <thead className="bg-slate-50 text-slate-500"><tr><th className="px-3 py-2 text-left font-bold">변경 항목</th><th className="px-3 py-2 text-left font-bold">현재 계약현황</th><th className="px-3 py-2 text-left font-bold">시트 반영 후</th></tr></thead>
-                      <tbody>
-                        {(item.diffs || []).map((diff) => (
-                          <tr key={diff.key} className="border-t border-slate-100">
-                            <td className="px-3 py-2 font-bold text-slate-700">{diff.label}</td>
-                            <td className="px-3 py-2 text-slate-500 break-words">{formatContractReviewValue(diff.key, diff.current)}</td>
-                            <td className={"px-3 py-2 font-bold break-words " + (diff.risk === "conflict" ? "text-red-600" : "text-emerald-700")}>{formatContractReviewValue(diff.key, diff.proposed)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div className="mt-3 border border-slate-200">
+                    <p className="px-3 py-2 text-xs font-extrabold text-slate-700 bg-slate-50 border-b border-slate-200">계약현황 생성 미리보기</p>
+                    <div className="grid sm:grid-cols-2">
+                      {previewRows.map(([label, value], index) => (
+                        <div key={label} className={"px-3 py-2.5 flex items-start justify-between gap-3 text-xs " + (index < previewRows.length - 2 ? "border-b border-slate-100 " : "") + (index % 2 === 0 ? "sm:border-r border-slate-100" : "")}>
+                          <span className="text-slate-400 shrink-0">{label}</span><b className="text-slate-800 text-right break-words">{value}</b>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                   <details className="mt-2 border border-slate-100 bg-slate-50 px-3 py-2">
-                    <summary className="cursor-pointer text-xs font-bold text-slate-600">원본 계약 행 {(item.sourceRows || []).length}건 보기</summary>
+                    <summary className="cursor-pointer text-xs font-bold text-slate-600">원본 계약 내용 {(item.sourceRows || []).length}건 보기</summary>
                     <div className="mt-2 space-y-2">
                       {(item.sourceRows || []).map((row) => (
                         <div key={row.row} className="bg-white border border-slate-100 px-3 py-2 text-xs leading-5">
@@ -4635,15 +4600,15 @@ function DealsView() {
                     </div>
                   </details>
                   <div className="flex justify-end gap-2 mt-3">
-                    <Btn kind="danger" disabled={!!contractApplyingId} onClick={() => ignoreContractReviewItem(item)}>이번 변경 제외</Btn>
-                    <Btn kind="primary" disabled={!!contractApplyingId || (item.matchType === "ambiguous" && !selectedTargetId)} onClick={() => applyContractReviewItem(item)}>
-                      {contractApplyingId === item.id ? <RefreshCw size={12} className="animate-spin" /> : <Check size={12} />}{item.matchType === "new" ? "신규 업체로 반영" : "이 내용으로 반영"}
+                    <Btn kind="danger" disabled={!!contractApplyingId} onClick={() => ignoreContractReviewItem(item)}>제외</Btn>
+                    <Btn kind="primary" disabled={!!contractApplyingId} onClick={() => applyContractReviewItem(item)}>
+                      {contractApplyingId === item.id ? <RefreshCw size={12} className="animate-spin" /> : <Plus size={12} />}신규업체 생성
                     </Btn>
                   </div>
                 </div>
               );
             })}
-            {contractReviewVisible.length === 0 && <Empty compact text="이 조건의 대기 변경이 없습니다." />}
+            {contractReviewVisible.length === 0 && <Empty compact text="8월 이후 추가할 미등록 계약 업체가 없습니다." />}
           </div>
         </div>
       </Modal>
