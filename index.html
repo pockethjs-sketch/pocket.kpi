@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>포켓컴퍼니 CRM</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%232563eb'/%3E%3Cpath d='M20 14h15c10 0 17 5 17 15S45 44 35 44h-7v8h-8V14zm8 8v14h7c5 0 9-2 9-7s-4-7-9-7h-7z' fill='white'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
+<link rel="preconnect" href="https://unpkg.com" crossorigin>
+<link rel="preconnect" href="https://esm.sh" crossorigin>
 <script>
   /* CRM API는 file://의 null Origin을 거부합니다. 로컬 서버가 실행 중이면
      같은 파일을 허용된 localhost Origin으로 즉시 다시 엽니다. */
@@ -15,8 +19,8 @@
   }
 </script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css">
-<script src="https://cdn.tailwindcss.com"></script>
-<script src="https://unpkg.com/@babel/standalone@7.25.6/babel.min.js"></script>
+<script defer src="https://cdn.tailwindcss.com"></script>
+<script defer src="https://unpkg.com/@babel/standalone@7.25.6/babel.min.js"></script>
 <script type="importmap">
 {
   "imports": {
@@ -188,9 +192,29 @@
   window.crmRemoteRevision = '';
   window.crmRemoteHash = '';
   window.crmStorageVersion = 1;
+  window.crmMutationVersion = 0;
+  window.crmBackendVersion = '';
+  window.crmMarketingError = '';
   window.crmLastRemoteValue = null;
+  window.crmOptimisticRemoteValue = null;
   window.crmSaveQueue = Promise.resolve();
   window.crmPendingDbMutations = [];
+  window.crmPendingRemoteSaves = 0;
+  window.crmSyncInProgress = false;
+  var CRM_LOCAL_STATE_KEY = 'pocketcrm:db:v4';
+  var CRM_REMOTE_REVISION_KEY = 'crm:remoteRevision';
+  var CRM_REMOTE_HASH_KEY = 'crm:remoteHash';
+  var CRM_LOCAL_DIRTY_KEY = 'crm:localDirty';
+  var CRM_PENDING_MUTATIONS_KEY = 'crm:pendingMutations:v1';
+  try {
+    var persistedPendingMutations = JSON.parse(localStorage.getItem(CRM_PENDING_MUTATIONS_KEY) || '[]');
+    if (Array.isArray(persistedPendingMutations)) {
+      window.crmPendingDbMutations = persistedPendingMutations.map(function (entry, index) {
+        if (entry && entry.id && entry.mutation) return entry;
+        return { id: 'legacy-' + Date.now().toString(36) + '-' + index, mutation: entry };
+      }).filter(function (entry) { return entry.mutation && entry.mutation.changedCount; });
+    }
+  } catch (e) {}
   try {
     var cachedMarketingSpend = JSON.parse(localStorage.getItem('crm:marketingSpend') || 'null');
     if (cachedMarketingSpend && typeof cachedMarketingSpend === 'object') window.sheetMarketingSpend = cachedMarketingSpend;
@@ -200,49 +224,107 @@
     if (cachedMarketingMeta && typeof cachedMarketingMeta === 'object') window.sheetMarketingMeta = cachedMarketingMeta;
   } catch (e) {}
 
-  window.fetchCrmSheetState = async function () {
-    var lastError = '';
-    for (var attempt = 0; attempt < 2; attempt++) {
-      var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-      /* 현재 전체 상태 응답은 약 1.3MB라 Apps Script 콜드 스타트 시 45초를 넘긴다.
-         첫 응답이 끝나기 직전에 취소하지 않도록 75초까지 허용한다. */
-      var timeout = controller ? setTimeout(function () { controller.abort(); }, 75000) : null;
-      try {
-        var res = await fetch(CRM_SHEET_URL + '?token=' + encodeURIComponent(CRM_TOKEN) + '&t=' + Date.now() + '&attempt=' + attempt, {
-          cache: 'no-store', signal: controller ? controller.signal : undefined
-        });
+  function crmFetchSheetAction(action, timeoutMs) {
+    var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var timeout = controller ? setTimeout(function () { controller.abort(); }, timeoutMs) : null;
+    var url = CRM_SHEET_URL + '?token=' + encodeURIComponent(CRM_TOKEN) + '&action=' + encodeURIComponent(action) + '&t=' + Date.now();
+    return fetch(url, { cache: 'no-store', signal: controller ? controller.signal : undefined })
+      .then(function (res) {
         if (!res.ok) throw new Error('sheet_' + res.status);
-        var o = await res.json();
-        if (!o || !o.data) throw new Error('sheet_empty');
-        window.crmRemoteRevision = String(o.revision || '');
-        window.crmRemoteHash = String(o.hash || '');
-        window.crmStorageVersion = Number(o.storageVersion || 1);
-        window.crmLastRemoteValue = o.data;
-        window.sheetMarketingSpend = o.marketingSpend && typeof o.marketingSpend === 'object' ? o.marketingSpend : window.sheetMarketingSpend || null;
-        window.sheetMarketingDaily = o.marketingDaily && typeof o.marketingDaily === 'object' ? o.marketingDaily : window.sheetMarketingDaily || null;
-        window.sheetMarketingMeta = o.marketingMeta && typeof o.marketingMeta === 'object' ? o.marketingMeta : window.sheetMarketingMeta || null;
-        if (window.sheetMarketingSpend) {
-          try { localStorage.setItem('crm:marketingSpend', JSON.stringify(window.sheetMarketingSpend)); } catch (e) {}
-        }
-        if (window.sheetMarketingDaily) {
-          try { localStorage.setItem('crm:marketingDaily', JSON.stringify(window.sheetMarketingDaily)); } catch (e) {}
-        }
-        if (window.sheetMarketingMeta) {
-          try { localStorage.setItem('crm:marketingMeta', JSON.stringify(window.sheetMarketingMeta)); } catch (e) {}
-        }
+        return res.json();
+      })
+      .finally(function () { if (timeout) clearTimeout(timeout); });
+  }
+
+  function crmApplyRemoteEnvelope(payload) {
+    if (!payload || typeof payload !== 'object') return;
+    window.crmRemoteRevision = String(payload.revision || window.crmRemoteRevision || '');
+    window.crmRemoteHash = String(payload.hash || window.crmRemoteHash || '');
+    window.crmStorageVersion = Number(payload.storageVersion || window.crmStorageVersion || 1);
+    window.crmMutationVersion = Number(payload.mutationVersion || window.crmMutationVersion || 0);
+    window.crmBackendVersion = String(payload.backendVersion || window.crmBackendVersion || '');
+    try {
+      if (window.crmRemoteRevision) localStorage.setItem(CRM_REMOTE_REVISION_KEY, window.crmRemoteRevision);
+      if (window.crmRemoteHash) localStorage.setItem(CRM_REMOTE_HASH_KEY, window.crmRemoteHash);
+    } catch (e) {}
+  }
+
+  function crmApplyMarketingEnvelope(payload) {
+    if (!payload || typeof payload !== 'object') return;
+    window.sheetMarketingSpend = payload.marketingSpend && typeof payload.marketingSpend === 'object' ? payload.marketingSpend : window.sheetMarketingSpend || null;
+    window.sheetMarketingDaily = payload.marketingDaily && typeof payload.marketingDaily === 'object' ? payload.marketingDaily : window.sheetMarketingDaily || null;
+    window.sheetMarketingMeta = payload.marketingMeta && typeof payload.marketingMeta === 'object' ? payload.marketingMeta : window.sheetMarketingMeta || null;
+    try {
+      if (window.sheetMarketingSpend) localStorage.setItem('crm:marketingSpend', JSON.stringify(window.sheetMarketingSpend));
+      if (window.sheetMarketingDaily) localStorage.setItem('crm:marketingDaily', JSON.stringify(window.sheetMarketingDaily));
+      if (window.sheetMarketingMeta) localStorage.setItem('crm:marketingMeta', JSON.stringify(window.sheetMarketingMeta));
+    } catch (e) {}
+  }
+
+  window.fetchCrmSheetState = async function () {
+    var localStateText = null;
+    var cachedRevision = '';
+    var localDirty = false;
+    try {
+      localStateText = localStorage.getItem(CRM_LOCAL_STATE_KEY);
+      cachedRevision = localStorage.getItem(CRM_REMOTE_REVISION_KEY) || '';
+      localDirty = localStorage.getItem(CRM_LOCAL_DIRTY_KEY) === '1';
+    } catch (e) {}
+
+    try {
+      /* 1단계: 1.8MB 상태 대신 revision 메타만 조회합니다. 정상 서버는 수 KB 이내입니다. */
+      var meta = await crmFetchSheetAction('meta', 15000);
+      if (!meta || meta.error) throw new Error((meta && meta.error) || 'meta_empty');
+      crmApplyRemoteEnvelope(meta);
+
+      /* 구버전 서버가 action을 무시하고 전체 상태를 반환해도 두 번째 전체 요청은 하지 않습니다. */
+      if (meta.data) {
+        crmApplyMarketingEnvelope(meta);
         window.crmRemoteLoaded = true;
         window.crmRemoteError = '';
-        return { value: o.data, revision: window.crmRemoteRevision, marketingSpend: window.sheetMarketingSpend, marketingDaily: window.sheetMarketingDaily, marketingMeta: window.sheetMarketingMeta, source: 'remote' };
-      } catch (e) {
-        lastError = String(e && e.message || e);
-        if (attempt < 1) await new Promise(function (resolve) { setTimeout(resolve, 1200); });
-      } finally {
-        if (timeout) clearTimeout(timeout);
+        window.crmLastRemoteValue = meta.data;
+        window.crmOptimisticRemoteValue = meta.data;
+        return { value: meta.data, revision: window.crmRemoteRevision, marketingSpend: window.sheetMarketingSpend, marketingDaily: window.sheetMarketingDaily, marketingMeta: window.sheetMarketingMeta, source: 'remote-legacy' };
       }
+
+      var marketingPromise = crmFetchSheetAction('marketing', 20000)
+        .then(function (marketing) {
+          if (!marketing || marketing.error) throw new Error((marketing && marketing.error) || 'marketing_empty');
+          crmApplyRemoteEnvelope(marketing);
+          crmApplyMarketingEnvelope(marketing);
+          window.crmMarketingError = '';
+          return marketing;
+        })
+        .catch(function (error) {
+          window.crmMarketingError = String(error && error.name === 'AbortError' ? 'marketing_timeout' : (error && error.message || error));
+          return null;
+        });
+
+      var revisionUnchanged = !!(localStateText && cachedRevision && !localDirty && window.crmRemoteRevision && cachedRevision === window.crmRemoteRevision);
+      if (revisionUnchanged) {
+        await marketingPromise;
+        window.crmRemoteLoaded = true;
+        window.crmRemoteError = '';
+        window.crmLastRemoteValue = localStateText;
+        window.crmOptimisticRemoteValue = localStateText;
+        return { unchanged: true, revision: window.crmRemoteRevision, marketingSpend: window.sheetMarketingSpend, marketingDaily: window.sheetMarketingDaily, marketingMeta: window.sheetMarketingMeta, source: 'remote-cache' };
+      }
+
+      /* 2단계: revision이 달라졌거나 로컬 변경이 남아 있을 때만 전체 상태를 한 번 읽습니다. */
+      var results = await Promise.all([crmFetchSheetAction('state', 45000), marketingPromise]);
+      var state = results[0];
+      if (!state || state.error || !state.data) throw new Error((state && state.error) || 'state_empty');
+      crmApplyRemoteEnvelope(state);
+      window.crmRemoteLoaded = true;
+      window.crmRemoteError = '';
+      window.crmLastRemoteValue = state.data;
+      window.crmOptimisticRemoteValue = state.data;
+      return { value: state.data, revision: window.crmRemoteRevision, marketingSpend: window.sheetMarketingSpend, marketingDaily: window.sheetMarketingDaily, marketingMeta: window.sheetMarketingMeta, source: 'remote' };
+    } catch (e) {
+      window.crmRemoteLoaded = false;
+      window.crmRemoteError = String(e && e.name === 'AbortError' ? 'backend_timeout' : (e && e.message || e) || 'sheet_unknown');
+      return null;
     }
-    window.crmRemoteLoaded = false;
-    window.crmRemoteError = lastError || 'sheet_unknown';
-    return null;
   };
 
   /* CRM 갱신은 사내 서버에서는 동일 Origin Nginx 프록시를 우선 사용하고,
@@ -323,27 +405,176 @@
       return item && typeof item === 'object' && item[idField] != null && String(item[idField]) !== '';
     });
   }
-  function crmBuildMutation(previousText, nextText) {
+  function crmCloneValue(value) {
+    if (value == null || typeof value !== 'object') return value;
+    return JSON.parse(JSON.stringify(value));
+  }
+  function crmIsPlainObject(value) {
+    return !!value && typeof value === 'object' && !Array.isArray(value);
+  }
+  function crmCollectPatchOps(before, after, path, ops) {
+    if (JSON.stringify(before) === JSON.stringify(after)) return ops;
+    if (!crmIsPlainObject(before) || !crmIsPlainObject(after)) {
+      ops.push({ op: 'set', path: path.slice(), value: crmCloneValue(after) });
+      return ops;
+    }
+    var keys = {};
+    Object.keys(before).forEach(function (key) { keys[key] = true; });
+    Object.keys(after).forEach(function (key) { keys[key] = true; });
+    Object.keys(keys).forEach(function (key) {
+      var nextPath = path.concat([key]);
+      if (!Object.prototype.hasOwnProperty.call(after, key)) {
+        ops.push({ op: 'delete', path: nextPath });
+      } else if (!Object.prototype.hasOwnProperty.call(before, key)) {
+        ops.push({ op: 'set', path: nextPath, value: crmCloneValue(after[key]) });
+      } else {
+        crmCollectPatchOps(before[key], after[key], nextPath, ops);
+      }
+    });
+    return ops;
+  }
+  function crmSafePatchPath(path) {
+    return Array.isArray(path) && path.length && path.every(function (key) {
+      key = String(key);
+      return key !== '__proto__' && key !== 'prototype' && key !== 'constructor';
+    });
+  }
+  function crmApplyPatchOps(target, ops) {
+    target = crmCloneValue(target || {});
+    (ops || []).forEach(function (entry) {
+      var path = entry && entry.path;
+      if (!crmSafePatchPath(path)) throw new Error('invalid_patch_path');
+      var cursor = target;
+      for (var i = 0; i < path.length - 1; i += 1) {
+        var key = String(path[i]);
+        if (!crmIsPlainObject(cursor[key]) && !Array.isArray(cursor[key])) cursor[key] = {};
+        cursor = cursor[key];
+      }
+      var leaf = String(path[path.length - 1]);
+      if (entry.op === 'delete') delete cursor[leaf];
+      else if (entry.op === 'set') cursor[leaf] = crmCloneValue(entry.value);
+      else throw new Error('invalid_patch_op');
+    });
+    return target;
+  }
+  function crmApplyMutationLocal(state, mutation) {
+    state = crmCloneValue(state && typeof state === 'object' ? state : {});
+    mutation = mutation || {};
+    Object.keys(mutation.collections || {}).forEach(function (name) {
+      var change = mutation.collections[name] || {};
+      var idField = String(change.idField || 'id');
+      var list = Array.isArray(state[name]) ? state[name].slice() : [];
+      var index = {};
+      list.forEach(function (item, position) {
+        if (item && item[idField] != null) index[String(item[idField])] = position;
+      });
+      (change.upsert || []).forEach(function (item) {
+        if (!item || item[idField] == null || String(item[idField]) === '') throw new Error('missing_entity_id:' + name);
+        var id = String(item[idField]);
+        if (index[id] == null) { index[id] = list.length; list.push(crmCloneValue(item)); }
+        else list[index[id]] = crmCloneValue(item);
+      });
+      (change.patches || []).forEach(function (patch) {
+        var id = String((patch && patch.id) || '');
+        if (!id || index[id] == null) throw new Error('missing_patch_entity:' + name + ':' + id);
+        list[index[id]] = crmApplyPatchOps(list[index[id]], patch.ops || []);
+      });
+      var removed = {};
+      (change.remove || []).forEach(function (id) { removed[String(id)] = true; });
+      state[name] = list.filter(function (item) { return !(item && removed[String(item[idField])]); });
+    });
+    Object.keys(mutation.documents || {}).forEach(function (name) { state[name] = crmCloneValue(mutation.documents[name]); });
+    (mutation.deleteDocuments || []).forEach(function (name) { delete state[name]; });
+    return state;
+  }
+  function crmConsumePendingMutations(baseState) {
+    var queue = Array.isArray(window.crmPendingDbMutations) ? window.crmPendingDbMutations.slice() : [];
+    var next = crmCloneValue(baseState || {}), allowed = {}, applied = 0, ids = [];
+    queue.forEach(function (entry) {
+      var mutation = entry && entry.mutation ? entry.mutation : entry;
+      if (!mutation || !mutation.changedCount) return;
+      next = crmApplyMutationLocal(next, mutation);
+      (((mutation.allowedRemovals || {}).leads) || []).forEach(function (id) { allowed[String(id)] = true; });
+      applied += 1;
+      if (entry && entry.id) ids.push(String(entry.id));
+    });
+    return {
+      state: next,
+      count: applied,
+      ids: ids,
+      saveOptions: { origin: 'user', reason: 'pending_user_replay', allowedLeadRemovals: Object.keys(allowed), pendingMutationIds: ids }
+    };
+  }
+  function crmPersistPendingMutations() {
+    try { localStorage.setItem(CRM_PENDING_MUTATIONS_KEY, JSON.stringify(window.crmPendingDbMutations || [])); } catch (e) {}
+  }
+  function crmClearPendingMutations() {
+    window.crmPendingDbMutations = [];
+    window.crmNextSaveOptions = null;
+    try { localStorage.removeItem(CRM_PENDING_MUTATIONS_KEY); } catch (e) {}
+  }
+  function crmNewMutationId(prefix) {
+    return String(prefix || 'web') + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+  }
+  function crmJournalMutation(prepared) {
+    if (!prepared || prepared.unchanged || !prepared.mutation || !prepared.mutationId) return;
+    window.crmPendingDbMutations = Array.isArray(window.crmPendingDbMutations) ? window.crmPendingDbMutations : [];
+    if (!window.crmPendingDbMutations.some(function (entry) { return entry && entry.id === prepared.mutationId; })) {
+      window.crmPendingDbMutations.push({ id: prepared.mutationId, mutation: prepared.mutation, createdAt: new Date().toISOString() });
+      crmPersistPendingMutations();
+    }
+  }
+  function crmAcknowledgePendingMutations(ids) {
+    var done = {};
+    (ids || []).forEach(function (id) { if (id) done[String(id)] = true; });
+    if (!Object.keys(done).length) return;
+    window.crmPendingDbMutations = (window.crmPendingDbMutations || []).filter(function (entry) {
+      return !(entry && done[String(entry.id)]);
+    });
+    crmPersistPendingMutations();
+    try {
+      if (window.crmPendingDbMutations.length) localStorage.setItem(CRM_LOCAL_DIRTY_KEY, '1');
+      else localStorage.removeItem(CRM_LOCAL_DIRTY_KEY);
+    } catch (e) {}
+  }
+  function crmBuildMutation(previousText, nextText, options) {
+    options = options || {};
     var previous = {}, next = {};
     try { previous = previousText ? JSON.parse(previousText) : {}; } catch (e) {}
     try { next = nextText ? JSON.parse(nextText) : {}; } catch (e) { throw new Error('local_state_invalid'); }
-    var mutation = { schemaVersion: 2, collections: {}, documents: {}, deleteDocuments: [], changedCount: 0 };
+    var allowedLeadRemovals = (options.allowedLeadRemovals || []).map(String);
+    var allowedLeadRemovalSet = {};
+    allowedLeadRemovals.forEach(function (id) { allowedLeadRemovalSet[id] = true; });
+    var mutation = {
+      schemaVersion: 3,
+      origin: String(options.origin || 'user'),
+      reason: String(options.reason || ''),
+      allowedRemovals: { leads: allowedLeadRemovals },
+      collections: {}, documents: {}, deleteDocuments: [], changedCount: 0
+    };
     var keys = {};
     Object.keys(previous || {}).forEach(function (key) { keys[key] = true; });
     Object.keys(next || {}).forEach(function (key) { keys[key] = true; });
     Object.keys(keys).forEach(function (key) {
       var before = previous[key], after = next[key], idField = CRM_COLLECTION_ID_FIELDS[key];
       if (idField && crmArrayHasStableIds(before || [], idField) && crmArrayHasStableIds(after || [], idField)) {
-        var beforeMap = {}, afterMap = {}, upsert = [], remove = [];
+        var beforeMap = {}, afterMap = {}, upsert = [], patches = [], remove = [];
         (before || []).forEach(function (item) { beforeMap[String(item[idField])] = item; });
         (after || []).forEach(function (item) { afterMap[String(item[idField])] = item; });
         Object.keys(afterMap).forEach(function (id) {
-          if (!beforeMap[id] || JSON.stringify(beforeMap[id]) !== JSON.stringify(afterMap[id])) upsert.push(afterMap[id]);
+          if (!beforeMap[id]) upsert.push(afterMap[id]);
+          else if (JSON.stringify(beforeMap[id]) !== JSON.stringify(afterMap[id])) {
+            var ops = crmCollectPatchOps(beforeMap[id], afterMap[id], [], []);
+            if (ops.length) patches.push({ id: id, ops: ops });
+          }
         });
-        Object.keys(beforeMap).forEach(function (id) { if (!afterMap[id]) remove.push(id); });
-        if (upsert.length || remove.length) {
-          mutation.collections[key] = { idField: idField, upsert: upsert, remove: remove };
-          mutation.changedCount += upsert.length + remove.length;
+        Object.keys(beforeMap).forEach(function (id) {
+          if (afterMap[id]) return;
+          if (key !== 'leads' || allowedLeadRemovalSet[id]) remove.push(id);
+        });
+        if (upsert.length || patches.length || remove.length) {
+          mutation.collections[key] = { idField: idField, upsert: upsert, patches: patches, remove: remove };
+          mutation.changedCount += upsert.length + patches.length + remove.length;
         }
         return;
       }
@@ -360,12 +591,8 @@
     mutation.actor = actor;
     return mutation;
   }
-  function crmPostStateV2(nextValue) {
-    var previousValue = window.crmLastRemoteValue;
-    if (!previousValue) return Promise.reject(new Error('remote_baseline_missing'));
-    var mutation = crmBuildMutation(previousValue, nextValue);
-    if (!mutation.changedCount) return Promise.resolve({ ok: true, unchanged: true, revision: window.crmRemoteRevision });
-    var mutationId = 'web-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+  function crmSubmitMutationV3(mutation, committedValue, mutationId, attempt) {
+    attempt = Number(attempt || 0);
     var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     var timeout = controller ? setTimeout(function () { controller.abort(); }, 30000) : null;
     return fetch(CRM_SHEET_URL, {
@@ -383,22 +610,60 @@
       if (!res.ok) throw new Error('sheet_' + res.status);
       return res.json();
     }).then(function (result) {
-      if (!result || !result.ok) {
-        if (result && result.error === 'revision_conflict') {
-          window.crmRemoteRevision = String(result.currentRevision || window.crmRemoteRevision || '');
-          window.crmRemoteError = 'revision_conflict';
-          throw new Error('revision_conflict');
-        }
-        throw new Error((result && result.error) || 'save_v2_failed');
+      if (result && result.error === 'revision_conflict' && attempt < 3) {
+        return crmFetchSheetAction('state', 45000).then(function (latest) {
+          if (!latest || latest.error || !latest.data) throw new Error((latest && latest.error) || 'conflict_reload_failed');
+          crmApplyRemoteEnvelope(latest);
+          var latestState = JSON.parse(latest.data);
+          var rebasedState = crmApplyMutationLocal(latestState, mutation);
+          var rebasedValue = JSON.stringify(rebasedState);
+          window.crmLastRemoteValue = latest.data;
+          return crmSubmitMutationV3(mutation, rebasedValue, mutationId, attempt + 1);
+        });
       }
+      if (!result || !result.ok) throw new Error((result && result.error) || 'save_v2_failed');
       if (Number(result.storageVersion || 0) < 2) throw new Error('storage_v2_not_deployed');
+      if (Number(result.mutationVersion || 0) < 3) throw new Error('storage_v3_not_deployed');
       window.crmRemoteRevision = String(result.revision || window.crmRemoteRevision || '');
       window.crmRemoteHash = String(result.hash || '');
       window.crmStorageVersion = 2;
-      window.crmLastRemoteValue = nextValue;
+      window.crmLastRemoteValue = committedValue;
       window.crmRemoteError = '';
+      try {
+        if (window.crmRemoteRevision) localStorage.setItem(CRM_REMOTE_REVISION_KEY, window.crmRemoteRevision);
+        if (window.crmRemoteHash) localStorage.setItem(CRM_REMOTE_HASH_KEY, window.crmRemoteHash);
+        localStorage.removeItem(CRM_LOCAL_DIRTY_KEY);
+      } catch (e) {}
+      result.committedValue = committedValue;
+      result.rebased = attempt > 0;
       return result;
     }).finally(function () { if (timeout) clearTimeout(timeout); });
+  }
+  function crmPrepareStateMutation(nextValue, options) {
+    var previousValue = window.crmOptimisticRemoteValue || window.crmLastRemoteValue;
+    if (!previousValue) throw new Error('remote_baseline_missing');
+    var mutation = crmBuildMutation(previousValue, nextValue, options || {});
+    if (!mutation.changedCount) {
+      try { if (!(window.crmPendingDbMutations || []).length) localStorage.removeItem(CRM_LOCAL_DIRTY_KEY); } catch (e) {}
+      return { unchanged: true };
+    }
+    var mutationId = crmNewMutationId('web');
+    var optimisticState = crmApplyMutationLocal(JSON.parse(previousValue), mutation);
+    window.crmOptimisticRemoteValue = JSON.stringify(optimisticState);
+    return { mutation: mutation, mutationId: mutationId };
+  }
+  function crmPostPreparedMutationV3(prepared) {
+    if (!prepared || prepared.unchanged) return Promise.resolve({ ok: true, unchanged: true, revision: window.crmRemoteRevision });
+    var baseValue = window.crmLastRemoteValue;
+    if (!baseValue) return Promise.reject(new Error('remote_baseline_missing'));
+    var committedState = crmApplyMutationLocal(JSON.parse(baseValue), prepared.mutation);
+    return crmSubmitMutationV3(prepared.mutation, JSON.stringify(committedState), prepared.mutationId, 0);
+  }
+  function crmPostStateV2(nextValue, options) {
+    var prepared;
+    try { prepared = crmPrepareStateMutation(nextValue, options); }
+    catch (error) { return Promise.reject(error); }
+    return crmPostPreparedMutationV3(prepared);
   }
 
   window.storage = {
@@ -415,16 +680,42 @@
       }
       return (local != null) ? { value: local, source: 'local' } : null;
     },
-    set: async function (k, v) {
+    set: async function (k, v, options) {
+      options = options || {};
       try { localStorage.setItem(k, v); } catch (e) {}   /* 항상 로컬 백업 */
+      if (CRM_SHEET_URL) {
+        try { localStorage.setItem(CRM_LOCAL_DIRTY_KEY, '1'); } catch (e) {}
+      }
       /* 원격 원본을 한 번도 읽지 못한 상태에서는 로컬·시드 데이터로 원격 원본을 덮어쓰지 않습니다. */
-      if (CRM_SHEET_URL && window.crmRemoteLoaded) {
-        /* 저장 요청을 직렬화해 키 입력 중 발생한 앞선 저장이 뒤늦게 최신 값을 덮지 못하게 합니다. */
+      if (CRM_SHEET_URL && window.crmRemoteLoaded && window.crmRemoteApplied) {
+        /* 변경분은 호출 시점에 필드 패치로 고정합니다. 앞선 요청이 충돌로 재시도돼도
+           뒤 요청의 변경 의도가 전체 상태 비교로 변질되지 않습니다. */
+        window.crmPendingRemoteSaves = Number(window.crmPendingRemoteSaves || 0) + 1;
+        var prepared;
+        try { prepared = crmPrepareStateMutation(v, options); }
+        catch (error) {
+          window.crmPendingRemoteSaves = Math.max(0, Number(window.crmPendingRemoteSaves || 1) - 1);
+          return Promise.reject(error);
+        }
+        var pendingIds = (options.pendingMutationIds || []).map(String);
+        var journalPrepared = String(options.origin || 'user') === 'user' && options.reason !== 'pending_user_replay';
+        if (prepared && prepared.unchanged) {
+          crmAcknowledgePendingMutations(pendingIds);
+          window.crmPendingRemoteSaves = Math.max(0, Number(window.crmPendingRemoteSaves || 1) - 1);
+          return { ok: true, unchanged: true, revision: window.crmRemoteRevision };
+        }
+        if (journalPrepared) crmJournalMutation(prepared);
         window.crmSaveQueue = (window.crmSaveQueue || Promise.resolve())
           .catch(function () {})
-          .then(function () { return crmPostStateV2(v); });
+          .then(function () { return crmPostPreparedMutationV3(prepared); })
+          .then(function (result) {
+            crmAcknowledgePendingMutations(pendingIds.concat(journalPrepared ? [prepared.mutationId] : []));
+            return result;
+          })
+          .finally(function () { window.crmPendingRemoteSaves = Math.max(0, Number(window.crmPendingRemoteSaves || 1) - 1); });
         return window.crmSaveQueue;
       }
+      return { ok: false, pending: true, reason: 'remote_not_ready' };
     },
     delete: async function (k) { try { localStorage.removeItem(k); } catch (e) {} }
   };
@@ -1986,7 +2277,7 @@ const KEY3 = "pocketcrm:db:v4";
 function useDB() {
   const [db, setDb] = useState(null);
   const [saveState, setSaveState] = useState("불러오는 중");
-  const timer = useRef(null); const skip = useRef(true);
+  const timer = useRef(null); const skip = useRef(true); const latestDbRef = useRef(null);
   useEffect(() => { (async () => {
     let data = null;
     let initialSource = "";
@@ -2005,7 +2296,7 @@ function useDB() {
     if (marketingSpendImport) {
       data.adSpend = sheetSpend;
       data.imports = data.imports || {};
-      data.imports.marketingSpend = { source: "구글시트 원본_메타광고 + 원본_검색광고", syncedAt: new Date().toISOString(), months: Object.keys(sheetSpend).length };
+      data.imports.marketingSpend = { source: "구글시트 원본_메타광고 + NAVER-GOOGLE", syncedAt: new Date().toISOString(), months: Object.keys(sheetSpend).length };
     }
     if (marketingDailyImport) data.adDaily = sheetDaily;
     if (marketingMetaImport) data.adSpendMeta = { ...(data.adSpendMeta || {}), ...sheetMeta };
@@ -2030,6 +2321,7 @@ function useDB() {
       }
     }
     /* 화면은 캐시/최초 데이터가 준비되는 즉시 열고 외부 동기화는 뒤에서 처리합니다. */
+    latestDbRef.current = data;
     setDb({ ...data });
     setSaveState(initialSource === "local" && window.crmRemoteStatePromise ? "캐시 표시 · 최신 데이터 확인 중" : finalState);
 
@@ -2037,7 +2329,44 @@ function useDB() {
     if (initialSource !== "remote" && window.crmRemoteStatePromise) {
       try {
         const remote = await window.crmRemoteStatePromise;
-        if (remote && remote.value) {
+        if (remote && remote.unchanged) {
+          let cachedChanged = false;
+          const pendingReplay = crmConsumePendingMutations(data);
+          if (pendingReplay.count) { data = pendingReplay.state; cachedChanged = true; }
+          const freshSpend = remote.marketingSpend && typeof remote.marketingSpend === "object" ? remote.marketingSpend : null;
+          const freshDaily = remote.marketingDaily && typeof remote.marketingDaily === "object" ? remote.marketingDaily : null;
+          const freshMarketingMeta = remote.marketingMeta && typeof remote.marketingMeta === "object" ? remote.marketingMeta : null;
+          if (freshSpend && Object.keys(freshSpend).length && JSON.stringify(data.adSpend || {}) !== JSON.stringify(freshSpend)) {
+            data.adSpend = freshSpend;
+            data.imports = data.imports || {};
+            data.imports.marketingSpend = { source: "구글시트 원본_메타광고 + NAVER-GOOGLE", syncedAt: new Date().toISOString(), months: Object.keys(freshSpend).length };
+            cachedChanged = true;
+          }
+          if (freshDaily && Object.keys(freshDaily).length && JSON.stringify(data.adDaily || {}) !== JSON.stringify(freshDaily)) {
+            data.adDaily = freshDaily;
+            cachedChanged = true;
+          }
+          if (freshMarketingMeta && Object.keys(freshMarketingMeta).length) {
+            const nextMarketingMeta = { ...(data.adSpendMeta || {}), ...freshMarketingMeta };
+            if (JSON.stringify(data.adSpendMeta || {}) !== JSON.stringify(nextMarketingMeta)) {
+              data.adSpendMeta = nextMarketingMeta;
+              cachedChanged = true;
+            }
+          }
+          if (cachedChanged) {
+            try { localStorage.setItem(KEY3, JSON.stringify(data)); } catch (e) {}
+            skip.current = true;
+            latestDbRef.current = data;
+            setDb({ ...data });
+            window.crmRemoteApplied = true;
+            await window.storage.set(KEY3, JSON.stringify(data), pendingReplay.count ? pendingReplay.saveOptions : { origin: "system", reason: "marketing_refresh" });
+          } else {
+            try { localStorage.removeItem(CRM_LOCAL_DIRTY_KEY); } catch (e) {}
+          }
+          window.crmRemoteApplied = true;
+          finalState = cachedChanged ? "최신 광고 데이터 반영·저장됨" : "최신 데이터 확인됨";
+          setSaveState(finalState);
+        } else if (remote && remote.value) {
           const cachedBeforeRemote = data;
           const remoteParsed = JSON.parse(remote.value);
           const needsAuthMigration = !remoteParsed.auth || !Array.isArray(remoteParsed.auth.accounts);
@@ -2046,9 +2375,8 @@ function useDB() {
           let fresh = migrateV1(remoteParsed);
           const remoteDemoCleanup = removeDemoLeadData(fresh);
           let remoteChanged = remoteDemoCleanup.changed || needsAuthMigration || needsRevenueMigration || needsTmMigration;
-          const pendingMutations = Array.isArray(window.crmPendingDbMutations) ? window.crmPendingDbMutations.splice(0) : [];
-          pendingMutations.forEach((mutation) => { try { mutation(fresh); } catch (e) {} });
-          if (pendingMutations.length) remoteChanged = true;
+          const pendingReplay = crmConsumePendingMutations(fresh);
+          if (pendingReplay.count) { fresh = pendingReplay.state; remoteChanged = true; }
           /* 수정사항·마케팅 로그는 화면에서 직접 입력하는 데이터다.
              느린 원격 응답이 도착했을 때 빈 원격 배열로 로컬 기록을 덮지 않고 ID 기준으로 합친다. */
           ["revisionNotes", "marketingLogs"].forEach((key) => {
@@ -2068,7 +2396,7 @@ function useDB() {
           if (freshSpend && Object.keys(freshSpend).length && JSON.stringify(fresh.adSpend || {}) !== JSON.stringify(freshSpend)) {
             fresh.adSpend = freshSpend;
             fresh.imports = fresh.imports || {};
-            fresh.imports.marketingSpend = { source: "구글시트 원본_메타광고 + 원본_검색광고", syncedAt: new Date().toISOString(), months: Object.keys(freshSpend).length };
+            fresh.imports.marketingSpend = { source: "구글시트 원본_메타광고 + NAVER-GOOGLE", syncedAt: new Date().toISOString(), months: Object.keys(freshSpend).length };
             remoteChanged = true;
           }
           if (freshDaily && Object.keys(freshDaily).length && JSON.stringify(fresh.adDaily || {}) !== JSON.stringify(freshDaily)) {
@@ -2085,14 +2413,18 @@ function useDB() {
           if (importPocketBizTaxInvoice20260731(fresh)) remoteChanged = true;
           if (mergeLegacyReceivables20260730(fresh)) remoteChanged = true;
           data = fresh;
-          try { localStorage.setItem(KEY3, JSON.stringify(data)); } catch (e) {}
+          try {
+            localStorage.setItem(KEY3, JSON.stringify(data));
+            localStorage.removeItem(CRM_LOCAL_DIRTY_KEY);
+          } catch (e) {}
           skip.current = true;
+          latestDbRef.current = data;
           setDb({ ...data });
           window.crmRemoteApplied = true;
           finalState = remoteChanged ? "최신 데이터 반영 · 저장 중" : "최신 데이터 반영됨";
           setSaveState(finalState);
           if (remoteChanged) {
-            await window.storage.set(KEY3, JSON.stringify(data));
+            await window.storage.set(KEY3, JSON.stringify(data), pendingReplay.count ? pendingReplay.saveOptions : { origin: "system", reason: "remote_migration" });
             finalState = "최신 데이터 반영·저장됨";
             setSaveState(finalState);
           }
@@ -2107,26 +2439,38 @@ function useDB() {
         setSaveState(finalState);
       }
     }
-    /* 지원사업 보드: Supabase 원본을 현재 DB 안의 supportBoard로 마이그레이션 */
-    try {
-      const importedSupportBoard = await window.fetchSupportBoard();
-      if (importedSupportBoard) {
-        const previous = data.supportBoard || null;
-        if (JSON.stringify(previous && { ...previous, syncedAt: undefined }) !== JSON.stringify({ ...importedSupportBoard, syncedAt: undefined })) {
-          data.supportBoard = { ...importedSupportBoard, syncedAt: new Date().toISOString() };
-          await window.storage.set(KEY3, JSON.stringify(data));
-          finalState = "저장됨 · 지원사업 보드 " + importedSupportBoard.companies.length + "개사 이관";
+    /* 지원사업 보드는 10분 안에 받은 캐시가 있으면 재요청하지 않습니다. */
+    const supportSyncedAt = data.supportBoard && data.supportBoard.syncedAt ? Date.parse(data.supportBoard.syncedAt) : 0;
+    const supportCacheFresh = supportSyncedAt > 0 && (Date.now() - supportSyncedAt) < 10 * 60 * 1000;
+    if (!supportCacheFresh) {
+      try {
+        const importedSupportBoard = await window.fetchSupportBoard();
+        if (importedSupportBoard) {
+          const supportBase = crmCloneValue(latestDbRef.current || data);
+          const previous = supportBase.supportBoard || null;
+          if (JSON.stringify(previous && { ...previous, syncedAt: undefined }) !== JSON.stringify({ ...importedSupportBoard, syncedAt: undefined })) {
+            supportBase.supportBoard = { ...importedSupportBoard, syncedAt: new Date().toISOString() };
+            data = supportBase;
+            latestDbRef.current = data;
+            skip.current = true;
+            setDb({ ...data });
+            await window.storage.set(KEY3, JSON.stringify(data), { origin: "system", reason: "support_board_refresh" });
+            finalState = "저장됨 · 지원사업 보드 " + importedSupportBoard.companies.length + "개사 이관";
+          }
         }
+      } catch (e) {
+        finalState = "지원사업 보드 연결 실패 · 기존 데이터 표시";
       }
-    } catch (e) {
-      finalState = "지원사업 보드 연결 실패 · 기존 데이터 표시";
     }
     /* 본사 CRM API 자동 동기화 (하루 1회, 리드/프리미팅) */
     try {
       if (window.crmShouldSync && window.crmShouldSync()) {
+        window.crmSyncInProgress = true;
         setSaveState("본사 CRM 동기화 중…");
         const syncEnd = todayISO();
         const syncStart = addDaysISO(syncEnd, -CRM_SYNC_WINDOW_DAYS);
+        const syncBase = crmCloneValue(latestDbRef.current || data);
+        data = crmCloneValue(syncBase);
         let syncProxy = null;
         if (window.crmIsHosted && window.crmIsHosted()) syncProxy = await window.crmFetchRefreshPayload(syncStart, syncEnd);
         const res = await window.crmFetchPremeeting(data, syncProxy ? syncProxy.leads : undefined);
@@ -2143,7 +2487,22 @@ function useDB() {
           if (financeRes && financeRes.db) data = financeRes.db;
           if (financeRes && financeRes.changed) crmChanged = true;
         }
-        if (crmChanged) { try { await window.storage.set(KEY3, JSON.stringify(data)); } catch (e) {} }
+        if (crmChanged) {
+          try {
+            /* CRM 작업 시작 뒤 사용자가 추가·수정한 값은 latestDbRef에 남아 있다.
+               CRM이 실제로 바꾼 필드 패치만 최신 화면 상태에 적용해 수동등록·금액·입금을 보존한다. */
+            const crmMutation = crmBuildMutation(JSON.stringify(syncBase), JSON.stringify(data), { origin: "crm_sync", reason: "automatic_crm_refresh", allowedLeadRemovals: [] });
+            data = crmApplyMutationLocal(latestDbRef.current || syncBase, crmMutation);
+            latestDbRef.current = data;
+            skip.current = true;
+            setDb({ ...data });
+            await window.storage.set(KEY3, JSON.stringify(data), { origin: "crm_sync", reason: "automatic_crm_refresh", allowedLeadRemovals: [] });
+          } catch (e) {
+            finalState = "CRM 변경 병합 저장 실패 · 사용자 입력은 로컬 보관됨";
+          }
+        } else {
+          data = latestDbRef.current || data;
+        }
         if (res && !res.err && (!meetingRes || !meetingRes.err)) window.crmMarkSynced();
         else if (res && res.err) finalState = location.protocol === "file:" ? "CRM 연결 실패 · 포켓CRM 실행.cmd 사용" : "CRM 동기화 실패 · " + res.err;
       }
@@ -2153,9 +2512,13 @@ function useDB() {
         ? "CRM 동기화 대기 · Apps Script 프록시 미배포"
         : syncError === "crm_token_missing"
           ? "CRM 동기화 대기 · 서버 토큰 미설정"
-          : "CRM 동기화 실패 · " + syncError;
+           : "CRM 동기화 실패 · " + syncError;
+    } finally {
+      window.crmSyncInProgress = false;
     }
     skip.current = true;
+    data = latestDbRef.current || data;
+    latestDbRef.current = data;
     setDb({ ...data }); setSaveState(finalState);
   })(); }, []);
   useEffect(() => {
@@ -2164,19 +2527,47 @@ function useDB() {
     setSaveState("저장 중…"); clearTimeout(timer.current);
       timer.current = setTimeout(async () => {
         try {
-          await window.storage.set(KEY3, JSON.stringify(db));
-          setSaveState("저장됨");
+          const pendingOptions = window.crmNextSaveOptions || { origin: "user", reason: "user_edit", allowedLeadRemovals: [] };
+          window.crmNextSaveOptions = null;
+          const saved = await window.storage.set(KEY3, JSON.stringify(db), pendingOptions);
+          setSaveState(saved && saved.pending ? "서버 반영 대기 · 로컬 임시 저장" : "저장됨");
         } catch (e) {
           var code = String((e && e.message) || e || '');
           if (code.indexOf('revision_conflict') >= 0) setSaveState("동기화 충돌 · 새로고침 필요");
-          else if (code.indexOf('storage_v2_not_deployed') >= 0 || code.indexOf('upgrade_required') >= 0) setSaveState("저장 서버 V2 배포 필요 · 로컬 보관됨");
+          else if (code.indexOf('storage_v2_not_deployed') >= 0 || code.indexOf('storage_v3_not_deployed') >= 0 || code.indexOf('upgrade_required') >= 0) setSaveState("저장 서버 최신 배포 필요 · 로컬 보관됨");
           else if (code.indexOf('remote_baseline_missing') >= 0) setSaveState("원격 로드 전 · 로컬 보관됨");
           else setSaveState("원격 저장 실패 · 로컬 보관됨");
         }
       }, 700);
     return () => clearTimeout(timer.current);
   }, [db]);
-  const up = (fn) => setDb((prev) => { const next = JSON.parse(JSON.stringify(prev)); fn(next); return next; });
+  const up = (fn, options = {}) => setDb((prev) => {
+    const next = typeof structuredClone === "function" ? structuredClone(prev) : JSON.parse(JSON.stringify(prev));
+    fn(next);
+    latestDbRef.current = next;
+    if (window.crmRemoteStatePromise && (!window.crmRemoteApplied || !window.crmRemoteLoaded)) {
+      try {
+        const pendingMutation = crmBuildMutation(JSON.stringify(prev), JSON.stringify(next), {
+          origin: "user",
+          reason: options.reason || "user_edit_before_remote_ready",
+          allowedLeadRemovals: options.allowedLeadRemovals || [],
+        });
+        if (pendingMutation.changedCount) {
+          window.crmPendingDbMutations = Array.isArray(window.crmPendingDbMutations) ? window.crmPendingDbMutations : [];
+          window.crmPendingDbMutations.push({ id: crmNewMutationId('pending'), mutation: pendingMutation, createdAt: new Date().toISOString() });
+          crmPersistPendingMutations();
+          setSaveState("서버 반영 대기 · 최신 데이터 확인 중");
+        }
+      } catch (e) {}
+    }
+    const previousOptions = window.crmNextSaveOptions || {};
+    window.crmNextSaveOptions = {
+      origin: "user",
+      reason: options.reason || previousOptions.reason || "user_edit",
+      allowedLeadRemovals: Array.from(new Set([...(previousOptions.allowedLeadRemovals || []), ...(options.allowedLeadRemovals || [])])),
+    };
+    return next;
+  });
   const reset = () => setDb(makeSeed());
   return { db, setDb, up, reset, saveState };
 }
@@ -2789,7 +3180,7 @@ function LeadsView() {
     up((d) => {
       d.leads = d.leads.filter((x) => x.id !== l.id);
       (d.projects || []).forEach((p) => { if (p.leadId === l.id) p.leadId = null; });
-    });
+    }, { reason: "manual_lead_delete", allowedLeadRemovals: [l.id] });
     toast("직접 추가한 DB를 삭제했습니다");
   };
   const addLead = () => {
@@ -3513,10 +3904,6 @@ function DealsView() {
         lead.crmProject = { projectNo: seed.projectNo, clientNo: seed.clientNo, name: seed.projectName, service: seed.service, url: seed.sourceUrl, importedAt: new Date().toISOString() };
         targetId = lead.id;
       };
-      if (window.crmRemoteStatePromise && !window.crmRemoteApplied) {
-        window.crmPendingDbMutations = Array.isArray(window.crmPendingDbMutations) ? window.crmPendingDbMutations : [];
-        window.crmPendingDbMutations.push(applyImport);
-      }
       up(applyImport);
       setCrmImportValue("");
       setCrmImportOpen(false);
@@ -3534,7 +3921,7 @@ function DealsView() {
     up((d) => {
       d.leads = d.leads.filter((x) => x.id !== l.id);
       (d.projects || []).forEach((p) => { if (p.leadId === l.id) p.leadId = null; });
-    });
+    }, { reason: "contract_lead_delete", allowedLeadRemovals: [l.id] });
     if (payId === l.id) setPayId(null);
     toast(crmLinked ? "계약현황에서 삭제했습니다 · CRM 원본에 남아 있으면 다음 동기화 때 다시 등록됩니다" : "계약현황에서 삭제했습니다");
   };
@@ -4563,7 +4950,7 @@ function MarketingPlatformDetail({ kind }) {
         <div className="px-4 pt-4 pb-3 flex items-start justify-between gap-3 flex-wrap">
           <div>
             <p className="text-sm font-extrabold text-slate-900">일별 원본 현황</p>
-            <p className="text-[10px] text-slate-400 mt-1">{isMeta ? "META 시트" : "NAVER-GOOGLE 시트"}의 일별 행을 그대로 요약합니다. 최신일자는 금액이 입력된 마지막 유효행 기준입니다.</p>
+            <p className="text-[10px] text-slate-400 mt-1">{isMeta ? "원본_메타광고 시트" : "NAVER-GOOGLE 시트"}의 일별 행을 그대로 요약합니다. 최신일자는 금액이 입력된 마지막 유효행 기준입니다.</p>
           </div>
           <div className="text-right">
             <span className={"inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-black " + (lagDays == null ? "border-amber-200 bg-amber-50 text-amber-700" : lagDays <= 1 ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-rose-200 bg-rose-50 text-rose-700")}>
@@ -5469,16 +5856,16 @@ function IntegratedPerformanceView() {
     if (stageId === "marketing") {
       if (type === "abs") return { kind: "count", label: "집계 대상", text: "CRM 유입 DB에서 유입일이 선택 기간에 포함된 행" };
       if (type === "conv") return { kind: "count", label: "계산 제외", text: "마케팅은 퍼널 시작점이므로 이전 단계 전환율을 계산하지 않습니다." };
-      return { kind: "divide", numerator: "구글시트 META·NAVER-GOOGLE의 선택 기간 광고비 합계", denominator: "CRM 유입 DB의 선택 기간 유입일 행 수" };
+      return { kind: "divide", numerator: "구글시트 원본_메타광고·NAVER-GOOGLE의 선택 기간 광고비 합계", denominator: "CRM 유입 DB의 선택 기간 유입일 행 수" };
     }
     if (stageId === "pre") {
       if (type === "abs") return { kind: "count", label: "집계 대상", text: "계약현황에서 프리미팅 참석일이 선택 기간에 포함된 고객사 행", note: "참석 후 드랍돼도 참석 이력은 유지합니다." };
       if (type === "conv") return { kind: "divide", numerator: "계약현황의 선택 기간 프리미팅 참석일 행 수", denominator: "CRM 유입 DB의 선택 기간 유입일 행 수" };
-      return { kind: "divide", numerator: "구글시트 META·NAVER-GOOGLE의 선택 기간 광고비 합계", denominator: "계약현황의 선택 기간 프리미팅 참석일 행 수" };
+      return { kind: "divide", numerator: "구글시트 원본_메타광고·NAVER-GOOGLE의 선택 기간 광고비 합계", denominator: "계약현황의 선택 기간 프리미팅 참석일 행 수" };
     }
     if (type === "abs") return { kind: "count", label: "집계 대상", text: "계약현황에서 상태가 계약 완료이고 계약일이 선택 기간에 포함된 고객사 행" };
     if (type === "conv") return { kind: "divide", numerator: "계약현황의 선택 기간 계약 완료 행 수", denominator: "계약현황의 선택 기간 프리미팅 참석일 행 수" };
-    return { kind: "divide", numerator: "구글시트 META·NAVER-GOOGLE의 선택 기간 광고비 합계", denominator: "계약현황의 선택 기간 계약 완료 행 수" };
+    return { kind: "divide", numerator: "구글시트 원본_메타광고·NAVER-GOOGLE의 선택 기간 광고비 합계", denominator: "계약현황의 선택 기간 계약 완료 행 수" };
   };
   const rowsForStage = (id) => id === "marketing" ? cohort : id === "pre" ? pre : contract;
   const baseRowsForStage = (id) => id === "pre" ? cohort : id === "contract" ? pre : [];
@@ -8066,22 +8453,22 @@ function SchemaView() {
   const [showSystem, setShowSystem] = useState(false);
   const sheetBase = "https://docs.google.com/spreadsheets/d/1IXr_3uXAg7k_yecSsVboXiHJNo5HMIDiMhSagg1Js4A/edit";
   const sheetGids = {
-    "원본_웹전체데이터": 2045540357, "원본_메타광고": 1128638972, "원본_검색광고": 561634293,
+    "원본_웹전체데이터": 2045540357, "원본_메타광고": 1128638972, "NAVER-GOOGLE": 1970221190,
     "마케팅_채널분석": 1729393856, "마케팅_로그": 882867591, "마케팅_유입DB": 1234196729,
     "프리미팅_계약현황": 495563488, "계약_포켓비즈": 1412612105, "계약_상품가격": 1649170877,
-    "기타_수정사항": 1042872084, "보관_잔금_구버전": 18625717, "계약_잔금관리": 2060807001,
+    "기타_수정사항": 1042872084, "[구버전] 잔금": 18625717, "계약_잔금관리": 2060807001,
     "계약_잔금로그": 2060807002, "시스템_저장메타": 479157921, "시스템_현재상태_A": 1069994132,
     "시스템_현재상태_B": 930808565, "시스템_상태스냅샷": 339356017, "시스템_변경로그": 1031580970,
     "데이터_엔티티": 828238717, "데이터_리드원장": 369318979, "데이터_계약원장": 405520072,
     "데이터_입금원장": 755962867, "데이터_수정사항원장": 360478157, "데이터_마케팅로그원장": 1009689029
   };
   const pages = [
-    { category: "통합", name: "통합 성과 체크", read: ["원본_메타광고", "원본_검색광고"], write: ["마케팅_로그", "데이터_마케팅로그원장"], external: ["CRM API"], use: "마케팅비·유입·프리미팅·계약 KPI" },
-    { category: "마케팅", name: "마케팅 총괄 대시보드", read: ["원본_메타광고", "원본_검색광고"], write: [], external: ["CRM API"], use: "채널 통합 성과와 추이" },
+    { category: "통합", name: "통합 성과 체크", read: ["원본_메타광고", "NAVER-GOOGLE"], write: ["마케팅_로그", "데이터_마케팅로그원장"], external: ["CRM API"], use: "마케팅비·유입·프리미팅·계약 KPI" },
+    { category: "마케팅", name: "마케팅 총괄 대시보드", read: ["원본_메타광고", "NAVER-GOOGLE"], write: [], external: ["CRM API"], use: "채널 통합 성과와 추이" },
     { category: "마케팅", name: "META", read: ["원본_메타광고"], write: [], external: ["CRM API"], use: "META 비용·문의·전환" },
-    { category: "마케팅", name: "NAVER + GOOGLE", read: ["원본_검색광고"], write: [], external: ["CRM API"], use: "검색광고 비용·문의·전환" },
+    { category: "마케팅", name: "NAVER + GOOGLE", read: ["NAVER-GOOGLE"], write: [], external: ["CRM API"], use: "검색광고 비용·문의·전환" },
     { category: "마케팅", name: "유입 DB", read: [], write: ["마케팅_유입DB", "데이터_리드원장"], external: ["CRM API"], use: "CRM 리드와 직접 등록 DB" },
-    { category: "마케팅", name: "마케팅 채널 분석", read: ["원본_메타광고", "원본_검색광고"], write: ["마케팅_채널분석"], external: ["CRM API"], use: "채널명을 통합한 성과" },
+    { category: "마케팅", name: "마케팅 채널 분석", read: ["원본_메타광고", "NAVER-GOOGLE"], write: ["마케팅_채널분석"], external: ["CRM API"], use: "채널명을 통합한 성과" },
     { category: "프리미팅", name: "프리미팅 총괄 대시보드", read: [], write: ["데이터_계약원장", "데이터_입금원장"], external: ["CRM API"], use: "프리미팅·계약·빌드업 성과" },
     { category: "프리미팅", name: "TM · DB 품질/전환", read: [], write: ["마케팅_유입DB", "데이터_리드원장"], external: ["CRM API"], use: "유입일별 DB 품질과 전환" },
     { category: "프리미팅", name: "계약 현황", read: [], write: ["프리미팅_계약현황", "데이터_계약원장", "데이터_입금원장"], external: ["CRM API"], use: "프리미팅 이후 계약·입금 관리" },
@@ -8093,7 +8480,7 @@ function SchemaView() {
     { category: "기타", name: "기타 총괄", read: [], write: [], external: [], use: "기타 메뉴 바로가기" },
     { category: "기타", name: "메시지 · 스크립트", read: [], write: [], external: [], use: "메시지 템플릿" },
     { category: "기타", name: "조직 · KPI", read: [], write: [], external: [], use: "사용자와 KPI 기준" },
-    { category: "기타", name: "잔금 구버전", read: [], write: ["보관_잔금_구버전"], external: [], use: "구형 미수금 화면" },
+    { category: "기타", name: "잔금 구버전", read: [], write: ["[구버전] 잔금"], external: [], use: "구형 미수금 화면" },
     { category: "기타", name: "데이터 구조도", read: [], write: [], external: [], use: "페이지와 시트 연결표" },
     { category: "기타", name: "수정사항", read: [], write: ["기타_수정사항", "데이터_수정사항원장"], external: [], use: "수정 요청과 담당자·상태" },
     { category: "관리", name: "권한 관리", read: [], write: [], external: [], use: "계정별 페이지 권한" },
@@ -8153,9 +8540,9 @@ const GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1IXr_3uXAg7k_ye
 const CRM_WEB_URL = "https://crm.xn--9i1b674cwc38r6pa.com/";
 const SUPPORT_DATA_URL = "https://supabase.com/dashboard/project/yoznpullugdnjrszhkon/editor";
 const VIEW_DATA_SOURCES = {
-  performanceCheck: { sheet: "META · NAVER-GOOGLE의 광고비와 계약·입금 데이터", crm: "유입 DB와 프리미팅 일정" },
-  marketingHub: { sheet: "META · NAVER-GOOGLE의 일별 광고 성과", crm: "유입일·유입경로별 DB" },
-  marketingMeta: { sheet: "META 시트의 비용·노출·클릭·문의 지표", crm: "META 경로로 들어온 CRM 문의" },
+  performanceCheck: { sheet: "원본_메타광고 · NAVER-GOOGLE의 광고비와 계약·입금 데이터", crm: "유입 DB와 프리미팅 일정" },
+  marketingHub: { sheet: "원본_메타광고 · NAVER-GOOGLE의 일별 광고 성과", crm: "유입일·유입경로별 DB" },
+  marketingMeta: { sheet: "원본_메타광고 시트의 비용·노출·클릭·문의 지표", crm: "META 경로로 들어온 CRM 문의" },
   marketingSearch: { sheet: "NAVER-GOOGLE 시트의 매체별 검색광고 지표", crm: "검색광고 경로로 들어온 CRM 문의" },
   leads: { sheet: "유입 DB의 저장 상태와 수동 등록 데이터", crm: "CRM 리드 원본·유입일·유입경로" },
   marketing: { sheet: "채널 통합 규칙과 채널별 성과 데이터", crm: "CRM 문의의 유입경로" },
