@@ -239,7 +239,9 @@
         return res.json();
       })
       .catch(function (error) {
-        if (attempt >= 2 || (error && error.name === 'AbortError')) throw error;
+        var timedOut = !!(error && error.name === 'AbortError');
+        var canRetry = timedOut ? (action === 'meta' && attempt < 1) : attempt < 2;
+        if (!canRetry) throw error;
         return crmDelay(attempt === 0 ? 500 : 1500).then(function () {
           return crmFetchSheetAction(action, timeoutMs, attempt + 1);
         });
