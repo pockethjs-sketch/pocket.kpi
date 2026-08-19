@@ -224,7 +224,12 @@
     if (cachedMarketingMeta && typeof cachedMarketingMeta === 'object') window.sheetMarketingMeta = cachedMarketingMeta;
   } catch (e) {}
 
-  function crmFetchSheetAction(action, timeoutMs) {
+  function crmDelay(ms) {
+    return new Promise(function (resolve) { setTimeout(resolve, ms); });
+  }
+
+  function crmFetchSheetAction(action, timeoutMs, attempt) {
+    attempt = Number(attempt || 0);
     var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     var timeout = controller ? setTimeout(function () { controller.abort(); }, timeoutMs) : null;
     var url = CRM_SHEET_URL + '?token=' + encodeURIComponent(CRM_TOKEN) + '&action=' + encodeURIComponent(action) + '&t=' + Date.now();
@@ -233,8 +238,44 @@
         if (!res.ok) throw new Error('sheet_' + res.status);
         return res.json();
       })
+      .catch(function (error) {
+        if (attempt >= 2 || (error && error.name === 'AbortError')) throw error;
+        return crmDelay(attempt === 0 ? 500 : 1500).then(function () {
+          return crmFetchSheetAction(action, timeoutMs, attempt + 1);
+        });
+      })
       .finally(function () { if (timeout) clearTimeout(timeout); });
   }
+
+  function crmPostSheetAction(action, payload, timeoutMs) {
+    var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var timeout = controller ? setTimeout(function () { controller.abort(); }, timeoutMs || 30000) : null;
+    return fetch(CRM_SHEET_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(Object.assign({ token: CRM_TOKEN, action: action }, payload || {})),
+      cache: 'no-store',
+      signal: controller ? controller.signal : undefined
+    }).then(function (res) {
+      if (!res.ok) throw new Error('sheet_' + res.status);
+      return res.json();
+    }).then(function (body) {
+      if (!body || body.error) throw new Error((body && body.error) || 'sheet_empty');
+      return body;
+    }).finally(function () { if (timeout) clearTimeout(timeout); });
+  }
+
+  window.crmFetchContractSheetChanges = async function () {
+    if (!CRM_SHEET_URL) throw new Error('sheet_url_missing');
+    var payload = await crmFetchSheetAction('contract_changes', 45000);
+    if (!payload || payload.error) throw new Error((payload && payload.error) || 'contract_changes_empty');
+    if (payload.action !== 'contract_changes' || !Array.isArray(payload.items)) throw new Error('contract_review_not_deployed');
+    return payload;
+  };
+
+  window.crmSetContractSheetChangeStatus = async function (changeId, status, actor) {
+    return crmPostSheetAction('contract_change_status', { changeId: changeId, status: status, actor: actor || 'web' }, 30000);
+  };
 
   function crmApplyRemoteEnvelope(payload) {
     if (!payload || typeof payload !== 'object') return;
@@ -398,7 +439,7 @@
   var CRM_COLLECTION_ID_FIELDS = {
     users: 'id', leads: 'id', projects: 'id', bizSubs: 'id', bizRecs: 'id', products: 'id',
     channels: 'id', creatives: 'id', geoTasks: 'id', contents: 'id', prompts: 'id', kpis: 'id',
-    revisionNotes: 'id', marketingLogs: 'id'
+    revisionNotes: 'id', marketingLogs: 'id', contractEvents: 'id'
   };
   function crmArrayHasStableIds(value, idField) {
     return Array.isArray(value) && value.every(function (item) {
@@ -2027,7 +2068,7 @@ function makeSeed() {
     geoTasks: JSON.parse(JSON.stringify(SEED_GEO)), contents: JSON.parse(JSON.stringify(SEED_CONTENTS)),
     prompts: JSON.parse(JSON.stringify(SEED_PROMPTS)), procTpls: JSON.parse(JSON.stringify(SEED_PROC)),
     org: JSON.parse(JSON.stringify(SEED_ORG)), kpis: JSON.parse(JSON.stringify(SEED_KPIS)),
-    templates: seedTemplates(), integrations: JSON.parse(JSON.stringify(SEED_INTEG)), revisionNotes: [], marketingLogs: [] };
+    templates: seedTemplates(), integrations: JSON.parse(JSON.stringify(SEED_INTEG)), revisionNotes: [], marketingLogs: [], contractEvents: [] };
 }
 const CRM_REVENUE_RULE_REV = 3;
 function reconcileStoredCrmSales(o) {
@@ -2226,6 +2267,7 @@ function migrateV1(o) {
   o.revisionNotes.forEach((note) => { if (note.assignedTo == null) note.assignedTo = ""; });
   o.marketingLogs = o.marketingLogs || [];
   o.marketingLogs.forEach((log) => { if (!log.kind) log.kind = log.status === "진행중" ? "action" : "log"; });
+  o.contractEvents = Array.isArray(o.contractEvents) ? o.contractEvents : [];
   o.perf = o.perf || {}; o.perfGoals = o.perfGoals || JSON.parse(JSON.stringify(SEED_PERF_GOALS)); o.perfMeta = o.perfMeta || { season: "시즌 6", start: weekStart(rel(-42)), end: "" }; if (o.perfMeta.start === undefined) o.perfMeta.start = weekStart(rel(-42)); if (o.perfMeta.end === undefined) o.perfMeta.end = "";
   (o.users || []).forEach((u) => {
     if (["dash", "actions"].includes(u.home)) u.home = "performanceCheck";
@@ -3779,7 +3821,7 @@ function LeadModal() {
    VIEW 3.5 — 딜 클로징 (기존 pocketkpi 딜 시트 이식·통합)
    ============================================================ */
 function DealsView() {
-  const { db, setDb, up, users, toast, period, openLead } = useApp();
+  const { db, setDb, up, users, toast, period, openLead, currentAccount } = useApp();
   const r = pRange(period);
   const [repF, setRepF] = useState("전체");
   const [ctF, setCtF] = useState("전체");
@@ -3795,6 +3837,34 @@ function DealsView() {
   const [crmImportOpen, setCrmImportOpen] = useState(false);
   const [crmImportValue, setCrmImportValue] = useState("");
   const [crmImportBusy, setCrmImportBusy] = useState(false);
+  const [contractReview, setContractReview] = useState({ items: [], pending: 0, summary: { safe: 0, conflict: 0, newCompanies: 0, ambiguous: 0 }, checkedAt: "", sourceSpreadsheetId: "" });
+  const [contractReviewOpen, setContractReviewOpen] = useState(false);
+  const [contractReviewBusy, setContractReviewBusy] = useState(false);
+  const [contractReviewError, setContractReviewError] = useState("");
+  const [contractReviewFilter, setContractReviewFilter] = useState("전체");
+  const [contractTargetSelections, setContractTargetSelections] = useState({});
+  const [contractApplyingId, setContractApplyingId] = useState("");
+  const refreshContractReview = async (showToast = false) => {
+    if (!window.crmFetchContractSheetChanges || contractReviewBusy) return;
+    setContractReviewBusy(true);
+    try {
+      const payload = await window.crmFetchContractSheetChanges();
+      setContractReview(payload);
+      setContractReviewError("");
+      if (showToast) toast(payload.pending ? "계약 시트 변경 " + payload.pending + "건을 확인했습니다" : "새 계약 시트 변경이 없습니다");
+    } catch (error) {
+      const message = String(error && error.message || error || "contract_review_failed");
+      setContractReviewError(message);
+      if (showToast) toast(message === "contract_review_not_deployed" ? "계약 변경 검토 기능이 Apps Script에 아직 배포되지 않았습니다" : "계약 시트 변경 확인 실패 · " + message);
+    } finally {
+      setContractReviewBusy(false);
+    }
+  };
+  useEffect(() => {
+    refreshContractReview(false);
+    const timer = setInterval(() => refreshContractReview(false), 5 * 60 * 1000);
+    return () => clearInterval(timer);
+  }, []);
   const sortBy = (k) => { if (sortKey === k) setSortDir((v) => -v); else { setSortKey(k); setSortDir(1); } };
   const arrow = (k) => sortKey === k ? <span className="text-indigo-500">{sortDir > 0 ? "▲" : "▼"}</span> : <span className="text-slate-300">↕</span>;
   const [addOpen, setAddOpen] = useState(false);
@@ -4039,6 +4109,164 @@ function DealsView() {
   const doPush = (l) => up((d) => { const x = d.leads.find((y) => y.id === l.id); if (!x) return; x.pushLog = x.pushLog || []; x.pushLog.push(todayISO()); x.history.push({ date: todayISO(), type: "푸시", note: "결제 푸시 " + x.pushLog.length + "회 — 미수 " + fmtK((x.contractAmount || x.expected || 0) - (x.paid || 0)) + "원" }); });
   const resetPush = (l) => up((d) => { const x = d.leads.find((y) => y.id === l.id); if (!x) return; x.pushLog = []; x.history.push({ date: todayISO(), type: "푸시", note: "결제 푸시 기록 초기화" }); });
   const toggleWin = (l, on) => up((d) => { const x = d.leads.find((y) => y.id === l.id); if (!x) return; if (on) { applyLeadStatus(d, x, "계약 완료"); } else { x.status = "견적·제안 발송"; x.history.push({ date: todayISO(), type: "상태", note: "계약 해제 — 견적·제안 발송으로 되돌림" }); } });
+  const contractReviewActor = (currentAccount && (currentAccount.displayName || currentAccount.username)) || "사용자";
+  const contractReviewVisible = (contractReview.items || []).filter((item) => {
+    if (contractReviewFilter === "전체") return true;
+    if (contractReviewFilter === "안전") return item.risk === "safe";
+    if (contractReviewFilter === "충돌") return item.risk === "conflict";
+    return item.matchType === "new";
+  });
+  const formatContractReviewValue = (key, value) => {
+    if (value == null || value === "") return "-";
+    if (["contractAmount", "paid"].includes(key) && Number.isFinite(Number(value))) return fmtWon(Number(value));
+    if (Array.isArray(value)) return value.join(", ") || "-";
+    return String(value);
+  };
+  const contractCompanyAliases = (value) => {
+    const raw = String(value || "");
+    const parts = [raw, raw.replace(/\([^)]*\)/g, " ")];
+    let match;
+    const pattern = /\(([^)]+)\)/g;
+    while ((match = pattern.exec(raw))) parts.push(match[1]);
+    return Array.from(new Set(parts.map((part) => String(part || "").toLowerCase().replace(/\(주\)|㈜|주식회사|유한회사|대표님|대표|법인/g, "").replace(/[^0-9a-z가-힣]/g, "")).filter((part) => part.length >= 2)));
+  };
+  const removeContractReviewItem = (id) => setContractReview((previous) => {
+    const items = (previous.items || []).filter((item) => item.id !== id);
+    return {
+      ...previous,
+      items,
+      pending: items.length,
+      summary: {
+        safe: items.filter((item) => item.risk === "safe").length,
+        conflict: items.filter((item) => item.risk === "conflict").length,
+        newCompanies: items.filter((item) => item.matchType === "new").length,
+        ambiguous: items.filter((item) => item.matchType === "ambiguous").length,
+      },
+    };
+  });
+  const applyContractReviewItem = (item) => {
+    const selectedTargetId = item.targetId || contractTargetSelections[item.id] || "";
+    if (item.matchType === "ambiguous" && !selectedTargetId) {
+      toast("반영할 계약현황 업체를 먼저 선택하세요");
+      return;
+    }
+    setContractApplyingId(item.id);
+    try {
+      up((d) => {
+        let lead = selectedTargetId ? (d.leads || []).find((row) => String(row.id) === String(selectedTargetId)) : null;
+        if (!lead) {
+          const sourceAliases = contractCompanyAliases(item.company);
+          const localMatches = (d.leads || []).filter((row) => contractCompanyAliases(row.company).some((alias) => sourceAliases.includes(alias)));
+          if (localMatches.length === 1) lead = localMatches[0];
+        }
+        if (!lead) {
+          const leadId = "contract-sheet-" + String(item.sourceKey || item.sourceHash).slice(0, 40);
+          lead = (d.leads || []).find((row) => row.id === leadId);
+          if (!lead) {
+            lead = {
+              id: leadId, manualEntry: false, contractSheetImported: true,
+              company: item.company || "(업체명 미확인)", contact: "", phone: "", email: "",
+              channel: "계약 프로세스 시트", creative: "", buildup: "", buildups: [], lineItems: [],
+              grade: "", status: "계약 완료", ctype: item.ctype || "신규", tmOwner: "",
+              salesOwner: item.owner || "", expected: 0, contractAmount: 0, paid: 0, payments: [],
+              sent: {}, newsletter: false, pushLog: [], premeetingAt: "", premeetingDoneAt: "",
+              bookedAt: "", contractAt: item.firstDate || todayISO(), createdAt: item.firstDate || todayISO(),
+              memo: "", history: [],
+            };
+            d.leads.unshift(lead);
+          }
+        }
+        lead.history = Array.isArray(lead.history) ? lead.history : [];
+        lead.payments = Array.isArray(lead.payments) ? lead.payments : [];
+        lead.lineItems = Array.isArray(lead.lineItems) ? lead.lineItems : [];
+        lead.buildups = Array.isArray(lead.buildups) ? lead.buildups : [];
+        lead.status = "계약 완료";
+        if (item.firstDate) lead.contractAt = item.firstDate;
+        if (item.ctype) lead.ctype = item.ctype;
+        if (item.owner) lead.salesOwner = item.owner;
+        const nextServices = Array.from(new Set([...(lead.buildups || []), ...(item.services || [])].filter(Boolean)));
+        lead.buildups = nextServices;
+        if (nextServices.length) lead.buildup = nextServices[0];
+        (item.sourceRows || []).forEach((row) => {
+          const lineId = "contract-sheet-line-" + String(item.sourceKey || "source") + "-" + String(row.row || "row");
+          const nextLine = {
+            id: lineId,
+            buildup: row.service || (item.services || [])[0] || lead.buildup || "",
+            name: row.dealText || row.service || "계약 프로세스 시트 계약",
+            price: Number(row.amount || 0),
+            source: "계약 프로세스 시트",
+            sourceRow: row.row,
+            sourceHash: item.sourceHash,
+          };
+          const lineIndex = lead.lineItems.findIndex((line) => line && line.id === lineId);
+          if (lineIndex >= 0) lead.lineItems[lineIndex] = nextLine;
+          else lead.lineItems.push(nextLine);
+        });
+        const currentPaid = actualPaid(lead);
+        const confirmedPaid = Number(item.numericPaid || 0);
+        if (confirmedPaid > currentPaid) {
+          const delta = confirmedPaid - currentPaid;
+          lead.payments.push({
+            id: "contract-sheet-payment-" + String(item.sourceHash || item.id).slice(0, 32),
+            no: lead.payments.length + 1,
+            label: "계약 시트 확인입금",
+            amount: delta,
+            dueAt: item.lastDate || item.firstDate || "",
+            paidAt: "",
+            paidConfirmed: true,
+            method: "",
+            memo: "계약 프로세스 시트 승인 반영 · 확인 누적액 " + fmtWon(confirmedPaid),
+          });
+        }
+        syncPaid(lead);
+        lead.history.push({
+          date: todayISO(), type: "계약 시트",
+          note: "계약 프로세스 시트 승인 반영 · " + (item.changeType || "정보 보완") + " · 원본 " + (item.sourceRows || []).length + "행" + (item.paymentChecked && !item.numericPaid ? " · 입금완료 표시는 금액 미확인으로 보존" : ""),
+          sourceHash: item.sourceHash, sourceKey: item.sourceKey, actor: contractReviewActor,
+        });
+        d.contractEvents = Array.isArray(d.contractEvents) ? d.contractEvents : [];
+        (item.sourceRows || []).forEach((row) => {
+          const eventId = "contract-source-" + String(item.sourceKey || "source") + "-" + String(row.row || "row");
+          const event = {
+            id: eventId, leadId: lead.id, company: lead.company,
+            sourceKey: item.sourceKey, sourceHash: item.sourceHash, sourceRows: [row.row],
+            firstDate: row.date || item.firstDate || "", lastDate: row.date || item.lastDate || "",
+            services: [row.service].filter(Boolean), amount: Number(row.amount || 0),
+            numericPaid: Number(row.paymentAmount || 0), paymentChecked: !!row.paymentChecked,
+            ctype: row.ctype || item.ctype || "", owner: row.owner || item.owner || "",
+            sourceData: [row], appliedAt: new Date().toISOString(), actor: contractReviewActor,
+          };
+          const eventIndex = d.contractEvents.findIndex((current) => current && current.id === eventId);
+          if (eventIndex >= 0) d.contractEvents[eventIndex] = event;
+          else d.contractEvents.push(event);
+        });
+        const approvedEventTotal = d.contractEvents
+          .filter((event) => event && String(event.leadId) === String(lead.id))
+          .reduce((sum, event) => sum + Number(event.amount || 0), 0);
+        if (approvedEventTotal > 0) lead.contractAmount = approvedEventTotal;
+        else if (Number(item.sourceAmount || 0) > 0) lead.contractAmount = Number(item.sourceAmount || 0);
+        if (!Number(lead.expected || 0) && Number(lead.contractAmount || 0) > 0) lead.expected = Number(lead.contractAmount || 0);
+      }, { reason: "contract_sheet_change_approved" });
+      removeContractReviewItem(item.id);
+      toast((item.matchType === "new" ? "계약현황에 새 업체를 추가했습니다" : "계약현황에 변경을 반영했습니다") + " · " + item.company);
+      setTimeout(() => refreshContractReview(false), 2500);
+    } finally {
+      setContractApplyingId("");
+    }
+  };
+  const ignoreContractReviewItem = async (item) => {
+    if (!window.crmSetContractSheetChangeStatus || contractApplyingId) return;
+    setContractApplyingId(item.id);
+    try {
+      await window.crmSetContractSheetChangeStatus(item.id, "제외", contractReviewActor);
+      removeContractReviewItem(item.id);
+      toast("이번 계약 시트 변경을 제외했습니다 · " + item.company);
+    } catch (error) {
+      toast("변경 제외 저장 실패 · " + String(error && error.message || error));
+    } finally {
+      setContractApplyingId("");
+    }
+  };
   return (
     <div className="space-y-4">
       <SecTitle icon={Handshake} title="계약 현황" sub={"프리미팅(방문) 완료된 고객을 계약까지 관리하는 시트입니다 (" + pLabel(period) + "). 본사 CRM에서 프리미팅 체크된 사람들 · 셀에서 바로 편집 · 헤더 클릭으로 정렬."}
@@ -4048,9 +4276,29 @@ function DealsView() {
           <Btn kind="ghost" disabled={crmSyncBusy} onClick={refreshTodayPremeetings} cls="border-sky-200 text-sky-700 hover:bg-sky-50">
             <RefreshCw size={13} className={crmSyncBusy ? "animate-spin" : ""} />{crmSyncBusy ? "CRM 확인 중" : "내방완료 갱신"}
           </Btn>
+          <Btn kind="ghost" disabled={contractReviewBusy} onClick={() => refreshContractReview(true)} cls="border-amber-200 text-amber-700 hover:bg-amber-50">
+            <RefreshCw size={13} className={contractReviewBusy ? "animate-spin" : ""} />{contractReviewBusy ? "계약 시트 확인 중" : "계약 시트 확인"}{contractReview.pending > 0 ? " " + contractReview.pending : ""}
+          </Btn>
           <Btn kind="ghost" onClick={() => setCrmImportOpen(true)} cls="border-indigo-200 text-indigo-700 hover:bg-indigo-50"><Link2 size={13} />CRM 링크 추가</Btn>
           <Btn kind="primary" onClick={() => setAddOpen(true)}><Plus size={13} />딜 추가</Btn>
         </div>} />
+      {(contractReview.pending > 0 || contractReviewError) && (
+        <button onClick={() => contractReview.pending > 0 ? setContractReviewOpen(true) : refreshContractReview(true)}
+          className={"w-full border px-4 py-3 text-left transition-colors " + (contractReviewError ? "border-red-200 bg-red-50 hover:bg-red-100" : "border-amber-200 bg-amber-50 hover:bg-amber-100")}>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className={"w-8 h-8 rounded-md flex items-center justify-center shrink-0 " + (contractReviewError ? "bg-red-100 text-red-600" : "bg-amber-100 text-amber-700")}>
+                {contractReviewError ? <AlertCircle size={16} /> : <RefreshCw size={15} />}
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-extrabold text-slate-800">{contractReviewError ? "계약 시트 변경 확인 필요" : "계약 시트에서 변경 " + contractReview.pending + "건 감지"}</p>
+                <p className="text-xs text-slate-500 mt-0.5 truncate">{contractReviewError ? "연동 상태를 다시 확인합니다" : "안전 반영 " + (contractReview.summary.safe || 0) + " · 충돌 확인 " + (contractReview.summary.conflict || 0) + " · 신규 업체 " + (contractReview.summary.newCompanies || 0) + " · 승인 전에는 계약현황을 바꾸지 않습니다"}</p>
+              </div>
+            </div>
+            <span className="text-xs font-bold text-amber-700 flex items-center gap-1">{contractReviewError ? "다시 확인" : "변경 검토"}<ArrowRight size={13} /></span>
+          </div>
+        </button>
+      )}
       <div className="flex items-center gap-1.5 flex-wrap">
         <span className="text-xs font-bold text-slate-500 mr-1 flex items-center gap-1"><User size={12} />영업자</span>
         {["전체", ...salesNames, "미배정"].map((name) => (
@@ -4314,6 +4562,89 @@ function DealsView() {
             업체명과 CRM 담당자만 확인합니다. 미팅일은 오늘로 등록하며 계약·견적·입금 금액은 가져오지 않습니다.
           </div>
           <div className="flex justify-end gap-2"><Btn disabled={crmImportBusy} onClick={() => setCrmImportOpen(false)}>취소</Btn><Btn kind="primary" disabled={crmImportBusy} onClick={importCrmDeal}><RefreshCw size={13} className={crmImportBusy ? "animate-spin" : ""} />{crmImportBusy ? "CRM 확인 중" : "불러와서 추가"}</Btn></div>
+        </div>
+      </Modal>
+      <Modal open={contractReviewOpen} onClose={() => { if (!contractApplyingId) setContractReviewOpen(false); }} wide title={"계약 시트 변경 검토 · " + (contractReview.pending || 0) + "건"}>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {[
+                ["전체", (contractReview.items || []).length],
+                ["안전", (contractReview.summary && contractReview.summary.safe) || 0],
+                ["충돌", (contractReview.summary && contractReview.summary.conflict) || 0],
+                ["신규", (contractReview.summary && contractReview.summary.newCompanies) || 0],
+              ].map(([key, count]) => (
+                <button key={key} onClick={() => setContractReviewFilter(key)} className={"px-2.5 py-1 text-xs font-bold border transition-colors " + (contractReviewFilter === key ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50")}>{key} {count}</button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2">
+              {contractReview.sourceSpreadsheetId && <a href={"https://docs.google.com/spreadsheets/d/" + contractReview.sourceSpreadsheetId + "/edit"} target="_blank" rel="noreferrer" className="text-xs font-bold text-indigo-600 hover:underline inline-flex items-center gap-1">원본 계약 시트<ExternalLink size={11} /></a>}
+              <Btn size="xs" disabled={contractReviewBusy} onClick={() => refreshContractReview(true)}><RefreshCw size={11} className={contractReviewBusy ? "animate-spin" : ""} />새로고침</Btn>
+            </div>
+          </div>
+          <div className="border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
+            원본 시트의 업체별 계약 행을 현재 계약현황과 비교합니다. <b>반영</b>을 누르기 전에는 기존 금액·입금·담당자를 바꾸지 않습니다. 입금란이 체크(✔)뿐이고 숫자가 없으면 입금액으로 추정하지 않습니다.
+          </div>
+          <div className="space-y-3 max-h-[62vh] overflow-y-auto pr-1">
+            {contractReviewVisible.map((item) => {
+              const tone = item.matchType === "new" ? "border-indigo-200" : item.risk === "conflict" ? "border-red-200" : "border-emerald-200";
+              const badge = item.matchType === "new" ? ["신규", "bg-indigo-50 text-indigo-700 border-indigo-200"] : item.risk === "conflict" ? ["확인 필요", "bg-red-50 text-red-700 border-red-200"] : ["안전 보완", "bg-emerald-50 text-emerald-700 border-emerald-200"];
+              const selectedTargetId = item.targetId || contractTargetSelections[item.id] || "";
+              return (
+                <div key={item.id} className={"border bg-white p-4 " + tone}>
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-extrabold text-slate-900">{item.company}</p>
+                        <Chip cls={badge[1]}>{badge[0]}</Chip>
+                        <Chip cls="bg-slate-50 text-slate-600 border-slate-200">{item.changeType}</Chip>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-1">원본 {item.firstDate || "날짜 없음"}{item.lastDate && item.lastDate !== item.firstDate ? " ~ " + item.lastDate : ""} · 계약 행 {(item.sourceRows || []).length}건 · 합계 {fmtWon(Number(item.sourceAmount || 0))}</p>
+                    </div>
+                    {item.matchType === "ambiguous" && (
+                      <Fld label="반영 대상 선택">
+                        <Sel value={selectedTargetId} onChange={(e) => setContractTargetSelections((previous) => ({ ...previous, [item.id]: e.target.value }))}
+                          options={[{ value: "", label: "업체를 선택하세요" }, ...(item.candidates || []).map((candidate) => ({ value: candidate.id, label: candidate.company + " · " + fmtWon(Number(candidate.contractAmount || 0)) }))]} />
+                      </Fld>
+                    )}
+                  </div>
+                  <div className="mt-3 overflow-x-auto border border-slate-100">
+                    <table className="w-full text-xs min-w-[620px]">
+                      <thead className="bg-slate-50 text-slate-500"><tr><th className="px-3 py-2 text-left font-bold">변경 항목</th><th className="px-3 py-2 text-left font-bold">현재 계약현황</th><th className="px-3 py-2 text-left font-bold">시트 반영 후</th></tr></thead>
+                      <tbody>
+                        {(item.diffs || []).map((diff) => (
+                          <tr key={diff.key} className="border-t border-slate-100">
+                            <td className="px-3 py-2 font-bold text-slate-700">{diff.label}</td>
+                            <td className="px-3 py-2 text-slate-500 break-words">{formatContractReviewValue(diff.key, diff.current)}</td>
+                            <td className={"px-3 py-2 font-bold break-words " + (diff.risk === "conflict" ? "text-red-600" : "text-emerald-700")}>{formatContractReviewValue(diff.key, diff.proposed)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <details className="mt-2 border border-slate-100 bg-slate-50 px-3 py-2">
+                    <summary className="cursor-pointer text-xs font-bold text-slate-600">원본 계약 행 {(item.sourceRows || []).length}건 보기</summary>
+                    <div className="mt-2 space-y-2">
+                      {(item.sourceRows || []).map((row) => (
+                        <div key={row.row} className="bg-white border border-slate-100 px-3 py-2 text-xs leading-5">
+                          <div className="flex items-center justify-between gap-3"><b className="text-slate-700">{row.date || "날짜 없음"} · {row.service || "상품 미분류"}</b><b className="text-slate-900">{row.amount ? fmtWon(Number(row.amount)) : "금액 미확인"}</b></div>
+                          <p className="text-slate-500 mt-0.5 break-words">{row.dealText || "계약 내용 없음"}</p>
+                          {(row.paymentText || row.memo) && <p className="text-slate-400 mt-0.5 break-words">입금: {row.paymentText || "-"}{row.memo ? " · 메모: " + row.memo : ""}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                  <div className="flex justify-end gap-2 mt-3">
+                    <Btn kind="danger" disabled={!!contractApplyingId} onClick={() => ignoreContractReviewItem(item)}>이번 변경 제외</Btn>
+                    <Btn kind="primary" disabled={!!contractApplyingId || (item.matchType === "ambiguous" && !selectedTargetId)} onClick={() => applyContractReviewItem(item)}>
+                      {contractApplyingId === item.id ? <RefreshCw size={12} className="animate-spin" /> : <Check size={12} />}{item.matchType === "new" ? "신규 업체로 반영" : "이 내용으로 반영"}
+                    </Btn>
+                  </div>
+                </div>
+              );
+            })}
+            {contractReviewVisible.length === 0 && <Empty compact text="이 조건의 대기 변경이 없습니다." />}
+          </div>
         </div>
       </Modal>
       <PayModal id={payId} onClose={() => setPayId(null)} upPay={upPay} applyPreset={applyPreset} />
