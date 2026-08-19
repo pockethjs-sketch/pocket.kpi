@@ -4094,6 +4094,12 @@ function DealsView() {
   const isUnassigned = (l) => salesNames.indexOf(repOf(l)) < 0;
   const repMatch = (l, name) => name === "전체" ? true : name === "미배정" ? isUnassigned(l) : repOf(l) === name;
   const repCount = (name) => dealsInPeriod.filter((l) => repMatch(l, name)).length;
+  /* 선택 기간에 실제 딜이 있는 영업자만 필터에 표시합니다. */
+  const visibleSalesNames = salesNames.filter((name) => repCount(name) > 0);
+  const visibleRepNames = ["전체", ...visibleSalesNames, ...(repCount("미배정") > 0 ? ["미배정"] : [])];
+  useEffect(() => {
+    if (repF !== "전체" && visibleRepNames.indexOf(repF) < 0) setRepF("전체");
+  }, [repF, visibleRepNames.join("|")]);
   /* 빌드업 필터 — 버튼 금액은 계약액이 아니라 누적 실입금액을 표시 */
   const buKeyOf = (l) => l.buildup || "미지정";
   const buPool = dealsInPeriod.filter((l) => repMatch(l, repF)).filter((l) => ctF === "전체" || (l.ctype || "신규") === ctF);
@@ -4343,20 +4349,35 @@ function DealsView() {
   };
   return (
     <div className="space-y-4">
-      <SecTitle icon={Handshake} title="계약 현황" sub={"프리미팅(방문) 완료된 고객을 계약까지 관리하는 시트입니다 (" + pLabel(period) + "). 본사 CRM에서 프리미팅 체크된 사람들 · 셀에서 바로 편집 · 헤더 클릭으로 정렬."}
-        right={<div className="flex items-center gap-2 flex-wrap">
-          <Seg value={ctF} onChange={setCtF} options={[["전체", "전체"], ["신규", "신규"], ["기존", "기존"]]} />
-          <Seg value={payF} onChange={setPayF} options={[["전체", "전체 " + payN.전체], ["진행", "진행 " + payN.진행], ["미수", "미수 " + payN.미수], ["완납", "완납 " + payN.완납]]} />
-          <Btn kind="ghost" disabled={crmSyncBusy} onClick={refreshTodayPremeetings} cls="border-sky-200 text-sky-700 hover:bg-sky-50">
-            <RefreshCw size={13} className={crmSyncBusy ? "animate-spin" : ""} />{crmSyncBusy ? "CRM 확인 중" : "내방완료 갱신"}
-          </Btn>
-          <Btn kind="ghost" disabled={contractReviewBusy} onClick={() => refreshContractReview(true)} cls="border-amber-200 text-amber-700 hover:bg-amber-50">
-            <RefreshCw size={13} className={contractReviewBusy ? "animate-spin" : ""} />{contractReviewBusy ? "신규 업체 확인 중" : "신규 계약 업체"}{contractReview.pending > 0 ? " " + contractReview.pending : ""}
-          </Btn>
-          <Btn kind="ghost" onClick={() => setContractLogOpen(true)} cls="border-slate-200 text-slate-700 hover:bg-slate-50"><ClipboardList size={13} />활동 로그{contractStatusLogs.length ? " " + contractStatusLogs.length : ""}</Btn>
-          <Btn kind="ghost" onClick={() => setCrmImportOpen(true)} cls="border-indigo-200 text-indigo-700 hover:bg-indigo-50"><Link2 size={13} />CRM 링크 추가</Btn>
-          <Btn kind="primary" onClick={() => setAddOpen(true)}><Plus size={13} />딜 추가</Btn>
-        </div>} />
+      <SecTitle icon={Handshake} title="계약 현황" sub={"프리미팅(방문) 완료된 고객을 계약까지 관리하는 시트입니다 (" + pLabel(period) + "). 본사 CRM에서 프리미팅 체크된 사람들 · 셀에서 바로 편집 · 헤더 클릭으로 정렬."} />
+      <Card cls="p-3">
+        <div className="flex flex-col 2xl:flex-row 2xl:items-center gap-3">
+          <div className="flex items-center gap-4 flex-wrap min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-extrabold uppercase tracking-wide text-slate-400 shrink-0">고객 구분</span>
+              <Seg value={ctF} onChange={setCtF} options={[["전체", "전체"], ["신규", "신규"], ["기존", "기존"]]} />
+            </div>
+            <div className="hidden sm:block w-px h-5 bg-slate-200" />
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-[10px] font-extrabold uppercase tracking-wide text-slate-400 shrink-0">수금 상태</span>
+              <Seg value={payF} onChange={setPayF} options={[["전체", "전체 " + payN.전체], ["진행", "진행 " + payN.진행], ["미수", "미수 " + payN.미수], ["완납", "완납 " + payN.완납]]} />
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 flex-wrap pt-3 border-t border-slate-100 2xl:pt-0 2xl:border-t-0 2xl:border-l 2xl:border-slate-200 2xl:pl-3 2xl:ml-auto">
+            <span className="text-[10px] font-extrabold uppercase tracking-wide text-slate-400 mr-0.5">데이터 작업</span>
+            <Btn size="xs" kind="ghost" disabled={crmSyncBusy} onClick={refreshTodayPremeetings} cls="border-sky-200 text-sky-700 hover:bg-sky-50">
+              <RefreshCw size={12} className={crmSyncBusy ? "animate-spin" : ""} />{crmSyncBusy ? "확인 중" : "CRM 갱신"}
+            </Btn>
+            <Btn size="xs" kind="ghost" disabled={contractReviewBusy} onClick={() => contractReview.pending > 0 ? setContractReviewOpen(true) : refreshContractReview(true)} cls="border-amber-200 text-amber-700 hover:bg-amber-50">
+              <RefreshCw size={12} className={contractReviewBusy ? "animate-spin" : ""} />신규 계약{contractReview.pending > 0 ? " " + contractReview.pending : ""}
+            </Btn>
+            <Btn size="xs" kind="ghost" onClick={() => setCrmImportOpen(true)} cls="border-indigo-200 text-indigo-700 hover:bg-indigo-50"><Link2 size={12} />CRM 링크</Btn>
+            <Btn size="xs" kind="ghost" onClick={() => setContractLogOpen(true)} cls="border-slate-200 text-slate-700 hover:bg-slate-50"><ClipboardList size={12} />활동 로그{contractStatusLogs.length ? " " + contractStatusLogs.length : ""}</Btn>
+            <span className="hidden sm:block w-px h-5 bg-slate-200 mx-0.5" />
+            <Btn size="xs" kind="primary" onClick={() => setAddOpen(true)}><Plus size={12} />딜 추가</Btn>
+          </div>
+        </div>
+      </Card>
       {(contractReview.pending > 0 || contractReviewError) && (
         <button onClick={() => contractReview.pending > 0 ? setContractReviewOpen(true) : refreshContractReview(true)}
           className={"w-full border px-4 py-3 text-left transition-colors " + (contractReviewError ? "border-red-200 bg-red-50 hover:bg-red-100" : "border-amber-200 bg-amber-50 hover:bg-amber-100")}>
@@ -4376,7 +4397,7 @@ function DealsView() {
       )}
       <div className="flex items-center gap-1.5 flex-wrap">
         <span className="text-xs font-bold text-slate-500 mr-1 flex items-center gap-1"><User size={12} />영업자</span>
-        {["전체", ...salesNames, "미배정"].map((name) => (
+        {visibleRepNames.map((name) => (
           <button key={name} onClick={() => setRepF(name)} className={"px-2.5 py-1 rounded-full text-xs font-medium border transition-colors " + (repF === name ? (name === "미배정" ? "bg-amber-500 text-white border-amber-500" : "bg-slate-900 text-white border-slate-900") : (name === "미배정" ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"))}>
             {name}<span className="ml-1 opacity-60 tabular-nums">{repCount(name)}</span>
           </button>
