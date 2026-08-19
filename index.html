@@ -314,7 +314,7 @@
 
     try {
       /* 1단계: 1.8MB 상태 대신 revision 메타만 조회합니다. 정상 서버는 수 KB 이내입니다. */
-      var meta = await crmFetchSheetAction('meta', 15000);
+      var meta = await crmFetchSheetAction('meta', 25000);
       if (!meta || meta.error) throw new Error((meta && meta.error) || 'meta_empty');
       crmApplyRemoteEnvelope(meta);
 
