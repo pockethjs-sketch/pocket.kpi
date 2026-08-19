@@ -439,7 +439,7 @@
   var CRM_COLLECTION_ID_FIELDS = {
     users: 'id', leads: 'id', projects: 'id', bizSubs: 'id', bizRecs: 'id', products: 'id',
     channels: 'id', creatives: 'id', geoTasks: 'id', contents: 'id', prompts: 'id', kpis: 'id',
-    revisionNotes: 'id', marketingLogs: 'id', contractEvents: 'id'
+    revisionNotes: 'id', marketingLogs: 'id', contractEvents: 'id', contractStatusLogs: 'id'
   };
   function crmArrayHasStableIds(value, idField) {
     return Array.isArray(value) && value.every(function (item) {
@@ -1447,6 +1447,19 @@ const fmtK = (n) => { n = Number(n) || 0; if (Math.abs(n) >= 100000000) return (
 const fmtDate = (iso) => { if (!iso) return "-"; const [y, m, d] = iso.split("-"); return Number(m) + "/" + Number(d); };
 const num = (v) => { const n = Number(String(v).replace(/[^0-9.-]/g, "")); return isNaN(n) ? 0 : n; };
 const pct = (a, b) => (b > 0 ? Math.round((a / b) * 100) : 0);
+const appendContractStatusLog = (data, entry = {}) => {
+  data.contractStatusLogs = Array.isArray(data.contractStatusLogs) ? data.contractStatusLogs : [];
+  const at = entry.at || new Date().toISOString();
+  const log = {
+    id: entry.id || uid(), at, date: entry.date || todayISO(),
+    company: entry.company || "(업체명 미확인)", leadId: entry.leadId || "",
+    action: entry.action || "변경", source: entry.source || "계약현황",
+    actor: entry.actor || "사용자", detail: entry.detail || "",
+    meta: entry.meta && typeof entry.meta === "object" ? entry.meta : {},
+  };
+  data.contractStatusLogs.unshift(log);
+  return log;
+};
 const fillTemplate = (tpl, lead) => (tpl || "").replaceAll("{회사명}", lead.company || "").replaceAll("{담당자}", lead.contact || "대표님").replaceAll("{빌드업}", (lead.buildups && lead.buildups.length ? lead.buildups.join("·") : lead.buildup) || "").replaceAll("{미팅일시}", lead.premeetingAt ? fmtDate(lead.premeetingAt) + " (" + dday(lead.premeetingAt) + ")" : "(협의 예정)").replaceAll("{영업담당}", lead.salesOwner || lead.tmOwner || "포켓 담당자").replaceAll("{링크}", "https://pocketcompany.co.kr");
 
 /* ---------- 기간 필터 ---------- */
@@ -2068,7 +2081,7 @@ function makeSeed() {
     geoTasks: JSON.parse(JSON.stringify(SEED_GEO)), contents: JSON.parse(JSON.stringify(SEED_CONTENTS)),
     prompts: JSON.parse(JSON.stringify(SEED_PROMPTS)), procTpls: JSON.parse(JSON.stringify(SEED_PROC)),
     org: JSON.parse(JSON.stringify(SEED_ORG)), kpis: JSON.parse(JSON.stringify(SEED_KPIS)),
-    templates: seedTemplates(), integrations: JSON.parse(JSON.stringify(SEED_INTEG)), revisionNotes: [], marketingLogs: [], contractEvents: [] };
+    templates: seedTemplates(), integrations: JSON.parse(JSON.stringify(SEED_INTEG)), revisionNotes: [], marketingLogs: [], contractEvents: [], contractStatusLogs: [] };
 }
 const CRM_REVENUE_RULE_REV = 3;
 function reconcileStoredCrmSales(o) {
@@ -2268,6 +2281,7 @@ function migrateV1(o) {
   o.marketingLogs = o.marketingLogs || [];
   o.marketingLogs.forEach((log) => { if (!log.kind) log.kind = log.status === "진행중" ? "action" : "log"; });
   o.contractEvents = Array.isArray(o.contractEvents) ? o.contractEvents : [];
+  o.contractStatusLogs = Array.isArray(o.contractStatusLogs) ? o.contractStatusLogs : [];
   o.perf = o.perf || {}; o.perfGoals = o.perfGoals || JSON.parse(JSON.stringify(SEED_PERF_GOALS)); o.perfMeta = o.perfMeta || { season: "시즌 6", start: weekStart(rel(-42)), end: "" }; if (o.perfMeta.start === undefined) o.perfMeta.start = weekStart(rel(-42)); if (o.perfMeta.end === undefined) o.perfMeta.end = "";
   (o.users || []).forEach((u) => {
     if (["dash", "actions"].includes(u.home)) u.home = "performanceCheck";
@@ -2419,9 +2433,9 @@ function useDB() {
           let remoteChanged = remoteDemoCleanup.changed || needsAuthMigration || needsRevenueMigration || needsTmMigration;
           const pendingReplay = crmConsumePendingMutations(fresh);
           if (pendingReplay.count) { fresh = pendingReplay.state; remoteChanged = true; }
-          /* 수정사항·마케팅 로그는 화면에서 직접 입력하는 데이터다.
+          /* 수정사항·마케팅·계약현황 로그는 화면에서 직접 입력하는 데이터다.
              느린 원격 응답이 도착했을 때 빈 원격 배열로 로컬 기록을 덮지 않고 ID 기준으로 합친다. */
-          ["revisionNotes", "marketingLogs"].forEach((key) => {
+          ["revisionNotes", "marketingLogs", "contractStatusLogs"].forEach((key) => {
             const localRows = Array.isArray(cachedBeforeRemote && cachedBeforeRemote[key]) ? cachedBeforeRemote[key] : [];
             const remoteRows = Array.isArray(fresh[key]) ? fresh[key] : [];
             if (!localRows.length) return;
@@ -2531,6 +2545,18 @@ function useDB() {
         }
         if (crmChanged) {
           try {
+            const contractStages = new Set(["프리미팅 완료", "견적·제안 발송", "계약 완료"]);
+            const contractBefore = new Map((syncBase.leads || []).map((lead) => [String(lead.id), lead.status || ""]));
+            (data.leads || []).forEach((lead) => {
+              const previousStatus = contractBefore.get(String(lead.id));
+              if (!contractStages.has(lead.status) || contractStages.has(previousStatus)) return;
+              appendContractStatusLog(data, {
+                company: lead.company, leadId: lead.id, action: "CRM 자동 동기화", source: "CRM 캘린더",
+                actor: "시스템",
+                detail: "내방완료 프리미팅을 계약현황에 자동 반영" + (lead.salesOwner ? " · 영업담당 " + lead.salesOwner : ""),
+                meta: { previousStatus: previousStatus || "미등록", nextStatus: lead.status, premeetingAt: meetingDoneDate(lead), projectNo: lead.projNo || "" },
+              });
+            });
             /* CRM 작업 시작 뒤 사용자가 추가·수정한 값은 latestDbRef에 남아 있다.
                CRM이 실제로 바꾼 필드 패치만 최신 화면 상태에 적용해 수동등록·금액·입금을 보존한다. */
             const crmMutation = crmBuildMutation(JSON.stringify(syncBase), JSON.stringify(data), { origin: "crm_sync", reason: "automatic_crm_refresh", allowedLeadRemovals: [] });
@@ -3842,6 +3868,8 @@ function DealsView() {
   const [contractReviewBusy, setContractReviewBusy] = useState(false);
   const [contractReviewError, setContractReviewError] = useState("");
   const [contractApplyingId, setContractApplyingId] = useState("");
+  const [contractLogOpen, setContractLogOpen] = useState(false);
+  const [contractLogQuery, setContractLogQuery] = useState("");
   const refreshContractReview = async (showToast = false) => {
     if (!window.crmFetchContractSheetChanges || contractReviewBusy) return;
     setContractReviewBusy(true);
@@ -3874,6 +3902,7 @@ function DealsView() {
     setCrmSyncBusy(true);
     try {
       const next = JSON.parse(JSON.stringify(db));
+      const beforeContractState = new Map((next.leads || []).map((lead) => [String(lead.id), { status: lead.status || "", company: lead.company || "" }]));
       const today = todayISO();
       const selectedRange = r || [addDaysISO(today, -31), today];
       const rangeStart = selectedRange[0] > today ? today : selectedRange[0];
@@ -3907,6 +3936,17 @@ function DealsView() {
         financeRes = await window.crmSyncFutureFinance(syncedDb);
         if (financeRes && financeRes.db) syncedDb = financeRes.db;
       }
+      const contractStages = new Set(["프리미팅 완료", "견적·제안 발송", "계약 완료"]);
+      (syncedDb.leads || []).forEach((lead) => {
+        const before = beforeContractState.get(String(lead.id));
+        if (!contractStages.has(lead.status) || (before && contractStages.has(before.status))) return;
+        appendContractStatusLog(syncedDb, {
+          company: lead.company, leadId: lead.id, action: "CRM 동기화", source: "CRM 캘린더",
+          actor: contractReviewActor,
+          detail: "내방완료 프리미팅을 계약현황에 반영" + (lead.salesOwner ? " · 영업담당 " + lead.salesOwner : ""),
+          meta: { previousStatus: before ? before.status : "미등록", nextStatus: lead.status, premeetingAt: meetingDoneDate(lead), projectNo: lead.projNo || "" },
+        });
+      });
       setDb({ ...syncedDb });
       if (window.crmMarkSynced) window.crmMarkSynced();
       try { localStorage.setItem("crm:lastManualDealSync", String(Date.now())); } catch (e) {}
@@ -3926,7 +3966,16 @@ function DealsView() {
   const addDeal = () => {
     if (!nd.company.trim()) { toast("회사명을 입력하세요"); return; }
     const newId = uid();
-    up((d) => d.leads.unshift({ id: newId, manualEntry: true, manualDeal: true, company: nd.company.trim(), contact: "", phone: "", email: "", channel: "직접 등록", creative: "", buildup: nd.buildup, buildups: nd.buildup ? [nd.buildup] : [], lineItems: [], grade: nd.grade, status: "프리미팅 완료", ctype: nd.ctype, tmOwner: "", salesOwner: nd.salesOwner, expected: 0, contractAmount: 0, paid: 0, payments: [], sent: {}, newsletter: false, pushLog: [], premeetingAt: nd.date, premeetingDoneAt: nd.date, bookedAt: nd.date, createdAt: todayISO(), memo: "", history: [{ date: todayISO(), type: "유입", note: "프리미팅 화면에서 직접 등록" }] }));
+    up((d) => {
+      const lead = { id: newId, manualEntry: true, manualDeal: true, company: nd.company.trim(), contact: "", phone: "", email: "", channel: "직접 등록", creative: "", buildup: nd.buildup, buildups: nd.buildup ? [nd.buildup] : [], lineItems: [], grade: nd.grade, status: "프리미팅 완료", ctype: nd.ctype, tmOwner: "", salesOwner: nd.salesOwner, expected: 0, contractAmount: 0, paid: 0, payments: [], sent: {}, newsletter: false, pushLog: [], premeetingAt: nd.date, premeetingDoneAt: nd.date, bookedAt: nd.date, createdAt: todayISO(), memo: "", history: [{ date: todayISO(), type: "유입", note: "프리미팅 화면에서 직접 등록" }] };
+      d.leads.unshift(lead);
+      appendContractStatusLog(d, {
+        company: lead.company, leadId: lead.id, action: "직접 추가", source: "계약현황",
+        actor: contractReviewActor,
+        detail: "딜 추가로 계약현황 생성" + (lead.salesOwner ? " · 영업담당 " + lead.salesOwner : "") + (lead.buildup ? " · " + lead.buildup : ""),
+        meta: { meetingAt: lead.premeetingDoneAt, ctype: lead.ctype, buildup: lead.buildup },
+      });
+    });
     setNd({ company: "", salesOwner: "", buildup: "", grade: "", ctype: "신규", amount: 0, date: todayISO() });
     setAddOpen(false); setPayId(newId); toast("딜을 추가했습니다 · 총 결제금액과 회차를 설정하세요");
   };
@@ -3971,6 +4020,13 @@ function DealsView() {
         lead.projNo = seed.projectNo;
         lead.crmProject = { projectNo: seed.projectNo, clientNo: seed.clientNo, name: seed.projectName, service: seed.service, url: seed.sourceUrl, importedAt: new Date().toISOString() };
         targetId = lead.id;
+        appendContractStatusLog(d, {
+          company: lead.company, leadId: lead.id,
+          action: added ? "CRM 링크 생성" : "CRM 링크 갱신", source: "CRM 프로젝트",
+          actor: contractReviewActor,
+          detail: "CRM 프로젝트 #" + seed.projectNo + (seed.owner ? " · 담당 " + seed.owner : " · 담당자 미확인"),
+          meta: { projectNo: seed.projectNo, clientNo: seed.clientNo || "", sourceUrl: seed.sourceUrl || "" },
+        });
       };
       up(applyImport);
       setCrmImportValue("");
@@ -3987,6 +4043,12 @@ function DealsView() {
     if (!l) return;
     const crmLinked = !!(l.crmSheet || l.crmMeeting || l.calendarOnly || l.crmProject || l.crmProjectImported);
     up((d) => {
+      appendContractStatusLog(d, {
+        company: l.company, leadId: l.id, action: "계약현황 삭제", source: crmLinked ? "CRM 연동" : "계약현황",
+        actor: contractReviewActor,
+        detail: crmLinked ? "화면에서 삭제 · CRM 원본에 남아 있으면 다음 동기화 때 다시 생성될 수 있음" : "화면에서 직접 삭제",
+        meta: { status: l.status || "", contractAmount: Number(l.contractAmount || 0) },
+      });
       d.leads = d.leads.filter((x) => x.id !== l.id);
       (d.projects || []).forEach((p) => { if (p.leadId === l.id) p.leadId = null; });
     }, { reason: "contract_lead_delete", allowedLeadRemovals: [l.id] });
@@ -4106,8 +4168,28 @@ function DealsView() {
   const ungradedN = pool.filter((l) => !GRADES.includes(l.grade)).length;
   const doPush = (l) => up((d) => { const x = d.leads.find((y) => y.id === l.id); if (!x) return; x.pushLog = x.pushLog || []; x.pushLog.push(todayISO()); x.history.push({ date: todayISO(), type: "푸시", note: "결제 푸시 " + x.pushLog.length + "회 — 미수 " + fmtK((x.contractAmount || x.expected || 0) - (x.paid || 0)) + "원" }); });
   const resetPush = (l) => up((d) => { const x = d.leads.find((y) => y.id === l.id); if (!x) return; x.pushLog = []; x.history.push({ date: todayISO(), type: "푸시", note: "결제 푸시 기록 초기화" }); });
-  const toggleWin = (l, on) => up((d) => { const x = d.leads.find((y) => y.id === l.id); if (!x) return; if (on) { applyLeadStatus(d, x, "계약 완료"); } else { x.status = "견적·제안 발송"; x.history.push({ date: todayISO(), type: "상태", note: "계약 해제 — 견적·제안 발송으로 되돌림" }); } });
+  const toggleWin = (l, on) => up((d) => {
+    const x = d.leads.find((y) => y.id === l.id); if (!x) return;
+    if (on) { applyLeadStatus(d, x, "계약 완료"); }
+    else { x.status = "견적·제안 발송"; x.history.push({ date: todayISO(), type: "상태", note: "계약 해제 — 견적·제안 발송으로 되돌림" }); }
+    appendContractStatusLog(d, {
+      company: x.company, leadId: x.id, action: on ? "계약 완료" : "계약 해제", source: "계약현황",
+      actor: contractReviewActor,
+      detail: on ? "계약 체크 완료" + (x.contractAmount ? " · 계약금액 " + fmtWon(x.contractAmount) : "") : "견적·제안 발송 단계로 되돌림",
+      meta: { status: x.status, contractAmount: Number(x.contractAmount || 0) },
+    });
+  });
   const contractReviewActor = (currentAccount && (currentAccount.displayName || currentAccount.username)) || "사용자";
+  const contractStatusLogs = [...(db.contractStatusLogs || [])].sort((a, b) => String(b.at || b.date || "").localeCompare(String(a.at || a.date || "")));
+  const contractLogVisible = contractStatusLogs.filter((log) => {
+    const query = contractLogQuery.trim().toLowerCase();
+    if (!query) return true;
+    return [log.company, log.action, log.source, log.actor, log.detail].some((value) => String(value || "").toLowerCase().includes(query));
+  });
+  const formatContractLogTime = (value) => {
+    const parsed = new Date(value || "");
+    return Number.isNaN(parsed.getTime()) ? (value || "시각 없음") : parsed.toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+  };
   const contractReviewVisible = contractReview.items || [];
   const contractCompanyAliases = (value) => {
     const raw = String(value || "");
@@ -4224,6 +4306,12 @@ function DealsView() {
         if (approvedEventTotal > 0) lead.contractAmount = approvedEventTotal;
         else if (Number(item.sourceAmount || 0) > 0) lead.contractAmount = Number(item.sourceAmount || 0);
         if (!Number(lead.expected || 0) && Number(lead.contractAmount || 0) > 0) lead.expected = Number(lead.contractAmount || 0);
+        appendContractStatusLog(d, {
+          company: lead.company, leadId: lead.id, action: "외부 시트 생성", source: "계약 프로세스 시트",
+          actor: contractReviewActor,
+          detail: "신규 업체 생성 · 계약 " + (lead.contractAmount ? fmtWon(lead.contractAmount) : "금액 미확인") + " · 원본 " + (item.sourceRows || []).length + "행",
+          meta: { sourceKey: item.sourceKey, sourceHash: item.sourceHash, contractAmount: Number(lead.contractAmount || 0), paid: Number(item.numericPaid || 0) },
+        });
       }, { reason: "contract_sheet_change_approved" });
       removeContractReviewItem(item.id);
       toast("계약현황에 신규 업체를 생성했습니다 · " + item.company);
@@ -4237,6 +4325,12 @@ function DealsView() {
     setContractApplyingId(item.id);
     try {
       await window.crmSetContractSheetChangeStatus(item.id, "제외", contractReviewActor);
+      up((d) => appendContractStatusLog(d, {
+        company: item.company, leadId: "", action: "외부 시트 제외", source: "계약 프로세스 시트",
+        actor: contractReviewActor,
+        detail: "신규 업체 후보에서 제외 · 원본 " + (item.sourceRows || []).length + "행",
+        meta: { sourceKey: item.sourceKey, sourceHash: item.sourceHash },
+      }), { reason: "contract_sheet_candidate_excluded" });
       removeContractReviewItem(item.id);
       toast("이번 계약 시트 변경을 제외했습니다 · " + item.company);
     } catch (error) {
@@ -4257,6 +4351,7 @@ function DealsView() {
           <Btn kind="ghost" disabled={contractReviewBusy} onClick={() => refreshContractReview(true)} cls="border-amber-200 text-amber-700 hover:bg-amber-50">
             <RefreshCw size={13} className={contractReviewBusy ? "animate-spin" : ""} />{contractReviewBusy ? "신규 업체 확인 중" : "신규 계약 업체"}{contractReview.pending > 0 ? " " + contractReview.pending : ""}
           </Btn>
+          <Btn kind="ghost" onClick={() => setContractLogOpen(true)} cls="border-slate-200 text-slate-700 hover:bg-slate-50"><ClipboardList size={13} />활동 로그{contractStatusLogs.length ? " " + contractStatusLogs.length : ""}</Btn>
           <Btn kind="ghost" onClick={() => setCrmImportOpen(true)} cls="border-indigo-200 text-indigo-700 hover:bg-indigo-50"><Link2 size={13} />CRM 링크 추가</Btn>
           <Btn kind="primary" onClick={() => setAddOpen(true)}><Plus size={13} />딜 추가</Btn>
         </div>} />
@@ -4610,6 +4705,45 @@ function DealsView() {
             })}
             {contractReviewVisible.length === 0 && <Empty compact text="8월 이후 추가할 미등록 계약 업체가 없습니다." />}
           </div>
+        </div>
+      </Modal>
+      <Modal open={contractLogOpen} onClose={() => setContractLogOpen(false)} wide title={"계약현황 활동 로그 · " + contractStatusLogs.length + "건"}>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="relative w-full sm:w-[360px]">
+              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Inp value={contractLogQuery} onChange={(e) => setContractLogQuery(e.target.value)} placeholder="업체·작업·경로·입력자 검색" className="pl-8" />
+            </div>
+            <span className="text-[11px] text-slate-400">최근 기록부터 표시 · 삭제된 업체 로그도 보존</span>
+          </div>
+          <div className="overflow-x-auto border border-slate-200 bg-white">
+            <div className="min-w-[980px]">
+              <div className="grid grid-cols-[145px_180px_115px_130px_110px_minmax(260px,1fr)] gap-3 border-b border-slate-200 bg-slate-50 px-3 py-2 text-[10px] font-extrabold text-slate-400">
+                <span>기록 시각</span><span>업체</span><span>작업</span><span>경로</span><span>입력자</span><span>상세</span>
+              </div>
+              <div className="max-h-[58vh] overflow-y-auto divide-y divide-slate-100">
+                {contractLogVisible.map((log) => {
+                  const canOpen = !!log.leadId && (db.leads || []).some((lead) => String(lead.id) === String(log.leadId));
+                  const destructive = /삭제|제외|해제/.test(log.action || "");
+                  const created = /추가|생성|완료/.test(log.action || "");
+                  const synced = /동기화|갱신/.test(log.action || "");
+                  const actionClass = destructive ? "bg-red-50 text-red-700 border-red-200" : created ? "bg-emerald-50 text-emerald-700 border-emerald-200" : synced ? "bg-sky-50 text-sky-700 border-sky-200" : "bg-slate-50 text-slate-600 border-slate-200";
+                  return (
+                    <div key={log.id} className="grid grid-cols-[145px_180px_115px_130px_110px_minmax(260px,1fr)] gap-3 items-start px-3 py-2.5 text-xs leading-5 hover:bg-slate-50/70">
+                      <span className="tabular-nums text-slate-500 whitespace-nowrap">{formatContractLogTime(log.at)}</span>
+                      <button type="button" disabled={!canOpen} onClick={() => { if (canOpen) { setContractLogOpen(false); openLead(log.leadId); } }} className={"text-left font-extrabold break-words " + (canOpen ? "text-slate-800 hover:text-indigo-600" : "text-slate-500 cursor-default")}>{log.company || "(업체명 미확인)"}</button>
+                      <span><span className={"inline-flex border px-1.5 py-0.5 text-[10px] font-extrabold " + actionClass}>{log.action || "변경"}</span></span>
+                      <span className="font-semibold text-slate-600 break-words">{log.source || "계약현황"}</span>
+                      <span className="text-slate-600 break-words">{log.actor || "사용자"}</span>
+                      <span className="text-slate-500 break-words">{log.detail || "상세 내용 없음"}</span>
+                    </div>
+                  );
+                })}
+                {contractLogVisible.length === 0 && <div className="px-4 py-12 text-center text-xs text-slate-400">{contractStatusLogs.length ? "검색 조건에 맞는 로그가 없습니다." : "아직 계약현황 활동 로그가 없습니다. 적용 이후 작업부터 기록됩니다."}</div>}
+              </div>
+            </div>
+          </div>
+          <p className="text-[11px] leading-5 text-slate-400">로그는 계약 데이터와 함께 Google Sheet에 저장됩니다. 과거 작업 시각은 근거 없이 역산하지 않으며, 이 기능 적용 이후 발생한 작업부터 기록합니다.</p>
         </div>
       </Modal>
       <PayModal id={payId} onClose={() => setPayId(null)} upPay={upPay} applyPreset={applyPreset} />
@@ -8756,7 +8890,8 @@ function SchemaView() {
     "계약_잔금로그": 2060807002, "시스템_저장메타": 479157921, "시스템_현재상태_A": 1069994132,
     "시스템_현재상태_B": 930808565, "시스템_상태스냅샷": 339356017, "시스템_변경로그": 1031580970,
     "데이터_엔티티": 828238717, "데이터_리드원장": 369318979, "데이터_계약원장": 405520072,
-    "데이터_입금원장": 755962867, "데이터_수정사항원장": 360478157, "데이터_마케팅로그원장": 1009689029
+    "데이터_입금원장": 755962867, "데이터_수정사항원장": 360478157, "데이터_마케팅로그원장": 1009689029,
+    "데이터_계약현황로그": 1238136186
   };
   const pages = [
     { category: "통합", name: "통합 성과 체크", read: ["원본_메타광고", "NAVER-GOOGLE"], write: ["마케팅_로그", "데이터_마케팅로그원장"], external: ["CRM API"], use: "마케팅비·유입·프리미팅·계약 KPI" },
@@ -8767,7 +8902,7 @@ function SchemaView() {
     { category: "마케팅", name: "마케팅 채널 분석", read: ["원본_메타광고", "NAVER-GOOGLE"], write: ["마케팅_채널분석"], external: ["CRM API"], use: "채널명을 통합한 성과" },
     { category: "프리미팅", name: "프리미팅 총괄 대시보드", read: [], write: ["데이터_계약원장", "데이터_입금원장"], external: ["CRM API"], use: "프리미팅·계약·빌드업 성과" },
     { category: "프리미팅", name: "TM · DB 품질/전환", read: [], write: ["마케팅_유입DB", "데이터_리드원장"], external: ["CRM API"], use: "유입일별 DB 품질과 전환" },
-    { category: "프리미팅", name: "계약 현황", read: [], write: ["프리미팅_계약현황", "데이터_계약원장", "데이터_입금원장"], external: ["CRM API"], use: "프리미팅 이후 계약·입금 관리" },
+    { category: "프리미팅", name: "계약 현황", read: [], write: ["프리미팅_계약현황", "데이터_계약원장", "데이터_입금원장", "데이터_계약현황로그"], external: ["CRM API"], use: "프리미팅 이후 계약·입금과 활동 이력 관리" },
     { category: "계약", name: "계약 총괄 대시보드", read: [], write: ["데이터_계약원장", "데이터_입금원장"], external: [], use: "계약액·입금액·미수금 집계" },
     { category: "계약", name: "지원사업 관리", read: [], write: [], external: ["Supabase", "CRM API"], use: "지원사업 배정·합격·일정" },
     { category: "계약", name: "잔금 관리", read: [], write: ["계약_잔금관리", "계약_잔금로그", "데이터_입금원장"], external: [], use: "선금·중도금·잔금과 변경 이력" },
