@@ -8554,7 +8554,7 @@ function OtherHubView() {
   const items = [
     { id: "org", icon: Target, title: "조직 · KPI", desc: "자동 KPI와 목표·보상 규칙", meta: (db.kpis || []).length + "개 KPI" },
     { id: "templates", icon: MessageSquareText, title: "메시지 · 스크립트", desc: "TM 스크립트와 미팅 전후 메시지", meta: "발송 문구 관리" },
-    { id: "schema", icon: Link2, title: "데이터 구조도", desc: "페이지별 원천·갱신·계산 흐름", meta: "연동 진단" },
+    { id: "schema", icon: Link2, title: "데이터 구조도", desc: "페이지·API·저장·백업 전체 흐름", meta: "아키텍처" },
     { id: "settings", icon: Settings, title: "설정 · 사용자", desc: "사용자·접속·연동·백업 관리", meta: users.length + "명 등록" },
   ];
   return (
@@ -8744,8 +8744,10 @@ function AccessControlView() {
   );
 }
 function SchemaView() {
+  const [viewMode, setViewMode] = useState("flow");
   const [category, setCategory] = useState("전체");
   const [showSystem, setShowSystem] = useState(false);
+  const [selectedNode, setSelectedNode] = useState("web");
   const sheetBase = "https://docs.google.com/spreadsheets/d/1IXr_3uXAg7k_yecSsVboXiHJNo5HMIDiMhSagg1Js4A/edit";
   const sheetGids = {
     "원본_웹전체데이터": 2045540357, "원본_메타광고": 1128638972, "NAVER-GOOGLE": 1970221190,
@@ -8777,7 +8779,7 @@ function SchemaView() {
     { category: "기타", name: "메시지 · 스크립트", read: [], write: [], external: [], use: "메시지 템플릿" },
     { category: "기타", name: "조직 · KPI", read: [], write: [], external: [], use: "사용자와 KPI 기준" },
     { category: "기타", name: "잔금 구버전", read: [], write: ["[구버전] 잔금"], external: [], use: "구형 미수금 화면" },
-    { category: "기타", name: "데이터 구조도", read: [], write: [], external: [], use: "페이지와 시트 연결표" },
+    { category: "기타", name: "데이터 구조도", read: [], write: [], external: [], use: "페이지·API·저장·백업 아키텍처" },
     { category: "기타", name: "수정사항", read: [], write: ["기타_수정사항", "데이터_수정사항원장"], external: [], use: "수정 요청과 담당자·상태" },
     { category: "관리", name: "권한 관리", read: [], write: [], external: [], use: "계정별 페이지 권한" },
     { category: "관리", name: "설정 · 사용자", read: [], write: [], external: [], use: "담당자·운영 설정" }
@@ -8793,9 +8795,107 @@ function SchemaView() {
       : <span className={"inline-flex items-center gap-1 px-2 py-1 rounded-md border text-[10px] font-extrabold " + colors}>{content}</span>;
   };
   const Empty = () => <span className="text-[10px] font-bold text-slate-400">전용 탭 없음 · 공통 원본 사용</span>;
+  const architectureNodes = {
+    crm: { lane: "외부 원천", title: "본사 CRM API", meta: "읽기 전용", tone: "blue", summary: "리드·TM·프리미팅 원천", details: ["newarrivals/v2 · 유입 DB", "mr_schedules · 프리미팅 일정", "CRM 값은 사용자 입력을 직접 삭제하지 않음"] },
+    ads: { lane: "외부 원천", title: "광고 매체 API", meta: "수집", tone: "blue", summary: "META · NAVER · GOOGLE", details: ["캠페인·일자별 비용/노출/클릭", "META는 잠재고객·포켓 트래픽·빌더진 트래픽 분리", "광고 원본은 수집 시트가 정본"] },
+    contract: { lane: "외부 원천", title: "외부 계약 시트", meta: "검토 후 반영", tone: "blue", summary: "신규 계약 후보 감지", details: ["2026-08 이후 미등록 업체만 후보화", "사용자가 신규 생성 또는 제외", "자동 덮어쓰기하지 않음"] },
+    support: { lane: "외부 원천", title: "Supabase", meta: "읽기", tone: "violet", summary: "지원사업 관리 데이터", details: ["지원사업 배정·합격·일정", "지원사업 관리 화면에서 조회", "웹 전체 상태 저장소와는 별도"] },
+    appscript: { lane: "연동 계층", title: "Apps Script Web App", meta: "API 게이트웨이", tone: "amber", summary: "읽기·저장·동기화 중계", details: ["Code.gs · doGet/doPost", "토큰 확인·리비전 충돌 방지", "Google Sheets 접근과 CRM 프록시"] },
+    collector: { lane: "연동 계층", title: "MarketingCollector.gs", meta: "시간 트리거", tone: "amber", summary: "광고 데이터 정기 수집", details: ["META/NAVER/GOOGLE 원본 갱신", "수집 결과와 오류를 시스템 탭에 기록", "웹 접속 여부와 독립 실행"] },
+    web: { lane: "웹", title: "Pocket KPI 웹", meta: "React · GitHub Pages", tone: "indigo", summary: "조회·계산·사용자 입력", details: ["통합·마케팅·프리미팅·계약·기타 화면", "서버 저장 성공 전 브라우저 저널 유지", "저장 성공 뒤 서버 리비전으로 화면 갱신"] },
+    journal: { lane: "웹", title: "브라우저 저널", meta: "임시 안전장치", tone: "indigo", summary: "미전송 변경 보관", details: ["localStorage에 저장 대기 작업 보관", "네트워크 복구 후 같은 mutationId로 재전송", "Google Sheets 정본을 대체하지 않음"] },
+    state: { lane: "Google Sheets", title: "현재상태 A / B", meta: "웹 복구 정본", tone: "emerald", summary: "웹 전체 상태 이중 저장", details: ["비활성 슬롯에 먼저 기록 후 검증", "저장메타가 현재 활성 슬롯 지정", "해시·리비전으로 손상/충돌 확인"] },
+    ledgers: { lane: "Google Sheets", title: "구조화 원장", meta: "확인·분석", tone: "emerald", summary: "리드·계약·입금·잔금", details: ["데이터_리드원장 · 계약원장 · 입금원장", "계약_잔금관리 · 계약_잔금로그", "A/B 저장과 함께 동기화되는 확인용 구조"] },
+    marketing: { lane: "Google Sheets", title: "광고 정본 시트", meta: "마케팅 정본", tone: "emerald", summary: "원본_메타광고 · NAVER-GOOGLE", details: ["일별·캠페인별 광고 수치", "대시보드 계산의 광고비 원천", "사용자 계약 입력과 분리 저장"] },
+    audit: { lane: "보호·복구", title: "로그 · 스냅샷", meta: "감사", tone: "slate", summary: "변경 이력과 복구 지점", details: ["시스템_변경로그 · 상태스냅샷", "데이터_계약현황로그 · 잔금로그", "누가·언제·무엇을 바꿨는지 추적"] },
+    backup: { lane: "보호·복구", title: "Drive 정기 백업", meta: "파일 백업", tone: "slate", summary: "스프레드시트 복사본", details: ["별도 backup.gs 시간 트리거", "운영 시트 전체를 날짜별 파일로 복제", "A/B와 별개의 최종 복구 수단"] }
+  };
+  const nodeTones = {
+    blue: "border-blue-200 bg-blue-50 text-blue-800 hover:border-blue-400",
+    violet: "border-violet-200 bg-violet-50 text-violet-800 hover:border-violet-400",
+    amber: "border-amber-200 bg-amber-50 text-amber-800 hover:border-amber-400",
+    indigo: "border-indigo-200 bg-indigo-50 text-indigo-800 hover:border-indigo-400",
+    emerald: "border-emerald-200 bg-emerald-50 text-emerald-800 hover:border-emerald-400",
+    slate: "border-slate-300 bg-slate-50 text-slate-800 hover:border-slate-500"
+  };
+  const ArchitectureNode = ({ id }) => {
+    const node = architectureNodes[id];
+    const active = selectedNode === id;
+    return <button type="button" onClick={() => setSelectedNode(id)} className={"w-full rounded-md border p-3 text-left transition-all " + nodeTones[node.tone] + (active ? " ring-2 ring-slate-900/15 shadow-sm" : "") }>
+      <div className="flex items-start justify-between gap-2"><span className="text-[11px] font-black">{node.title}</span><span className="shrink-0 rounded border border-current/15 bg-white/60 px-1.5 py-0.5 text-[8px] font-black">{node.meta}</span></div>
+      <p className="mt-1 text-[9px] font-bold opacity-70">{node.summary}</p>
+    </button>;
+  };
+  const selected = architectureNodes[selectedNode];
+  const FlowArrow = () => <div className="flex items-center justify-center py-1 text-slate-300"><ArrowRight size={18} className="hidden xl:block" /><ArrowDown size={18} className="xl:hidden" /></div>;
+  const pageGroups = [
+    { name: "통합", items: ["통합 성과 체크"] },
+    { name: "마케팅", items: ["총괄", "META", "NAVER+GOOGLE", "유입 DB", "채널 분석"] },
+    { name: "프리미팅", items: ["총괄", "TM 품질", "계약 현황"] },
+    { name: "계약", items: ["총괄", "지원사업", "잔금", "포켓비즈", "상품·가격"] },
+    { name: "기타·관리", items: ["메시지", "조직·KPI", "수정사항", "권한", "설정"] }
+  ];
   return (
     <div className="space-y-4">
-      <SecTitle icon={Link2} title="데이터 구조도" />
+      <SecTitle icon={Link2} title="웹 · 데이터 구조도" right={<span className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[9px] font-black text-slate-500">읽기 전용 구조 문서</span>} />
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-200 bg-white p-2">
+        <div className="flex gap-1">
+          {[{ id: "flow", label: "전체 흐름" }, { id: "pages", label: "페이지 연결표" }, { id: "safety", label: "저장 안전장치" }].map((item) => <button key={item.id} type="button" onClick={() => setViewMode(item.id)} className={"rounded-md px-3 py-1.5 text-[10px] font-black transition-colors " + (viewMode === item.id ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-100")}>{item.label}</button>)}
+        </div>
+        <p className="px-1 text-[9px] font-bold text-slate-400">노드를 누르면 실제 저장 역할과 주의사항이 표시됩니다.</p>
+      </div>
+
+      {viewMode === "flow" && <>
+        <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+          {[{ label: "웹 복구 정본", value: "현재상태 A/B", tone: "text-indigo-700" }, { label: "마케팅 정본", value: "광고 원본 시트", tone: "text-emerald-700" }, { label: "사용자 입력", value: "즉시 서버 저장", tone: "text-blue-700" }, { label: "최종 보호", value: "로그·스냅샷·Drive", tone: "text-slate-700" }].map((item) => <div key={item.label} className="rounded-md border border-slate-200 bg-white px-3 py-2.5"><p className="text-[8px] font-black text-slate-400">{item.label}</p><p className={"mt-0.5 text-[11px] font-black " + item.tone}>{item.value}</p></div>)}
+        </div>
+        <Card cls="overflow-hidden">
+          <div className="border-b border-slate-200 bg-slate-50 px-4 py-2.5">
+            <p className="text-[11px] font-black text-slate-700">데이터가 들어와 저장·백업되는 전체 경로</p>
+            <p className="mt-0.5 text-[9px] text-slate-400">화살표는 주 흐름이며, 일부 화면은 여러 원천을 함께 읽습니다.</p>
+          </div>
+          <div className="overflow-x-auto p-4">
+            <div className="grid min-w-[1020px] grid-cols-[1fr_32px_1fr_32px_1.25fr_32px_1fr] items-stretch gap-0">
+              <div className="space-y-2 rounded-md border border-dashed border-blue-200 bg-blue-50/30 p-2">
+                <p className="px-1 text-[8px] font-black uppercase tracking-wider text-blue-500">1 · 외부 원천</p>
+                <ArchitectureNode id="crm" /><ArchitectureNode id="ads" /><ArchitectureNode id="contract" /><ArchitectureNode id="support" />
+              </div>
+              <FlowArrow />
+              <div className="space-y-2 rounded-md border border-dashed border-amber-200 bg-amber-50/30 p-2">
+                <p className="px-1 text-[8px] font-black uppercase tracking-wider text-amber-600">2 · 연동 계층</p>
+                <ArchitectureNode id="appscript" /><ArchitectureNode id="collector" />
+                <div className="rounded-md border border-amber-100 bg-white p-2 text-[8px] font-bold leading-4 text-slate-500">CRM·계약·저장은 Web App<br />광고 수집은 Collector 트리거</div>
+              </div>
+              <FlowArrow />
+              <div className="space-y-2 rounded-md border border-dashed border-indigo-200 bg-indigo-50/30 p-2">
+                <p className="px-1 text-[8px] font-black uppercase tracking-wider text-indigo-500">3 · 웹 페이지</p>
+                <ArchitectureNode id="web" />
+                <div className="grid grid-cols-2 gap-1">
+                  {pageGroups.map((group) => <div key={group.name} className="rounded-md border border-indigo-100 bg-white p-2"><p className="text-[8px] font-black text-indigo-600">{group.name}</p><p className="mt-1 text-[8px] font-bold leading-4 text-slate-500">{group.items.join(" · ")}</p></div>)}
+                </div>
+                <ArchitectureNode id="journal" />
+              </div>
+              <FlowArrow />
+              <div className="space-y-2 rounded-md border border-dashed border-emerald-200 bg-emerald-50/30 p-2">
+                <p className="px-1 text-[8px] font-black uppercase tracking-wider text-emerald-600">4 · 저장 · 보호</p>
+                <ArchitectureNode id="state" /><ArchitectureNode id="ledgers" /><ArchitectureNode id="marketing" />
+                <div className="flex items-center justify-center text-slate-300"><ArrowDown size={14} /></div>
+                <ArchitectureNode id="audit" /><ArchitectureNode id="backup" />
+              </div>
+            </div>
+          </div>
+        </Card>
+        <Card cls="overflow-hidden">
+          <div className="grid lg:grid-cols-[190px_1fr]">
+            <div className={"border-b p-4 lg:border-b-0 lg:border-r " + (selected.tone === "blue" ? "bg-blue-50" : selected.tone === "violet" ? "bg-violet-50" : selected.tone === "amber" ? "bg-amber-50" : selected.tone === "indigo" ? "bg-indigo-50" : selected.tone === "emerald" ? "bg-emerald-50" : "bg-slate-50")}>
+              <p className="text-[8px] font-black text-slate-400">선택한 노드 · {selected.lane}</p><p className="mt-1 text-sm font-black text-slate-900">{selected.title}</p><p className="mt-1 text-[10px] font-bold text-slate-500">{selected.summary}</p>
+            </div>
+            <div className="grid gap-2 p-4 md:grid-cols-3">{selected.details.map((detail, idx) => <div key={detail} className="flex gap-2 rounded-md border border-slate-200 bg-white p-3"><span className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-slate-900 text-[8px] font-black text-white">{idx + 1}</span><p className="text-[10px] font-bold leading-4 text-slate-600">{detail}</p></div>)}</div>
+          </div>
+        </Card>
+      </>}
+
+      {viewMode === "pages" && <>
       <div className="rounded-md border border-indigo-200 bg-indigo-50 px-4 py-3 flex flex-wrap items-center gap-x-5 gap-y-2">
         <div><p className="text-[10px] font-black text-indigo-500">공통 웹 원본</p><p className="text-xs font-extrabold text-slate-800 mt-0.5">화면에서 입력·수정하는 값은 A/B에 이중 저장</p></div>
         <div className="flex flex-wrap gap-1.5"><SheetChip name="시스템_현재상태_A" tone="blue" /><SheetChip name="시스템_현재상태_B" tone="blue" /></div>
@@ -8816,14 +8916,25 @@ function SchemaView() {
           </div>)}
         </div>
       </Card>
-      <Card>
-        <button type="button" onClick={() => setShowSystem(!showSystem)} className="w-full flex items-center gap-3 p-4 text-left"><span className="w-8 h-8 rounded-md bg-slate-100 text-slate-600 flex items-center justify-center"><FileText size={14} /></span><div className="min-w-0 flex-1"><p className="text-sm font-black text-slate-800">백업·복구용 시스템 탭</p><p className="text-[10px] text-slate-400 mt-0.5">평소에는 건드리지 않는 공통 저장 구조</p></div><ChevronDown size={15} className={"text-slate-400 transition-transform " + (showSystem ? "rotate-180" : "")} /></button>
-        {showSystem && <div className="border-t border-slate-200 p-4 space-y-3">
-          <div><p className="text-[10px] font-black text-slate-500 mb-1.5">현재 원본 선택</p><div className="flex flex-wrap gap-1.5"><SheetChip name="시스템_저장메타" tone="blue" /><SheetChip name="시스템_현재상태_A" tone="blue" /><SheetChip name="시스템_현재상태_B" tone="blue" /></div></div>
-          <div><p className="text-[10px] font-black text-slate-500 mb-1.5">복구·감사</p><div className="flex flex-wrap gap-1.5"><SheetChip name="시스템_상태스냅샷" tone="blue" /><SheetChip name="시스템_변경로그" tone="blue" /><SheetChip name="데이터_엔티티" tone="blue" /></div></div>
-          <p className="text-[10px] font-bold text-amber-700">페이지별 원장 탭은 확인용 구조화 복사본입니다. 현재 웹 복구 원본은 A/B 탭입니다.</p>
-        </div>}
-      </Card>
+      </>}
+
+      {viewMode === "safety" && <>
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3"><p className="text-[11px] font-black text-amber-900">저장 원칙</p><p className="mt-1 text-[10px] font-bold leading-4 text-amber-800">사용자 입력은 Apps Script 저장 성공 전까지 브라우저 저널에 남고, 서버에서는 리비전 확인 → 비활성 A/B 기록 → 해시 검증 → 활성 슬롯 전환 순서로 확정됩니다.</p></div>
+        <Card cls="p-4 overflow-x-auto">
+          <div className="flex min-w-[900px] items-stretch gap-2">
+            {[{ no: "1", title: "사용자 입력", desc: "계약·입금·잔금·특이사항" }, { no: "2", title: "브라우저 저널", desc: "성공 전 mutation 보관" }, { no: "3", title: "리비전 확인", desc: "동시 수정 충돌 방지" }, { no: "4", title: "비활성 A/B 기록", desc: "기존 정본을 보존한 채 저장" }, { no: "5", title: "해시 검증·전환", desc: "검증 성공 시에만 활성화" }, { no: "6", title: "원장·로그 동기화", desc: "구조화 확인본과 감사 이력" }].map((step, idx, arr) => <React.Fragment key={step.no}><div className="min-w-0 flex-1 rounded-md border border-slate-200 bg-white p-3"><span className="flex h-5 w-5 items-center justify-center rounded bg-slate-900 text-[9px] font-black text-white">{step.no}</span><p className="mt-2 text-[10px] font-black text-slate-800">{step.title}</p><p className="mt-1 text-[9px] font-bold leading-4 text-slate-400">{step.desc}</p></div>{idx < arr.length - 1 && <div className="flex items-center text-slate-300"><ArrowRight size={15} /></div>}</React.Fragment>) }
+          </div>
+        </Card>
+        <div className="grid gap-3 lg:grid-cols-3">
+          <Card cls="p-4"><p className="text-[9px] font-black text-indigo-500">복구 정본</p><p className="mt-1 text-sm font-black text-slate-800">현재상태 A/B</p><p className="mt-2 text-[10px] font-bold leading-4 text-slate-500">웹 전체 상태를 되살리는 기준입니다. 저장메타가 활성 슬롯과 리비전을 지정합니다.</p><div className="mt-3 flex flex-wrap gap-1"><SheetChip name="시스템_저장메타" tone="blue" /><SheetChip name="시스템_현재상태_A" tone="blue" /><SheetChip name="시스템_현재상태_B" tone="blue" /></div></Card>
+          <Card cls="p-4"><p className="text-[9px] font-black text-emerald-500">확인 원장</p><p className="mt-1 text-sm font-black text-slate-800">엔티티별 구조화 탭</p><p className="mt-2 text-[10px] font-bold leading-4 text-slate-500">사람이 확인·대조하기 쉬운 복사본입니다. A/B 저장과 같은 mutation에서 갱신됩니다.</p><div className="mt-3 flex flex-wrap gap-1"><SheetChip name="데이터_리드원장" /><SheetChip name="데이터_계약원장" /><SheetChip name="데이터_입금원장" /></div></Card>
+          <Card cls="p-4"><p className="text-[9px] font-black text-slate-500">감사·복구</p><p className="mt-1 text-sm font-black text-slate-800">로그·스냅샷·Drive</p><p className="mt-2 text-[10px] font-bold leading-4 text-slate-500">잘못된 수정과 시점별 변화를 추적하고, 시트 자체 손상 시 파일 백업으로 복구합니다.</p><div className="mt-3 flex flex-wrap gap-1"><SheetChip name="시스템_상태스냅샷" tone="blue" /><SheetChip name="시스템_변경로그" tone="blue" /></div></Card>
+        </div>
+        <Card>
+          <button type="button" onClick={() => setShowSystem(!showSystem)} className="w-full flex items-center gap-3 p-4 text-left"><span className="w-8 h-8 rounded-md bg-slate-100 text-slate-600 flex items-center justify-center"><FileText size={14} /></span><div className="min-w-0 flex-1"><p className="text-sm font-black text-slate-800">시스템 탭 상세</p><p className="text-[10px] text-slate-400 mt-0.5">평소에는 건드리지 않는 공통 저장 구조</p></div><ChevronDown size={15} className={"text-slate-400 transition-transform " + (showSystem ? "rotate-180" : "")} /></button>
+          {showSystem && <div className="border-t border-slate-200 p-4 space-y-3"><div><p className="text-[10px] font-black text-slate-500 mb-1.5">현재 원본 선택</p><div className="flex flex-wrap gap-1.5"><SheetChip name="시스템_저장메타" tone="blue" /><SheetChip name="시스템_현재상태_A" tone="blue" /><SheetChip name="시스템_현재상태_B" tone="blue" /></div></div><div><p className="text-[10px] font-black text-slate-500 mb-1.5">복구·감사</p><div className="flex flex-wrap gap-1.5"><SheetChip name="시스템_상태스냅샷" tone="blue" /><SheetChip name="시스템_변경로그" tone="blue" /><SheetChip name="데이터_엔티티" tone="blue" /></div></div></div>}
+        </Card>
+      </>}
     </div>
   );
 }
@@ -8849,7 +8960,7 @@ const VIEW_DATA_SOURCES = {
   supportManagement: { sheet: "지원사업 고객의 합격·연장 관리 데이터", crm: "계약 고객 기본정보", support: "배정 지원사업과 합격 이력" },
   ltvExpansion: { sheet: "기존 고객의 선금·중도금·잔금 회차와 특이사항·상태", crm: "기존 계약 고객 기본정보" },
   balance: { sheet: "구형 잔금액·예정일·회수 상태 화면", crm: "계약 고객 기본정보" },
-  schema: { sheet: "웹 전체 저장 데이터와 시트별 연결 정의", support: "지원사업 외부 데이터 연결 상태" },
+  schema: { sheet: "웹 페이지·API·A/B 상태·구조화 원장·백업 연결 정의", support: "지원사업 외부 데이터 연결 상태" },
   prompts: { sheet: "프롬프트와 설정 저장 데이터", ai: "사용자가 요청할 때 전송하는 프롬프트" }
 };
 function DataConnectionFooter({ view, db, saveState }) {
