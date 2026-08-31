@@ -5118,6 +5118,11 @@ function MarketingPlatformDetail({ kind }) {
   const metaCampaignMonthly = ((meta.campaigns || {}).META) || {};
   const sourceKey = isMeta ? "META" : "SEARCH";
   const sourceFreshness = (meta.sources && meta.sources[sourceKey]) || {};
+  const collector = meta.collector || {};
+  const collectorSourceKeys = isMeta ? ["META"] : ["NAVER", "GOOGLE"];
+  const collectorRows = collectorSourceKeys.map((key) => ({ key, ...((collector.sources && collector.sources[key]) || {}) }));
+  const collectorProblems = collectorRows.filter((item) => !item.configured || item.status === "ERROR" || (item.latestDate && collector.targetLatestDate && item.latestDate < collector.targetLatestDate));
+  const collectorNeverConfigured = collectorRows.some((item) => item.configured === false);
   const latestSourceDate = sourceFreshness.latestDate || "";
   const sourceUpdatedAt = sourceFreshness.updatedAt || "";
   const lagDays = latestSourceDate ? Math.max(0, Math.floor((new Date(todayISO() + "T12:00:00") - new Date(latestSourceDate + "T12:00:00")) / 86400000)) : null;
@@ -5297,6 +5302,10 @@ function MarketingPlatformDetail({ kind }) {
     <div className="space-y-4">
       <SecTitle icon={Megaphone} title={isMeta ? "META 성과 대시보드" : "NAVER · GOOGLE 성과 대시보드"}
         right={<div className="flex items-center gap-2"><span className={"inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-extrabold " + (lagDays == null ? "border-amber-200 bg-amber-50 text-amber-700" : lagDays <= 1 ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-rose-200 bg-rose-50 text-rose-700")} title={sourceUpdatedAt ? "원본 시트 갱신 " + sourceUpdatedAt : "원본 시트의 최신 유효 일자"}><span className={"w-1.5 h-1.5 rounded-full " + (lagDays == null ? "bg-amber-500" : lagDays <= 1 ? "bg-emerald-500" : "bg-rose-500")} />{latestSourceDate ? "최신 " + latestSourceDate.slice(5).replace("-", ".") : "최신일자 확인 필요"}</span><Btn size="xs" kind="ghost" onClick={() => go("marketing")}>전체 채널 <ExternalLink size={11} /></Btn></div>} />
+      {!!collectorProblems.length && <div className={"rounded-md border px-3.5 py-3 flex items-start justify-between gap-3 " + (collectorNeverConfigured ? "border-amber-200 bg-amber-50 text-amber-900" : "border-rose-200 bg-rose-50 text-rose-900")}>
+        <div><p className="text-xs font-black">{collectorNeverConfigured ? "광고 API 자동수집 설정 필요" : "광고 데이터 자동수집 지연"}</p><p className="mt-1 text-[10px] font-medium leading-5 opacity-80">{collectorProblems.map((item) => item.key + " " + (!item.configured ? "미설정" : item.status === "ERROR" ? "오류" : "최신 " + (item.latestDate || "확인 필요"))).join(" · ")}</p></div>
+        <span className="text-[9px] font-bold shrink-0 opacity-60">목표 최신일 {collector.targetLatestDate || "D-1"} · 트리거 {Number(collector.triggerCount || 0)}개</span>
+      </div>}
       <div className="grid grid-cols-2 xl:grid-cols-6 gap-2.5">
         {metricCards.map((m) => {
           const delta = deltaPct(m.value, m.before);
