@@ -8,7 +8,10 @@
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1 --port 8765",
     "check": "npm run build && node scripts/verify-build.mjs",
-    "audit": "npm audit --audit-level=high"
+    "audit": "npm audit --audit-level=high",
+    "test": "node --test tests/*.test.mjs",
+    "test:supabase": "node --test tests/schema-contract.test.mjs tests/migration-reconciliation.test.mjs tests/repository-adapter.test.mjs",
+    "migrate:supabase:dry-run": "node scripts/migrate-sheets-to-supabase.mjs"
   },
   "dependencies": {
     "lucide-react": "0.469.0",

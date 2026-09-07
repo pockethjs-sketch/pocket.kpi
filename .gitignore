@@ -3,3 +3,4 @@ dist/
 .vite/
 .npm-cache/
 *.log
+artifacts/

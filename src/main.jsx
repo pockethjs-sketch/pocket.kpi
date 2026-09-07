@@ -1,4 +1,5 @@
 import "./styles.css";
+import { shadowAfterSheetsCommit, shadowCompareSheetsSnapshot } from "./data/shadowRuntime.js";
 
 /* ===== CRM 저장 연동 설정 =====
      구글시트 팀공유를 켜려면 아래 CRM_SHEET_URL 에 Apps Script 배포 URL(...exec)을 붙여넣으세요.
@@ -164,6 +165,7 @@ import "./styles.css";
         window.crmRemoteError = '';
         window.crmLastRemoteValue = meta.data;
         window.crmOptimisticRemoteValue = meta.data;
+        await shadowCompareSheetsSnapshot(JSON.parse(meta.data), window.crmRemoteRevision);
         return { value: meta.data, revision: window.crmRemoteRevision, marketingSpend: window.sheetMarketingSpend, marketingDaily: window.sheetMarketingDaily, marketingMeta: window.sheetMarketingMeta, source: 'remote-legacy' };
       }
 
@@ -187,6 +189,7 @@ import "./styles.css";
         window.crmRemoteError = '';
         window.crmLastRemoteValue = localStateText;
         window.crmOptimisticRemoteValue = localStateText;
+        await shadowCompareSheetsSnapshot(JSON.parse(localStateText), window.crmRemoteRevision);
         return { unchanged: true, revision: window.crmRemoteRevision, marketingSpend: window.sheetMarketingSpend, marketingDaily: window.sheetMarketingDaily, marketingMeta: window.sheetMarketingMeta, source: 'remote-cache' };
       }
 
@@ -199,6 +202,7 @@ import "./styles.css";
       window.crmRemoteError = '';
       window.crmLastRemoteValue = state.data;
       window.crmOptimisticRemoteValue = state.data;
+      await shadowCompareSheetsSnapshot(JSON.parse(state.data), window.crmRemoteRevision);
       return { value: state.data, revision: window.crmRemoteRevision, marketingSpend: window.sheetMarketingSpend, marketingDaily: window.sheetMarketingDaily, marketingMeta: window.sheetMarketingMeta, source: 'remote' };
     } catch (e) {
       window.crmRemoteLoaded = false;
@@ -516,7 +520,8 @@ import "./styles.css";
       } catch (e) {}
       result.committedValue = committedValue;
       result.rebased = attempt > 0;
-      return result;
+      return shadowAfterSheetsCommit({ mutationId: mutationId, mutation: mutation, revision: result.revision })
+        .then(function (shadow) { result.shadow = shadow; return result; });
     }).finally(function () { if (timeout) clearTimeout(timeout); });
   }
   function crmPrepareStateMutation(nextValue, options) {
