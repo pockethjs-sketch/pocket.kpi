@@ -226,9 +226,9 @@ import "./styles.css";
         return day && day >= crmStart && day <= crmEnd;
       });
       meetingRows = (meetingRows || []).filter(function (row) {
-        return Number(row && row.mr_type) === 1 && Number(row && row.mr_checked) === 1;
+        return Number(row && row.mr_type) === 1;
       });
-      return { ok: true, start: crmStart, end: crmEnd, leads: leadRows, meetings: meetingRows, proxyVersion: 'nginx-same-origin-v1' };
+      return { ok: true, start: crmStart, end: crmEnd, leads: leadRows, meetings: meetingRows, proxyVersion: 'nginx-calendar-all-v2' };
     }
     if (!CRM_SHEET_URL) throw new Error('sheet_url_missing');
     var params = new URLSearchParams({
@@ -1118,9 +1118,8 @@ import "./styles.css";
     await Promise.all(Array.from({ length: Math.min(4, targets.length) }, worker));
     return { changed: changed, db: db, checked: targets.length, updated: updated, errors: errors };
   };
-  /* 캘린더의 실제 프리미팅 완료 데이터.
-     newarrivals의 client_first_visit는 일부 고객만 채워지므로,
-     계약현황 수동 갱신은 mr_schedules의 프리미팅(1) + 내방체크(1)를 정본으로 사용합니다. */
+  /* 캘린더의 프리미팅 일정 전체를 가져옵니다.
+     mr_checked=1은 실제 완료, 미체크는 예정/방문 미확인으로 분리해 완료 KPI를 올리지 않습니다. */
   window.crmFetchCheckedMeetings = async function (db, day, suppliedRows, startDay) {
     var base = CRM_API_BASE.split('/crm/v3/')[0];
     var targetDay = day || new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
@@ -1136,52 +1135,67 @@ import "./styles.css";
       }
     }
     if (Array.isArray(suppliedRows)) {
-      rows = suppliedRows.filter(function (meeting) { return Number(meeting.mr_type) === 1 && Number(meeting.mr_checked) === 1; });
+      rows = suppliedRows.filter(function (meeting) { return Number(meeting.mr_type) === 1; });
     } else {
       try {
         var response = await fetch(base + '/crm/v3/mr_schedules?' + qs.toString(), { cache: 'no-store', headers: { 'authorization': 'Bearer ' + CRM_JWT, 'x-requested-with': 'XMLHttpRequest', 'accept': 'application/json' } });
         if (response.status !== 200) return { changed: false, db: db, err: response.status === 401 ? 'token' : 'http' + response.status };
         var json = await response.json();
-        rows = (json.query || []).filter(function (meeting) { return Number(meeting.mr_type) === 1 && Number(meeting.mr_checked) === 1; });
+        rows = (json.query || []).filter(function (meeting) { return Number(meeting.mr_type) === 1; });
       } catch (e) { return { changed: false, db: db, err: 'network' }; }
     }
     db.leads = db.leads || [];
-    var byId = {}, byProject = {};
+    var byId = {}, byProject = {}, byMeeting = {}, byCompany = {};
+    var companyKey = function (value) { return String(value || '').replace(/\s+/g, '').toLowerCase(); };
     db.leads.forEach(function (lead) {
       if (lead.id) byId[lead.id] = lead;
       if (lead.projNo != null) byProject[String(lead.projNo)] = lead;
+      if (lead.crmMeeting && lead.crmMeeting.msNo != null) byMeeting[String(lead.crmMeeting.msNo)] = lead;
+      if (companyKey(lead.company)) byCompany[companyKey(lead.company)] = lead;
     });
     var fmtPhone = function (value) { var n = String(value || '').replace(/\D/g, ''); if (n.length === 11) return n.slice(0, 3) + '-' + n.slice(3, 7) + '-' + n.slice(7); if (n.length === 10) return n.slice(0, 3) + '-' + n.slice(3, 6) + '-' + n.slice(6); return String(value || ''); };
     var meetingDay = function (value) { var date = new Date(value || ''); return Number.isNaN(date.getTime()) ? targetDay : new Date(date.getTime() + 9 * 3600000).toISOString().slice(0, 10); };
-    var changed = false, added = 0, updated = 0, ownerFilled = 0;
+    var changed = false, added = 0, updated = 0, ownerFilled = 0, completedCount = 0, scheduledCount = 0, nameMatched = 0;
     rows.forEach(function (meeting) {
-      var id = meeting.client_no != null ? 'crm-' + meeting.client_no : 'crm-meeting-' + meeting.ms_no;
-      var lead = byId[id] || (meeting.proj_no != null ? byProject[String(meeting.proj_no)] : null);
+      var id = meeting.client_no != null ? 'crm-' + meeting.client_no : (meeting.proj_no != null ? 'crm-project-' + meeting.proj_no : 'crm-meeting-' + meeting.ms_no);
       var managers = Array.isArray(meeting.managers) ? meeting.managers : [];
       var owner = managers.map(function (manager) { return String(manager.emp_name || '').trim(); }).find(Boolean) || '';
       var dayValue = meetingDay(meeting.start_dt);
       var company = String(meeting.client_rep_name || meeting.client_name || meeting.mr_name || '(업체명 미등록)').trim();
+      var completed = Number(meeting.mr_checked) === 1;
+      if (completed) completedCount += 1; else scheduledCount += 1;
+      var strongLead = byId[id]
+        || (meeting.proj_no != null ? byProject[String(meeting.proj_no)] : null)
+        || (meeting.ms_no != null ? byMeeting[String(meeting.ms_no)] : null);
+      var nameLead = byCompany[companyKey(company)];
+      if (!strongLead && nameLead) { nameMatched += 1; return; }
+      var lead = strongLead;
       var contactRow = Array.isArray(meeting.client_contact) ? meeting.client_contact[0] : null;
       if (!lead) {
-        lead = { id: id, calendarOnly: true, company: company, contact: String(meeting.client_name || (contactRow && contactRow.name) || ''), phone: fmtPhone(contactRow && contactRow.number), email: String(meeting.client_email || ''), channel: 'CRM 캘린더', creative: '', buildup: '', buildups: [], lineItems: [], grade: '', status: '프리미팅 완료', ctype: '신규', tmOwner: '', salesOwner: owner, expected: 0, contractAmount: 0, paid: 0, payments: [], sent: {}, newsletter: false, pushLog: [], projNo: meeting.proj_no || null, crmFinanceAuto: { policy: 'future-only-v1', enabledAt: new Date().toISOString() }, premeetingDoneAt: dayValue, premeetingAt: dayValue, bookedAt: dayValue, createdAt: '', memo: '', history: [{ date: dayValue, type: '미팅', note: 'CRM 캘린더 내방체크 프리미팅 수동수집' }] };
-        db.leads.unshift(lead); byId[id] = lead; if (lead.projNo != null) byProject[String(lead.projNo)] = lead;
+        lead = { id: id, calendarOnly: true, company: company, contact: String(meeting.client_name || (contactRow && contactRow.name) || ''), phone: fmtPhone(contactRow && contactRow.number), email: String(meeting.client_email || ''), channel: 'CRM 캘린더', creative: '', buildup: '', buildups: [], lineItems: [], grade: '', status: completed ? '프리미팅 완료' : '프리미팅 확정', ctype: '신규', tmOwner: '', salesOwner: owner, expected: 0, contractAmount: 0, paid: 0, payments: [], sent: {}, newsletter: false, pushLog: [], projNo: meeting.proj_no || null, crmFinanceAuto: { policy: 'future-only-v1', enabledAt: new Date().toISOString() }, premeetingDoneAt: completed ? dayValue : '', premeetingAt: dayValue, bookedAt: dayValue, createdAt: '', memo: '', history: [{ date: dayValue, type: completed ? '미팅' : '일정', note: completed ? 'CRM 캘린더 내방체크 프리미팅 수동수집' : 'CRM 캘린더 프리미팅 일정 수동수집 · 방문 미확인' }] };
+        db.leads.unshift(lead); byId[id] = lead; if (lead.projNo != null) byProject[String(lead.projNo)] = lead; if (meeting.ms_no != null) byMeeting[String(meeting.ms_no)] = lead; byCompany[companyKey(company)] = lead;
         added += 1; changed = true; if (owner) ownerFilled += 1;
       } else {
         var before = JSON.stringify([lead.company, lead.salesOwner, lead.status, lead.premeetingDoneAt, lead.premeetingAt, lead.bookedAt, lead.crmMeeting]);
         if (!lead.company || lead.company === '(무명)') lead.company = company;
         if (!lead.salesOwner && owner) { lead.salesOwner = owner; ownerFilled += 1; }
-        if (!lead.premeetingDoneAt) lead.premeetingDoneAt = dayValue;
         if (!lead.premeetingAt) lead.premeetingAt = dayValue;
         if (!lead.bookedAt) lead.bookedAt = dayValue;
-        if (['신규 DB', 'TM 진행중', '프리미팅 확정'].indexOf(lead.status) >= 0) lead.status = '프리미팅 완료';
+        if (completed) {
+          if (!lead.premeetingDoneAt) lead.premeetingDoneAt = dayValue;
+          if (['신규 DB', 'TM 진행중', '프리미팅 확정'].indexOf(lead.status) >= 0) lead.status = '프리미팅 완료';
+        } else if (['신규 DB', 'TM 진행중'].indexOf(lead.status) >= 0) {
+          lead.status = '프리미팅 확정';
+        }
         lead.history = lead.history || [];
-        if (!lead.history.some(function (item) { return item && item.note === 'CRM 캘린더 내방체크 프리미팅 수동수집'; })) lead.history.push({ date: dayValue, type: '미팅', note: 'CRM 캘린더 내방체크 프리미팅 수동수집' });
+        var historyNote = completed ? 'CRM 캘린더 내방체크 프리미팅 수동수집' : 'CRM 캘린더 프리미팅 일정 수동수집 · 방문 미확인';
+        if (!lead.history.some(function (item) { return item && item.date === dayValue && item.note === historyNote; })) lead.history.push({ date: dayValue, type: completed ? '미팅' : '일정', note: historyNote });
         lead.crmMeeting = { source: 'mr_schedules', msNo: meeting.ms_no, type: Number(meeting.mr_type), checked: Number(meeting.mr_checked), startAt: meeting.start_dt || '', endAt: meeting.end_dt || '', managers: managers.map(function (manager) { return { no: manager.emp_no, name: manager.emp_name }; }) };
         if (before !== JSON.stringify([lead.company, lead.salesOwner, lead.status, lead.premeetingDoneAt, lead.premeetingAt, lead.bookedAt, lead.crmMeeting])) { updated += 1; changed = true; }
       }
-      if (!lead.crmMeeting) lead.crmMeeting = { source: 'mr_schedules', msNo: meeting.ms_no, type: 1, checked: 1, startAt: meeting.start_dt || '', endAt: meeting.end_dt || '', managers: managers.map(function (manager) { return { no: manager.emp_no, name: manager.emp_name }; }) };
+      if (!lead.crmMeeting) lead.crmMeeting = { source: 'mr_schedules', msNo: meeting.ms_no, type: 1, checked: Number(meeting.mr_checked), startAt: meeting.start_dt || '', endAt: meeting.end_dt || '', managers: managers.map(function (manager) { return { no: manager.emp_no, name: manager.emp_name }; }) };
     });
-    return { changed: changed, db: db, count: rows.length, added: added, updated: updated, ownerFilled: ownerFilled };
+    return { changed: changed, db: db, count: rows.length, completed: completedCount, scheduled: scheduledCount, added: added, updated: updated, nameMatched: nameMatched, ownerFilled: ownerFilled };
   };
   /* 로딩/에러 표시 */
   window.addEventListener('error', function (e) {
@@ -3756,22 +3770,23 @@ function DealsView() {
         financeRes = await window.crmSyncFutureFinance(syncedDb);
         if (financeRes && financeRes.db) syncedDb = financeRes.db;
       }
-      const contractStages = new Set(["프리미팅 완료", "견적·제안 발송", "계약 완료"]);
+      const contractStages = new Set(["프리미팅 확정", "프리미팅 완료", "견적·제안 발송", "계약 완료"]);
       (syncedDb.leads || []).forEach((lead) => {
         const before = beforeContractState.get(String(lead.id));
         if (!contractStages.has(lead.status) || (before && contractStages.has(before.status))) return;
+        const completed = !!meetingDoneDate(lead);
         appendContractStatusLog(syncedDb, {
           company: lead.company, leadId: lead.id, action: "CRM 동기화", source: "CRM 캘린더",
           actor: contractReviewActor,
-          detail: "내방완료 프리미팅을 계약현황에 반영" + (lead.salesOwner ? " · 영업담당 " + lead.salesOwner : ""),
-          meta: { previousStatus: before ? before.status : "미등록", nextStatus: lead.status, premeetingAt: meetingDoneDate(lead), projectNo: lead.projNo || "" },
+          detail: (completed ? "내방완료 프리미팅을 계약현황에 반영" : "프리미팅 일정을 계약현황에 반영 · 방문 미확인") + (lead.salesOwner ? " · 영업담당 " + lead.salesOwner : ""),
+          meta: { previousStatus: before ? before.status : "미등록", nextStatus: lead.status, premeetingAt: completed ? meetingDoneDate(lead) : (lead.premeetingAt || lead.bookedAt || ""), checked: completed ? 1 : 0, projectNo: lead.projNo || "" },
         });
       });
       setDb({ ...syncedDb });
       if (window.crmMarkSynced) window.crmMarkSynced();
       try { localStorage.setItem("crm:lastManualDealSync", String(Date.now())); } catch (e) {}
       const financeDetail = financeRes && financeRes.updated ? " · 신규대상 계약·입금 " + financeRes.updated + "건 갱신" : "";
-      const detail = (meetingRes.count ? ("선택 기간 내방완료 프리미팅 " + meetingRes.count + "건 · 신규 " + meetingRes.added + "건 · 영업자 반영 " + meetingRes.ownerFilled + "건") : "선택 기간에 내방완료된 프리미팅이 없습니다") + financeDetail;
+      const detail = (meetingRes.count ? ("선택 기간 프리미팅 " + meetingRes.count + "건 · 완료 " + meetingRes.completed + "건 · 방문 미확인 " + meetingRes.scheduled + "건 · 신규 " + meetingRes.added + "건 · 영업자 반영 " + meetingRes.ownerFilled + "건") : "선택 기간에 프리미팅 일정이 없습니다") + financeDetail;
       toast(detail);
     } catch (e) {
       const reason = String(e && e.message || e);
@@ -3880,8 +3895,8 @@ function DealsView() {
     ...db.leads.map((lead) => lead.salesOwner).filter(Boolean),
   ])].filter((name) => !INACTIVE_CONTRACT_SALES.has(name));
   const buildupOpts = [...new Set([...db.products.map((p) => p.name), ...BUILDUPS])];
-  const CLOSE_ST = ["프리미팅 완료", "견적·제안 발송", "계약 완료"];
-  const baseDate = (l) => meetingDoneDate(l) || l.contractAt || l.createdAt;
+  const CLOSE_ST = ["프리미팅 확정", "프리미팅 완료", "견적·제안 발송", "계약 완료"];
+  const baseDate = (l) => meetingDoneDate(l) || l.premeetingAt || l.bookedAt || l.contractAt || l.createdAt;
   const payState = (l) => {
     if (l.status !== "계약 완료") return "진행";
     const amt = l.contractAmount || 0;
@@ -4167,7 +4182,7 @@ function DealsView() {
   };
   return (
     <div className="space-y-4">
-      <SecTitle icon={Handshake} title="계약 현황" sub={"프리미팅(방문) 완료된 고객을 계약까지 관리하는 시트입니다 (" + pLabel(period) + "). 본사 CRM에서 프리미팅 체크된 사람들 · 셀에서 바로 편집 · 헤더 클릭으로 정렬."} />
+      <SecTitle icon={Handshake} title="계약 현황" sub={"CRM 캘린더의 프리미팅 일정부터 방문 완료·계약까지 관리하는 시트입니다 (" + pLabel(period) + "). 방문 미확인은 프리미팅 확정으로 분리 · 셀에서 바로 편집 · 헤더 클릭으로 정렬."} />
       <Card cls="p-3">
         <div className="flex flex-col 2xl:flex-row 2xl:items-center gap-3">
           <div className="flex items-center gap-4 flex-wrap min-w-0">
