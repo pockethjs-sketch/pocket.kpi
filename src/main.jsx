@@ -51,6 +51,20 @@ import "./styles.css";
     return new Promise(function (resolve) { setTimeout(resolve, ms); });
   }
 
+  window.crmWaitForRemoteCommit = async function (timeoutMs) {
+    var deadline = Date.now() + Number(timeoutMs || 30000);
+    /* React 상태 변경 뒤 700ms 저장 디바운스가 큐에 들어올 시간을 확보합니다. */
+    await crmDelay(900);
+    while (Date.now() < deadline) {
+      try { await (window.crmSaveQueue || Promise.resolve()); } catch (error) {}
+      var dirty = false;
+      try { dirty = localStorage.getItem(CRM_LOCAL_DIRTY_KEY) === '1'; } catch (error) {}
+      if (!dirty && Number(window.crmPendingRemoteSaves || 0) === 0) return true;
+      await crmDelay(250);
+    }
+    throw new Error('remote_save_timeout');
+  };
+
   function crmFetchSheetAction(action, timeoutMs, attempt) {
     attempt = Number(attempt || 0);
     var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
@@ -4050,7 +4064,7 @@ function DealsView() {
       },
     };
   });
-  const applyContractReviewItem = (item) => {
+  const applyContractReviewItem = async (item) => {
     const sourceAliases = contractCompanyAliases(item.company);
     const alreadyExists = (db.leads || []).some((row) => contractCompanyAliases(row.company).some((alias) => sourceAliases.includes(alias)));
     if (alreadyExists) {
@@ -4153,9 +4167,16 @@ function DealsView() {
           meta: { sourceKey: item.sourceKey, sourceHash: item.sourceHash, contractAmount: Number(lead.contractAmount || 0), paid: Number(item.numericPaid || 0) },
         });
       }, { reason: "contract_sheet_change_approved" });
+      if (window.crmWaitForRemoteCommit) await window.crmWaitForRemoteCommit(45000);
+      if (window.crmSetContractSheetChangeStatus) {
+        await window.crmSetContractSheetChangeStatus(item.id, "추가", contractReviewActor);
+      }
       removeContractReviewItem(item.id);
       toast("계약현황에 신규 업체를 생성했습니다 · " + item.company);
-      setTimeout(() => refreshContractReview(false), 2500);
+      await refreshContractReview(false);
+    } catch (error) {
+      const reason = String(error && error.message || error || "contract_apply_failed");
+      toast(reason === "remote_save_timeout" ? "업체 저장 확인이 지연되고 있습니다 · 잠시 후 다시 확인하세요" : "신규 업체 저장 실패 · " + reason);
     } finally {
       setContractApplyingId("");
     }
