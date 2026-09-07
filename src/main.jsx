@@ -1172,6 +1172,7 @@ import { shadowStatusFromSheetsResult } from "./data/repositoryAdapter.js";
     var fmtPhone = function (value) { var n = String(value || '').replace(/\D/g, ''); if (n.length === 11) return n.slice(0, 3) + '-' + n.slice(3, 7) + '-' + n.slice(7); if (n.length === 10) return n.slice(0, 3) + '-' + n.slice(3, 6) + '-' + n.slice(6); return String(value || ''); };
     var meetingDay = function (value) { var date = new Date(value || ''); return Number.isNaN(date.getTime()) ? targetDay : new Date(date.getTime() + 9 * 3600000).toISOString().slice(0, 10); };
     var changed = false, added = 0, updated = 0, ownerFilled = 0, completedCount = 0, scheduledCount = 0, nameMatched = 0;
+    rows.sort(function (a, b) { return String(a.start_dt || '').localeCompare(String(b.start_dt || '')); });
     rows.forEach(function (meeting) {
       var id = meeting.client_no != null ? 'crm-' + meeting.client_no : (meeting.proj_no != null ? 'crm-project-' + meeting.proj_no : 'crm-meeting-' + meeting.ms_no);
       var managers = Array.isArray(meeting.managers) ? meeting.managers : [];
@@ -1184,15 +1185,21 @@ import { shadowStatusFromSheetsResult } from "./data/repositoryAdapter.js";
         || (meeting.proj_no != null ? byProject[String(meeting.proj_no)] : null)
         || (meeting.ms_no != null ? byMeeting[String(meeting.ms_no)] : null);
       var nameLead = byCompany[companyKey(company)];
-      if (!strongLead && nameLead) { nameMatched += 1; return; }
+      /* 이름만 같은 업체는 다른 CRM 고객일 수 있으므로 건너뛰지 않습니다.
+         강한 식별자가 없는 캘린더 행만 유일한 이름 후보에 연결합니다. */
+      if (!strongLead && meeting.client_no == null && meeting.proj_no == null && nameLead) {
+        strongLead = nameLead;
+        nameMatched += 1;
+      }
       var lead = strongLead;
+      var existedBeforeSync = !!lead;
+      var beforeRecord = existedBeforeSync ? JSON.stringify(lead) : '';
       var contactRow = Array.isArray(meeting.client_contact) ? meeting.client_contact[0] : null;
       if (!lead) {
-        lead = { id: id, calendarOnly: true, company: company, contact: String(meeting.client_name || (contactRow && contactRow.name) || ''), phone: fmtPhone(contactRow && contactRow.number), email: String(meeting.client_email || ''), channel: 'CRM 캘린더', creative: '', buildup: '', buildups: [], lineItems: [], grade: '', status: completed ? '프리미팅 완료' : '프리미팅 확정', ctype: '신규', tmOwner: '', salesOwner: owner, expected: 0, contractAmount: 0, paid: 0, payments: [], sent: {}, newsletter: false, pushLog: [], projNo: meeting.proj_no || null, crmFinanceAuto: { policy: 'future-only-v1', enabledAt: new Date().toISOString() }, premeetingDoneAt: completed ? dayValue : '', premeetingAt: dayValue, bookedAt: dayValue, createdAt: '', memo: '', history: [{ date: dayValue, type: completed ? '미팅' : '일정', note: completed ? 'CRM 캘린더 내방체크 프리미팅 수동수집' : 'CRM 캘린더 프리미팅 일정 수동수집 · 방문 미확인' }] };
+        lead = { id: id, calendarOnly: true, company: company, contact: String(meeting.client_name || (contactRow && contactRow.name) || ''), phone: fmtPhone(contactRow && contactRow.number), email: String(meeting.client_email || ''), channel: 'CRM 캘린더', creative: '', buildup: '', buildups: [], lineItems: [], grade: '', status: completed ? '프리미팅 완료' : '프리미팅 확정', ctype: '신규', tmOwner: '', salesOwner: owner, expected: 0, contractAmount: 0, paid: 0, payments: [], sent: {}, newsletter: false, pushLog: [], projNo: meeting.proj_no || null, crmFinanceAuto: { policy: 'future-only-v1', enabledAt: new Date().toISOString() }, premeetingDoneAt: completed ? dayValue : '', premeetingAt: dayValue, bookedAt: dayValue, createdAt: '', memo: '', crmMeetings: [], history: [{ date: dayValue, type: completed ? '미팅' : '일정', note: completed ? 'CRM 캘린더 내방체크 프리미팅 수동수집' : 'CRM 캘린더 프리미팅 일정 수동수집 · 방문 미확인' }] };
         db.leads.unshift(lead); byId[id] = lead; if (lead.projNo != null) byProject[String(lead.projNo)] = lead; if (meeting.ms_no != null) byMeeting[String(meeting.ms_no)] = lead; byCompany[companyKey(company)] = lead;
         added += 1; changed = true; if (owner) ownerFilled += 1;
       } else {
-        var before = JSON.stringify([lead.company, lead.salesOwner, lead.status, lead.premeetingDoneAt, lead.premeetingAt, lead.bookedAt, lead.crmMeeting]);
         if (!lead.company || lead.company === '(무명)') lead.company = company;
         if (!lead.salesOwner && owner) { lead.salesOwner = owner; ownerFilled += 1; }
         if (!lead.premeetingAt) lead.premeetingAt = dayValue;
@@ -1206,10 +1213,15 @@ import { shadowStatusFromSheetsResult } from "./data/repositoryAdapter.js";
         lead.history = lead.history || [];
         var historyNote = completed ? 'CRM 캘린더 내방체크 프리미팅 수동수집' : 'CRM 캘린더 프리미팅 일정 수동수집 · 방문 미확인';
         if (!lead.history.some(function (item) { return item && item.date === dayValue && item.note === historyNote; })) lead.history.push({ date: dayValue, type: completed ? '미팅' : '일정', note: historyNote });
-        lead.crmMeeting = { source: 'mr_schedules', msNo: meeting.ms_no, type: Number(meeting.mr_type), checked: Number(meeting.mr_checked), startAt: meeting.start_dt || '', endAt: meeting.end_dt || '', managers: managers.map(function (manager) { return { no: manager.emp_no, name: manager.emp_name }; }) };
-        if (before !== JSON.stringify([lead.company, lead.salesOwner, lead.status, lead.premeetingDoneAt, lead.premeetingAt, lead.bookedAt, lead.crmMeeting])) { updated += 1; changed = true; }
       }
-      if (!lead.crmMeeting) lead.crmMeeting = { source: 'mr_schedules', msNo: meeting.ms_no, type: 1, checked: Number(meeting.mr_checked), startAt: meeting.start_dt || '', endAt: meeting.end_dt || '', managers: managers.map(function (manager) { return { no: manager.emp_no, name: manager.emp_name }; }) };
+      var meetingEntry = { source: 'mr_schedules', msNo: meeting.ms_no, type: 1, checked: Number(meeting.mr_checked), startAt: meeting.start_dt || '', endAt: meeting.end_dt || '', managers: managers.map(function (manager) { return { no: manager.emp_no, name: manager.emp_name }; }) };
+      lead.crmMeetings = Array.isArray(lead.crmMeetings) ? lead.crmMeetings : [];
+      var meetingIndex = lead.crmMeetings.findIndex(function (item) { return String(item && item.msNo) === String(meeting.ms_no); });
+      if (meetingIndex >= 0) lead.crmMeetings[meetingIndex] = meetingEntry; else lead.crmMeetings.push(meetingEntry);
+      lead.crmMeetings.sort(function (a, b) { return String(a.startAt || '').localeCompare(String(b.startAt || '')); });
+      lead.crmMeeting = lead.crmMeetings[lead.crmMeetings.length - 1] || meetingEntry;
+      byMeeting[String(meeting.ms_no)] = lead;
+      if (existedBeforeSync && beforeRecord !== JSON.stringify(lead)) { updated += 1; changed = true; }
     });
     return { changed: changed, db: db, count: rows.length, completed: completedCount, scheduled: scheduledCount, added: added, updated: updated, nameMatched: nameMatched, ownerFilled: ownerFilled };
   };
@@ -1250,6 +1262,16 @@ const meetingDoneDate = (l) => {
   return "";
 };
 const hasCompletedMeeting = (l) => !!meetingDoneDate(l);
+const crmMeetingEntryDate = (meeting) => {
+  if (!meeting || !meeting.startAt) return "";
+  const date = new Date(meeting.startAt);
+  return Number.isNaN(date.getTime()) ? String(meeting.startAt).slice(0, 10) : new Date(date.getTime() + 9 * 3600000).toISOString().slice(0, 10);
+};
+const crmMeetingDates = (lead) => {
+  if (!lead) return [];
+  const rows = Array.isArray(lead.crmMeetings) && lead.crmMeetings.length ? lead.crmMeetings : (lead.crmMeeting ? [lead.crmMeeting] : []);
+  return [...new Set(rows.filter((meeting) => Number(meeting && meeting.type) === 1).map(crmMeetingEntryDate).filter(Boolean))].sort();
+};
 const SSTYLE = {
   "신규 DB": "bg-slate-100 text-slate-600 border-slate-200",
   "TM 진행중": "bg-sky-50 text-sky-700 border-sky-200",
@@ -3754,8 +3776,8 @@ function DealsView() {
       const next = JSON.parse(JSON.stringify(db));
       const beforeContractState = new Map((next.leads || []).map((lead) => [String(lead.id), { status: lead.status || "", company: lead.company || "" }]));
       const today = todayISO();
-      const rangeStart = today.slice(0, 7) + "-01";
-      const rangeEnd = today;
+      const rangeStart = r ? r[0] : "2026-08-01";
+      const rangeEnd = r ? r[1] : today;
       let proxy = null;
       let proxyError = null;
       if (window.crmFetchRefreshPayload) {
@@ -3801,7 +3823,7 @@ function DealsView() {
       if (window.crmMarkSynced) window.crmMarkSynced();
       try { localStorage.setItem("crm:lastManualDealSync", String(Date.now())); } catch (e) {}
       const financeDetail = financeRes && financeRes.updated ? " · 신규대상 계약·입금 " + financeRes.updated + "건 갱신" : "";
-      const detail = (meetingRes.count ? ("이번 달 프리미팅 " + meetingRes.count + "건 · 완료 " + meetingRes.completed + "건 · 방문 미확인 " + meetingRes.scheduled + "건 · 신규 " + meetingRes.added + "건 · 영업자 반영 " + meetingRes.ownerFilled + "건") : "이번 달에 프리미팅 일정이 없습니다") + financeDetail;
+      const detail = (meetingRes.count ? ("선택 기간 프리미팅 " + meetingRes.count + "건 · 완료 " + meetingRes.completed + "건 · 방문 미확인 " + meetingRes.scheduled + "건 · 신규 " + meetingRes.added + "건 · 영업자 반영 " + meetingRes.ownerFilled + "건") : "선택 기간에 프리미팅 일정이 없습니다") + financeDetail;
       toast(detail);
     } catch (e) {
       const reason = String(e && e.message || e);
@@ -3911,7 +3933,8 @@ function DealsView() {
   ])].filter((name) => !INACTIVE_CONTRACT_SALES.has(name));
   const buildupOpts = [...new Set([...db.products.map((p) => p.name), ...BUILDUPS])];
   const CLOSE_ST = ["프리미팅 확정", "프리미팅 완료", "견적·제안 발송", "계약 완료"];
-  const baseDate = (l) => meetingDoneDate(l) || l.premeetingAt || l.bookedAt || l.contractAt || l.createdAt;
+  const periodCrmMeetingDate = (l) => crmMeetingDates(l).filter((date) => inR(date, r)).slice(-1)[0] || "";
+  const baseDate = (l) => periodCrmMeetingDate(l) || meetingDoneDate(l) || l.premeetingAt || l.bookedAt || l.contractAt || l.createdAt;
   const payState = (l) => {
     if (l.status !== "계약 완료") return "진행";
     const amt = l.contractAmount || 0;
