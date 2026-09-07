@@ -9,3 +9,5 @@ max_rows = 1000
 [db]
 major_version = 17
 
+[functions.kpi-shadow-gateway]
+verify_jwt = false
