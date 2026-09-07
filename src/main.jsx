@@ -3738,9 +3738,8 @@ function DealsView() {
       const next = JSON.parse(JSON.stringify(db));
       const beforeContractState = new Map((next.leads || []).map((lead) => [String(lead.id), { status: lead.status || "", company: lead.company || "" }]));
       const today = todayISO();
-      const selectedRange = r || [addDaysISO(today, -31), today];
-      const rangeStart = selectedRange[0] > today ? today : selectedRange[0];
-      const rangeEnd = selectedRange[1] > today ? today : selectedRange[1];
+      const rangeStart = today.slice(0, 7) + "-01";
+      const rangeEnd = today;
       let proxy = null;
       let proxyError = null;
       if (window.crmFetchRefreshPayload) {
@@ -3786,7 +3785,7 @@ function DealsView() {
       if (window.crmMarkSynced) window.crmMarkSynced();
       try { localStorage.setItem("crm:lastManualDealSync", String(Date.now())); } catch (e) {}
       const financeDetail = financeRes && financeRes.updated ? " · 신규대상 계약·입금 " + financeRes.updated + "건 갱신" : "";
-      const detail = (meetingRes.count ? ("선택 기간 프리미팅 " + meetingRes.count + "건 · 완료 " + meetingRes.completed + "건 · 방문 미확인 " + meetingRes.scheduled + "건 · 신규 " + meetingRes.added + "건 · 영업자 반영 " + meetingRes.ownerFilled + "건") : "선택 기간에 프리미팅 일정이 없습니다") + financeDetail;
+      const detail = (meetingRes.count ? ("이번 달 프리미팅 " + meetingRes.count + "건 · 완료 " + meetingRes.completed + "건 · 방문 미확인 " + meetingRes.scheduled + "건 · 신규 " + meetingRes.added + "건 · 영업자 반영 " + meetingRes.ownerFilled + "건") : "이번 달에 프리미팅 일정이 없습니다") + financeDetail;
       toast(detail);
     } catch (e) {
       const reason = String(e && e.message || e);
