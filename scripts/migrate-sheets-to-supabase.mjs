@@ -1,5 +1,5 @@
 import { readFile, writeFile, mkdir } from "node:fs/promises";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomUUID } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { normalizeExport, reconcileExport } from "./migration-lib.mjs";
@@ -11,8 +11,8 @@ const inputPath = valueAfter("--input");
 const outDir = valueAfter("--out") || path.resolve("artifacts", "supabase-migration");
 if (!inputPath) throw new Error("--input <normalized-sheets-export.json> is required");
 if (apply && !args.has("--confirm-new-project")) throw new Error("--apply requires --confirm-new-project");
-if (apply && (!process.env.KPI_SUPABASE_MIGRATION_URL || !process.env.KPI_SUPABASE_MIGRATION_TOKEN)) {
-  throw new Error("apply requires server-only KPI_SUPABASE_MIGRATION_URL and KPI_SUPABASE_MIGRATION_TOKEN");
+if (apply && (!process.env.KPI_SUPABASE_MIGRATION_URL || !process.env.KPI_SHADOW_HMAC_SECRET)) {
+  throw new Error("apply requires server-only KPI_SUPABASE_MIGRATION_URL and KPI_SHADOW_HMAC_SECRET");
 }
 
 const source = JSON.parse(await readFile(inputPath, "utf8"));
@@ -35,10 +35,15 @@ if (reconciliation.invalidRows.length || reconciliation.duplicates.length) {
 }
 
 if (apply) {
+  const bodyText = JSON.stringify({ action: "import", runId, sourceRevision: report.sourceRevision, sourceHash: report.sourceHash, entities: normalized, reconciliation });
+  const timestamp = String(Date.now());
+  const signature = createHmac("sha256", process.env.KPI_SHADOW_HMAC_SECRET)
+    .update(`${timestamp}.${bodyText}`)
+    .digest("hex");
   const response = await fetch(process.env.KPI_SUPABASE_MIGRATION_URL, {
     method: "POST",
-    headers: { authorization: `Bearer ${process.env.KPI_SUPABASE_MIGRATION_TOKEN}`, "content-type": "application/json", "idempotency-key": runId },
-    body: JSON.stringify({ action: "import", runId, sourceRevision: report.sourceRevision, sourceHash: report.sourceHash, entities: normalized, reconciliation }),
+    headers: { "content-type": "application/json", "idempotency-key": runId, "x-kpi-timestamp": timestamp, "x-kpi-signature": signature },
+    body: bodyText,
   });
   if (!response.ok) throw new Error(`migration gateway HTTP ${response.status}`);
   const result = await response.json();
