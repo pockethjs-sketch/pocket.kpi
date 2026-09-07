@@ -38,7 +38,7 @@ if (apply) {
   const response = await fetch(process.env.KPI_SUPABASE_MIGRATION_URL, {
     method: "POST",
     headers: { authorization: `Bearer ${process.env.KPI_SUPABASE_MIGRATION_TOKEN}`, "content-type": "application/json", "idempotency-key": runId },
-    body: JSON.stringify({ runId, sourceRevision: report.sourceRevision, sourceHash: report.sourceHash, entities: normalized }),
+    body: JSON.stringify({ action: "import", runId, sourceRevision: report.sourceRevision, sourceHash: report.sourceHash, entities: normalized, reconciliation }),
   });
   if (!response.ok) throw new Error(`migration gateway HTTP ${response.status}`);
   const result = await response.json();
@@ -50,4 +50,3 @@ if (apply) {
 }
 
 console.log(JSON.stringify({ runId, mode: report.mode, counts: reconciliation.counts, totals: reconciliation.totals }, null, 2));
-
