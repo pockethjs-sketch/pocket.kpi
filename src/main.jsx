@@ -3903,7 +3903,7 @@ function DealsView() {
       up(applyImport);
       setCrmImportValue("");
       setCrmImportOpen(false);
-      toast((added ? "CRM 프로젝트를 계약현황에 추가했습니다" : "이미 등록된 프로젝트를 갱신했습니다") + " · " + (seed.company || ("#" + seed.projectNo)) + (seed.owner ? " · 담당 " + seed.owner : " · 담당자 미확인"));
+      toast((added ? "CRM 프로젝트를 프리미팅 기업에 추가했습니다" : "이미 등록된 프로젝트를 갱신했습니다") + " · " + (seed.company || ("#" + seed.projectNo)) + (seed.owner ? " · 담당 " + seed.owner : " · 담당자 미확인"));
       if (targetId) openLead(targetId);
     } catch (error) {
       toast(error && error.message ? error.message : "CRM 프로젝트 조회에 실패했습니다");
@@ -3925,7 +3925,7 @@ function DealsView() {
       (d.projects || []).forEach((p) => { if (p.leadId === l.id) p.leadId = null; });
     }, { reason: "contract_lead_delete", allowedLeadRemovals: [l.id] });
     if (payId === l.id) setPayId(null);
-    toast(crmLinked ? "계약현황에서 삭제했습니다 · CRM 원본에 남아 있으면 다음 동기화 때 다시 등록됩니다" : "계약현황에서 삭제했습니다");
+    toast(crmLinked ? "프리미팅 기업에서 삭제했습니다 · CRM 원본에 남아 있으면 다음 동기화 때 다시 등록됩니다" : "프리미팅 기업에서 삭제했습니다");
   };
   const salesNames = [...new Set([
     ...users.filter((u) => dutyOf(u.team) === "sales").map((u) => u.name),
@@ -4093,7 +4093,7 @@ function DealsView() {
     const sourceAliases = contractCompanyAliases(item.company);
     const alreadyExists = (db.leads || []).some((row) => contractCompanyAliases(row.company).some((alias) => sourceAliases.includes(alias)));
     if (alreadyExists) {
-      toast("이미 계약현황에 등록된 업체입니다 · 목록을 다시 확인합니다");
+      toast("이미 프리미팅 기업에 등록된 업체입니다 · 목록을 다시 확인합니다");
       refreshContractReview(false);
       return;
     }
@@ -4197,7 +4197,7 @@ function DealsView() {
         await window.crmSetContractSheetChangeStatus(item.id, "추가", contractReviewActor);
       }
       removeContractReviewItem(item.id);
-      toast("계약현황에 신규 업체를 생성했습니다 · " + item.company);
+      toast("프리미팅 기업에 신규 업체를 생성했습니다 · " + item.company);
       await refreshContractReview(false);
     } catch (error) {
       const reason = String(error && error.message || error || "contract_apply_failed");
@@ -4227,7 +4227,7 @@ function DealsView() {
   };
   return (
     <div className="space-y-4">
-      <SecTitle icon={Handshake} title="계약 현황" sub={"CRM 캘린더의 프리미팅 일정부터 방문 완료·계약까지 관리하는 시트입니다 (" + pLabel(period) + "). 방문 미확인은 프리미팅 확정으로 분리 · 셀에서 바로 편집 · 헤더 클릭으로 정렬."} />
+      <SecTitle icon={Handshake} title="프리미팅 기업" sub={"CRM 캘린더의 프리미팅 일정부터 방문 완료·계약까지 관리하는 시트입니다 (" + pLabel(period) + "). 방문 미확인은 프리미팅 확정으로 분리 · 셀에서 바로 편집 · 헤더 클릭으로 정렬."} />
       <Card cls="p-3">
         <div className="flex flex-col 2xl:flex-row 2xl:items-center gap-3">
           <div className="flex items-center gap-4 flex-wrap min-w-0">
@@ -4265,7 +4265,7 @@ function DealsView() {
                 {contractReviewError ? <AlertCircle size={16} /> : <RefreshCw size={15} />}
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-extrabold text-slate-800">{contractReviewError ? "신규 계약 업체 확인 필요" : "8월 이후 계약현황에 없는 업체 " + contractReview.pending + "곳"}</p>
+                <p className="text-sm font-extrabold text-slate-800">{contractReviewError ? "신규 계약 업체 확인 필요" : "8월 이후 프리미팅 기업에 없는 업체 " + contractReview.pending + "곳"}</p>
                 <p className="text-xs text-slate-500 mt-0.5 truncate">{contractReviewError ? "연동 상태를 다시 확인합니다" : "생성될 계약 정보를 확인한 뒤 신규업체 생성 또는 제외를 선택하세요"}</p>
               </div>
             </div>
@@ -4541,14 +4541,14 @@ function DealsView() {
       <Modal open={contractReviewOpen} onClose={() => { if (!contractApplyingId) setContractReviewOpen(false); }} wide title={"신규 계약 업체 확인 · " + (contractReview.pending || 0) + "곳"}>
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-3 flex-wrap">
-            <p className="text-xs font-bold text-slate-500">{contractReview.sourceCutoff || "2026-08-01"} 이후 · 계약현황 미등록 업체만 표시</p>
+            <p className="text-xs font-bold text-slate-500">{contractReview.sourceCutoff || "2026-08-01"} 이후 · 프리미팅 기업 미등록 업체만 표시</p>
             <div className="flex items-center gap-2">
               {contractReview.sourceSpreadsheetId && <a href={"https://docs.google.com/spreadsheets/d/" + contractReview.sourceSpreadsheetId + "/edit"} target="_blank" rel="noreferrer" className="text-xs font-bold text-indigo-600 hover:underline inline-flex items-center gap-1">원본 계약 시트<ExternalLink size={11} /></a>}
               <Btn size="xs" disabled={contractReviewBusy} onClick={() => refreshContractReview(true)}><RefreshCw size={11} className={contractReviewBusy ? "animate-spin" : ""} />새로고침</Btn>
             </div>
           </div>
           <div className="border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
-            아래 값 그대로 계약현황에 새 업체가 생성됩니다. 이미 계약현황에 있는 업체의 값은 비교하거나 수정하지 않습니다. 입금란이 체크(✔)뿐이고 숫자가 없으면 입금액은 0원으로 두고 금액 미확인으로 표시합니다.
+            아래 값 그대로 프리미팅 기업에 새 업체가 생성됩니다. 이미 등록된 업체의 값은 비교하거나 수정하지 않습니다. 입금란이 체크(✔)뿐이고 숫자가 없으면 입금액은 0원으로 두고 금액 미확인으로 표시합니다.
           </div>
           <div className="space-y-3 max-h-[62vh] overflow-y-auto pr-1">
             {contractReviewVisible.map((item) => {
@@ -4568,13 +4568,13 @@ function DealsView() {
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-sm font-extrabold text-slate-900">{item.company}</p>
-                        <Chip cls="bg-indigo-50 text-indigo-700 border-indigo-200">계약현황 미등록</Chip>
+                        <Chip cls="bg-indigo-50 text-indigo-700 border-indigo-200">프리미팅 기업 미등록</Chip>
                       </div>
                       <p className="text-xs text-slate-400 mt-1">원본 {item.firstDate || "날짜 없음"}{item.lastDate && item.lastDate !== item.firstDate ? " ~ " + item.lastDate : ""} · 계약 행 {(item.sourceRows || []).length}건</p>
                     </div>
                   </div>
                   <div className="mt-3 border border-slate-200">
-                    <p className="px-3 py-2 text-xs font-extrabold text-slate-700 bg-slate-50 border-b border-slate-200">계약현황 생성 미리보기</p>
+                    <p className="px-3 py-2 text-xs font-extrabold text-slate-700 bg-slate-50 border-b border-slate-200">프리미팅 기업 생성 미리보기</p>
                     <div className="grid sm:grid-cols-2">
                       {previewRows.map(([label, value], index) => (
                         <div key={label} className={"px-3 py-2.5 flex items-start justify-between gap-3 text-xs " + (index < previewRows.length - 2 ? "border-b border-slate-100 " : "") + (index % 2 === 0 ? "sm:border-r border-slate-100" : "")}>
@@ -4608,7 +4608,7 @@ function DealsView() {
           </div>
         </div>
       </Modal>
-      <Modal open={contractLogOpen} onClose={() => setContractLogOpen(false)} wide title={"계약현황 활동 로그 · " + contractStatusLogs.length + "건"}>
+      <Modal open={contractLogOpen} onClose={() => setContractLogOpen(false)} wide title={"프리미팅 기업 활동 로그 · " + contractStatusLogs.length + "건"}>
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="relative w-full sm:w-[360px]">
@@ -4640,7 +4640,7 @@ function DealsView() {
                     </div>
                   );
                 })}
-                {contractLogVisible.length === 0 && <div className="px-4 py-12 text-center text-xs text-slate-400">{contractStatusLogs.length ? "검색 조건에 맞는 로그가 없습니다." : "아직 계약현황 활동 로그가 없습니다. 적용 이후 작업부터 기록됩니다."}</div>}
+                {contractLogVisible.length === 0 && <div className="px-4 py-12 text-center text-xs text-slate-400">{contractStatusLogs.length ? "검색 조건에 맞는 로그가 없습니다." : "아직 프리미팅 기업 활동 로그가 없습니다. 적용 이후 작업부터 기록됩니다."}</div>}
               </div>
             </div>
           </div>
@@ -6262,7 +6262,7 @@ function IntegratedPerformanceView() {
       const existingCount = rows.filter((lead) => lead.ctype === "기존").length;
       return <div className="space-y-3">
         <div className="flex items-center justify-between gap-2">
-          <div><p className="text-xs font-bold text-slate-600">{title}</p><p className="mt-1 text-[10px] text-slate-400">업체를 누르면 계약현황 상세 화면이 열립니다.</p></div>
+          <div><p className="text-xs font-bold text-slate-600">{title}</p><p className="mt-1 text-[10px] text-slate-400">업체를 누르면 프리미팅 기업 상세 화면이 열립니다.</p></div>
           <span className={"text-xs font-extrabold tabular-nums " + (tone || "text-slate-500")}>{rows.length}건</span>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
@@ -8659,7 +8659,7 @@ const AUTH_PAGE_GROUPS = [
   { id: "premeeting", label: "프리미팅", pages: [
     { id: "premeetingHub", label: "프리미팅 총괄 대시보드" },
     { id: "tmManagement", label: "TM · DB 품질/전환" },
-    { id: "deals", label: "계약 현황" },
+    { id: "deals", label: "프리미팅 기업" },
   ] },
   { id: "contract", label: "계약", pages: [
     { id: "contractHub", label: "계약 총괄 대시보드" },
@@ -8691,7 +8691,7 @@ const NAV_SECTIONS = [
   ] },
   { id: "premeetingHub", label: "프리미팅", icon: Handshake, home: "premeetingHub", items: [
     { id: "tmManagement", label: "TM · DB 품질/전환", icon: Phone },
-    { id: "deals", label: "계약 현황", icon: Handshake },
+    { id: "deals", label: "프리미팅 기업", icon: Handshake },
   ] },
   { id: "contractHub", label: "계약", icon: Handshake, home: "contractHub", items: [
     { id: "supportManagement", label: "지원사업 관리", icon: Check },
@@ -8829,7 +8829,7 @@ function SchemaView() {
     { category: "마케팅", name: "마케팅 채널 분석", read: ["원본_메타광고", "NAVER-GOOGLE"], write: ["마케팅_채널분석"], external: ["CRM API"], use: "채널명을 통합한 성과" },
     { category: "프리미팅", name: "프리미팅 총괄 대시보드", read: [], write: ["데이터_계약원장", "데이터_입금원장"], external: ["CRM API"], use: "프리미팅·계약·빌드업 성과" },
     { category: "프리미팅", name: "TM · DB 품질/전환", read: [], write: ["마케팅_유입DB", "데이터_리드원장"], external: ["CRM API"], use: "유입일별 DB 품질과 전환" },
-    { category: "프리미팅", name: "계약 현황", read: [], write: ["프리미팅_계약현황", "데이터_계약원장", "데이터_입금원장", "데이터_계약현황로그"], external: ["CRM API"], use: "프리미팅 이후 계약·입금과 활동 이력 관리" },
+    { category: "프리미팅", name: "프리미팅 기업", read: [], write: ["프리미팅_계약현황", "데이터_계약원장", "데이터_입금원장", "데이터_계약현황로그"], external: ["CRM API"], use: "프리미팅 이후 계약·입금과 활동 이력 관리" },
     { category: "계약", name: "계약 총괄 대시보드", read: [], write: ["데이터_계약원장", "데이터_입금원장"], external: [], use: "계약액·입금액·미수금 집계" },
     { category: "계약", name: "지원사업 관리", read: [], write: [], external: ["Supabase", "CRM API"], use: "지원사업 배정·합격·일정" },
     { category: "계약", name: "잔금 관리", read: [], write: ["계약_잔금관리", "계약_잔금로그", "데이터_입금원장"], external: [], use: "선금·중도금·잔금과 변경 이력" },
@@ -8891,7 +8891,7 @@ function SchemaView() {
   const pageGroups = [
     { name: "통합", items: ["통합 성과 체크"] },
     { name: "마케팅", items: ["총괄", "META", "NAVER+GOOGLE", "유입 DB", "채널 분석"] },
-    { name: "프리미팅", items: ["총괄", "TM 품질", "계약 현황"] },
+    { name: "프리미팅", items: ["총괄", "TM 품질", "프리미팅 기업"] },
     { name: "계약", items: ["총괄", "지원사업", "잔금", "포켓비즈", "상품·가격"] },
     { name: "기타·관리", items: ["메시지", "조직·KPI", "수정사항", "권한", "설정"] }
   ];
@@ -9013,9 +9013,9 @@ const VIEW_DATA_SOURCES = {
   marketingSearch: { sheet: "NAVER-GOOGLE 시트의 매체별 검색광고 지표", crm: "검색광고 경로로 들어온 CRM 문의" },
   leads: { sheet: "유입 DB의 저장 상태와 수동 등록 데이터", crm: "CRM 리드 원본·유입일·유입경로" },
   marketing: { sheet: "채널 통합 규칙과 채널별 성과 데이터", crm: "CRM 문의의 유입경로" },
-  premeetingHub: { sheet: "프리미팅·계약현황 저장 데이터", crm: "프리미팅 캘린더 일정과 담당자" },
+  premeetingHub: { sheet: "프리미팅 기업 저장 데이터", crm: "프리미팅 캘린더 일정과 담당자" },
   tmManagement: { sheet: "날짜별 DB 품질·전환 집계", crm: "유입일·TM 품질정보·후처리·프리미팅 전환" },
-  deals: { sheet: "계약현황의 단계·금액·담당자 저장 데이터", crm: "프리미팅 일정과 고객사 정보" },
+  deals: { sheet: "프리미팅 기업의 단계·금액·담당자 저장 데이터", crm: "프리미팅 일정과 고객사 정보" },
   contractHub: { sheet: "계약금액·입금금액·미수금 데이터", crm: "계약 전 고객사·담당자 정보" },
   supportManagement: { sheet: "지원사업 고객의 합격·연장 관리 데이터", crm: "계약 고객 기본정보", support: "배정 지원사업과 합격 이력" },
   ltvExpansion: { sheet: "기존 고객의 선금·중도금·잔금 회차와 특이사항·상태", crm: "기존 계약 고객 기본정보" },
