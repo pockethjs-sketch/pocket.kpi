@@ -142,8 +142,23 @@ Deno.serve(async (req) => {
     }
   }
   if (body.action === "snapshot") {
-    const { data, error } = await supabase.from("shadow_state_snapshots").select("primary_revision,state_snapshot,created_at").eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(1).maybeSingle();
-    return error ? json({ error: "snapshot_read_failed" }, 500) : json({ ok: true, revision: data?.primary_revision || null, snapshot: data?.state_snapshot || null });
+    const { data, error } = await supabase.from("app_current_state")
+      .select("primary_revision,state_snapshot,updated_at")
+      .eq("organization_id", organizationId).maybeSingle();
+    if (!error && data) return json({ ok: true, revision: data.primary_revision, snapshot: data.state_snapshot, source: "app_current_state", updatedAt: data.updated_at });
+    const { data: legacy, error: legacyError } = await supabase.from("shadow_state_snapshots")
+      .select("primary_revision,state_snapshot,created_at").eq("organization_id", organizationId)
+      .order("created_at", { ascending: false }).limit(1).maybeSingle();
+    return legacyError ? json({ error: "snapshot_read_failed" }, 500) : json({ ok: true, revision: legacy?.primary_revision || null, snapshot: legacy?.state_snapshot || null, source: "legacy_snapshot" });
+  }
+  if (body.action === "architecture_status") {
+    const [{ data: current, error: currentError }, { data: projection, error: projectionError }] = await Promise.all([
+      supabase.from("app_current_state").select("primary_revision,updated_at").eq("organization_id", organizationId).maybeSingle(),
+      supabase.from("app_state_projections").select("primary_revision,status,entity_counts,financial_totals,projected_at,error_detail").eq("organization_id", organizationId).maybeSingle(),
+    ]);
+    if (currentError || projectionError) return json({ error: "architecture_status_failed" }, 500);
+    return json({ ok: true, primary: "supabase", current, projection,
+      relationsCurrent: Boolean(current?.primary_revision && current.primary_revision === projection?.primary_revision && projection?.status === "CURRENT") });
   }
   return json({ error: "unknown_action" }, 400);
 });

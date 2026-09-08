@@ -7,6 +7,7 @@ const security = await readFile(new URL("../supabase/migrations/20260907091000_k
 const ownership = await readFile(new URL("../supabase/migrations/20260907092000_kpi_restore_and_ownership.sql", import.meta.url), "utf8");
 const rollback = await readFile(new URL("../supabase/rollback/20260907090000_kpi_crm_core.down.sql", import.meta.url), "utf8");
 const queue = await readFile(new URL("../supabase/migrations/20260907100000_shadow_gateway_queue.sql", import.meta.url), "utf8");
+const relationalPrimary = await readFile(new URL("../supabase/migrations/20260908103000_relational_primary_projection.sql", import.meta.url), "utf8");
 
 test("financial meanings use separate columns and reconciliation view", () => {
   for (const token of ["quoted_amount", "contract_amount", "planned_amount", "received_amount", "outstanding_amount"]) assert.match(core + security, new RegExp(token));
@@ -37,4 +38,18 @@ test("browser roles cannot write server-only ledgers", () => {
 test("shadow tables are RLS-forced and inaccessible to browser roles", () => {
   assert.match(queue, /force row level security/);
   assert.match(queue, /revoke all on public\.shadow_mutation_queue/);
+});
+
+test("current state, relational projection, mutation journal, and audit commit atomically", () => {
+  for (const token of ["app_current_state", "project_v3_state", "shadow_mutation_queue", "audit_events", "pg_advisory_xact_lock"])
+    assert.match(relationalPrimary, new RegExp(token));
+  assert.match(relationalPrimary, /p_mutation, null,/);
+  assert.match(relationalPrimary, /app_state_daily_checkpoints/);
+  assert.match(relationalPrimary, /on conflict \(organization_id, checkpoint_date\) do nothing/);
+});
+
+test("new server-only state tables are RLS-forced and unavailable to browser writes", () => {
+  for (const table of ["app_current_state", "app_state_daily_checkpoints", "app_state_projections"])
+    assert.match(relationalPrimary, new RegExp(`alter table public\\.${table} force row level security`));
+  assert.match(relationalPrimary, /revoke all on public\.app_current_state, public\.app_state_daily_checkpoints, public\.app_state_projections from anon, authenticated/);
 });

@@ -23,3 +23,9 @@ test("gateway writes idempotency, ownership claims, audit, and durable queue", (
   for (const token of ["idempotency_keys", "field_ownership_claims", "audit_events", "shadow_mutation_queue"]) assert.match(edge + queue, new RegExp(token));
   assert.match(queue, /revoke all on public\.shadow_mutation_queue, public\.shadow_state_snapshots from anon, authenticated/);
 });
+
+test("gateway reads the single current state with legacy snapshot fallback", () => {
+  assert.match(edge, /from\("app_current_state"\)/);
+  assert.match(edge, /source: "app_current_state"/);
+  assert.match(edge, /source: "legacy_snapshot"/);
+});

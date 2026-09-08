@@ -5,10 +5,13 @@ import { readFile } from "node:fs/promises";
 const code = await readFile(new URL("../../pocket-kpi-deploy/Code.gs", import.meta.url), "utf8");
 const frontend = await readFile(new URL("../src/main.jsx", import.meta.url), "utf8");
 
-test("Apps Script commits Supabase primary before the Sheets backup", () => {
+test("Apps Script commits Supabase primary without synchronous Sheets writes", () => {
   const primary = code.indexOf("_crmCommitSupabasePrimary_(mutationId, current.revision, revision");
-  const sheets = code.indexOf("_crmWriteBufferedState(nextText, revision)");
-  assert.ok(primary >= 0 && sheets > primary);
+  const saveEnd = code.indexOf("function _crmShadowConfig_", primary);
+  const saveBody = code.slice(primary, saveEnd);
+  assert.ok(primary >= 0);
+  assert.doesNotMatch(saveBody, /_crmWriteBufferedState\(/);
+  assert.match(saveBody, /scheduled: true, intervalMinutes: 15/);
 });
 
 test("shadow credentials come only from Script Properties", () => {
