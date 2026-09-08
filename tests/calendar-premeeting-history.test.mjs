@@ -18,5 +18,13 @@ test("calendar meetings are retained by ms_no instead of replacing one field", (
 
 test("contract month filtering considers every stored CRM meeting date", () => {
   assert.match(source, /const crmMeetingDates = \(lead\)/);
-  assert.match(source, /crmMeetingDates\(l\)\.filter\(\(date\) => inR\(date, r\)\)/);
+  assert.match(source, /const premeetingCompanyDateInRange = \(lead, range\)/);
+  assert.match(source, /crmMeetingDates\(lead\)\.filter\(\(date\) => inR\(date, range\)\)/);
+});
+
+test("performance premeeting count uses the same population as premeeting companies", () => {
+  assert.match(source, /const isPremeetingCompanyInRange = \(lead, range\)/);
+  const sharedCountUses = source.match(/isPremeetingCompanyInRange\(l, r\)/g) || [];
+  assert.ok(sharedCountUses.length >= 2, "premeeting companies and performance views must share the predicate");
+  assert.match(source, /const pre = db\.leads\.filter\(\(l\) => isPremeetingCompanyInRange\(l, r\) && matchesCustomerType\(l\)\)/);
 });

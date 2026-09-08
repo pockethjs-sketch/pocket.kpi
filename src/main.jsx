@@ -1252,6 +1252,7 @@ const BSTYLE = {
 };
 const STATUSES = ["신규 DB", "TM 진행중", "프리미팅 확정", "프리미팅 완료", "견적·제안 발송", "계약 완료", "드랍"];
 const DEAL_STAGE_STATUSES = ["프리미팅 완료", "견적·제안 발송", "계약 완료"];
+const PREMEETING_COMPANY_STATUSES = ["프리미팅 확정", "프리미팅 완료", "견적·제안 발송", "계약 완료"];
 /* 프리미팅 집계의 단일 기준:
    1) 저장된 참석 완료일 2) 계약현황 단계에 저장된 프리미팅일 순으로 사용합니다.
    CRM 캘린더의 firstVisitAt은 예정 일정이므로 참석 완료 근거로 사용하지 않습니다. */
@@ -1272,6 +1273,16 @@ const crmMeetingDates = (lead) => {
   const rows = Array.isArray(lead.crmMeetings) && lead.crmMeetings.length ? lead.crmMeetings : (lead.crmMeeting ? [lead.crmMeeting] : []);
   return [...new Set(rows.filter((meeting) => Number(meeting && meeting.type) === 1).map(crmMeetingEntryDate).filter(Boolean))].sort();
 };
+/* 프리미팅 기업 화면과 통합 성과 체크가 같은 모집단을 사용하도록 하는 공통 기준.
+   선택 기간 안의 CRM 캘린더 일정이 우선이며, 과거 단일 날짜 필드는 호환용으로 사용합니다. */
+const premeetingCompanyDateInRange = (lead, range) => {
+  if (!lead) return "";
+  const crmDate = crmMeetingDates(lead).filter((date) => inR(date, range)).slice(-1)[0] || "";
+  if (crmDate) return crmDate;
+  const legacyDate = String(meetingDoneDate(lead) || lead.premeetingAt || lead.bookedAt || lead.contractAt || lead.createdAt || "").slice(0, 10);
+  return inR(legacyDate, range) ? legacyDate : "";
+};
+const isPremeetingCompanyInRange = (lead, range) => PREMEETING_COMPANY_STATUSES.includes(lead && lead.status) && !!premeetingCompanyDateInRange(lead, range);
 const SSTYLE = {
   "신규 DB": "bg-slate-100 text-slate-600 border-slate-200",
   "TM 진행중": "bg-sky-50 text-sky-700 border-sky-200",
@@ -3932,9 +3943,7 @@ function DealsView() {
     ...db.leads.map((lead) => lead.salesOwner).filter(Boolean),
   ])].filter((name) => !INACTIVE_CONTRACT_SALES.has(name));
   const buildupOpts = [...new Set([...db.products.map((p) => p.name), ...BUILDUPS])];
-  const CLOSE_ST = ["프리미팅 확정", "프리미팅 완료", "견적·제안 발송", "계약 완료"];
-  const periodCrmMeetingDate = (l) => crmMeetingDates(l).filter((date) => inR(date, r)).slice(-1)[0] || "";
-  const baseDate = (l) => periodCrmMeetingDate(l) || meetingDoneDate(l) || l.premeetingAt || l.bookedAt || l.contractAt || l.createdAt;
+  const baseDate = (l) => premeetingCompanyDateInRange(l, r) || meetingDoneDate(l) || l.premeetingAt || l.bookedAt || l.contractAt || l.createdAt;
   const payState = (l) => {
     if (l.status !== "계약 완료") return "진행";
     const amt = l.contractAmount || 0;
@@ -3957,7 +3966,7 @@ function DealsView() {
     });
     x.history.push({ date: todayISO(), type: "결제", note: "결제 스케줄 설정 — " + pre.name + " (" + fmtK(base) + "원)" });
   });
-  const dealsInPeriod = db.leads.filter((l) => CLOSE_ST.includes(l.status) && inR(baseDate(l), r));
+  const dealsInPeriod = db.leads.filter((l) => isPremeetingCompanyInRange(l, r));
   const repOf = (l) => {
     const owner = l.salesOwner || l.tmOwner || "";
     return INACTIVE_CONTRACT_SALES.has(owner) ? "" : owner;
@@ -6118,9 +6127,9 @@ function IntegratedPerformanceView() {
   const TARGET = { conv: 30, leadMonth: 500, preMonth: 150, contractMonth: 45, leadCost: 50000, preCost: 150000, contractCost: 450000 };
   const matchesCustomerType = (l) => customerType === "전체" || (l.ctype || "신규") === customerType;
   const cohort = db.leads.filter((l) => inR(l.createdAt, r) && matchesCustomerType(l));
-  /* 계약현황에서 생성된 참석일을 기준으로 행당 1건 집계합니다.
-     후속 상태가 드랍으로 바뀌어도 저장된 참석일은 과거 실적에 남습니다. */
-  const pre = db.leads.filter((l) => inR(meetingDoneDate(l), r) && matchesCustomerType(l));
+  /* 프리미팅 기업 화면의 전체 업체와 동일하게 행당 1건 집계합니다.
+     참석 완료뿐 아니라 선택 기간에 잡힌 프리미팅 확정 일정도 포함합니다. */
+  const pre = db.leads.filter((l) => isPremeetingCompanyInRange(l, r) && matchesCustomerType(l));
   const contract = db.leads.filter((l) => l.status === "계약 완료" && inR(l.contractAt, r) && matchesCustomerType(l));
   const contractAmountTotal = contract.reduce((sum, lead) => sum + (Number(lead.contractAmount) || paySum(lead) || 0), 0);
   const roasSpend = marketingSpendForPeriod(db, period);
