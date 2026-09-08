@@ -4,15 +4,22 @@ const encoder = new TextEncoder();
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 const hex = (bytes: Uint8Array) => [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
 
-async function verify(req: Request, raw: string) {
+async function verify(req: Request, raw: string, rawBytes: Uint8Array) {
   const secret = Deno.env.get("KPI_SHADOW_HMAC_SECRET") || "";
   const timestamp = req.headers.get("x-kpi-timestamp") || "";
   const supplied = req.headers.get("x-kpi-signature") || "";
   if (!secret || !timestamp || !supplied) return false;
   const epoch = Number(timestamp);
   if (!Number.isFinite(epoch) || Math.abs(Date.now() - epoch) > 5 * 60_000) return false;
+  const suppliedBodyHash = req.headers.get("x-kpi-body-sha256") || "";
+  let signedValue = timestamp + "." + raw;
+  if (suppliedBodyHash) {
+    const actualBodyHash = hex(new Uint8Array(await crypto.subtle.digest("SHA-256", rawBytes)));
+    if (actualBodyHash !== suppliedBodyHash) return false;
+    signedValue = timestamp + "." + suppliedBodyHash;
+  }
   const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const expected = hex(new Uint8Array(await crypto.subtle.sign("HMAC", key, encoder.encode(timestamp + "." + raw))));
+  const expected = hex(new Uint8Array(await crypto.subtle.sign("HMAC", key, encoder.encode(signedValue))));
   if (expected.length !== supplied.length) return false;
   let mismatch = 0; for (let i = 0; i < expected.length; i++) mismatch |= expected.charCodeAt(i) ^ supplied.charCodeAt(i);
   return mismatch === 0;
@@ -36,14 +43,43 @@ async function upsertChunks(supabase: any, table: string, rows: any[], onConflic
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
-  const raw = await req.text();
-  if (!(await verify(req, raw))) return json({ error: "unauthorized" }, 401);
+  const rawBytes = new Uint8Array(await req.arrayBuffer());
+  const raw = new TextDecoder().decode(rawBytes);
+  if (!(await verify(req, raw, rawBytes))) return json({ error: "unauthorized" }, 401);
   let body: any; try { body = JSON.parse(raw); } catch { return json({ error: "bad_json" }, 400); }
   const url = Deno.env.get("SUPABASE_URL")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
   const organizationId = Deno.env.get("KPI_ORGANIZATION_ID") || "";
   if (!organizationId) return json({ error: "organization_not_configured" }, 503);
+
+  if (body.action === "mutation_status") {
+    if (!body.mutationId) return json({ error: "missing_mutation_id" }, 400);
+    const { data, error } = await supabase.from("idempotency_keys").select("status,response")
+      .eq("organization_id", organizationId).eq("key", String(body.mutationId)).maybeSingle();
+    if (error) return json({ error: "mutation_status_failed" }, 500);
+    return json({ ok: true, found: Boolean(data), status: data?.status || null, response: data?.response || null });
+  }
+
+  if (body.action === "primary_commit") {
+    if (!body.mutationId || !body.baseRevision || !body.nextRevision || !body.mutation || !body.stateSnapshot) {
+      return json({ error: "missing_primary_fields" }, 400);
+    }
+    const requestHash = await crypto.subtle.digest("SHA-256", encoder.encode(raw)).then((x) => hex(new Uint8Array(x)));
+    const { data, error } = await supabase.rpc("commit_primary_state", {
+      p_organization_id: organizationId,
+      p_mutation_id: String(body.mutationId),
+      p_base_revision: String(body.baseRevision),
+      p_next_revision: String(body.nextRevision),
+      p_request_hash: requestHash,
+      p_mutation: body.mutation,
+      p_state_snapshot: body.stateSnapshot,
+      p_field_ownership_claims: ownershipClaims(body.mutation),
+    });
+    if (error) return json({ error: "primary_commit_failed", code: error.code }, 500);
+    if (!data?.ok) return json(data || { error: "primary_commit_rejected" }, data?.error === "revision_conflict" ? 409 : 400);
+    return json({ ...data, primary: "supabase" });
+  }
 
   if (body.action === "enqueue") {
     if (!body.mutationId || !body.primaryRevision || !body.mutation) return json({ error: "missing_fields" }, 400);

@@ -15,7 +15,8 @@ test("gateway requires a timestamped HMAC and server-only service key", () => {
 
 test("custom HMAC is the public edge boundary when platform JWT verification is disabled", () => {
   assert.match(config, /\[functions\.kpi-shadow-gateway\][\s\S]*verify_jwt = false/);
-  assert.match(edge, /if \(!\(await verify\(req, raw\)\)\)/);
+  assert.match(edge, /if \(!\(await verify\(req, raw, rawBytes\)\)\)/);
+  assert.match(edge, /x-kpi-body-sha256/);
 });
 
 test("gateway writes idempotency, ownership claims, audit, and durable queue", () => {
