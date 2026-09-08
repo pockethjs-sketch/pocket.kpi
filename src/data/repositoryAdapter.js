@@ -28,6 +28,16 @@ export function compareRepositorySnapshots(sheetSnapshot, shadowSnapshot) {
 }
 
 export function shadowStatusFromSheetsResult(result) {
+  if (result && result.primary === "supabase") {
+    const backup = result.sheetsBackup || {};
+    return {
+      configured: true,
+      state: backup.ok ? "committed-and-backed-up" : "committed-backup-pending",
+      primary: "supabase",
+      backupPending: backup.pending === true,
+      error: backup.error || undefined,
+    };
+  }
   const shadow = result && result.shadow;
   if (!shadow || shadow.configured === false) return { configured: false, state: "disabled" };
   if (shadow.pendingRetry) return { configured: true, state: "pending-retry", error: shadow.error || "shadow_failed" };

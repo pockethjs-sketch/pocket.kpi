@@ -635,12 +635,13 @@ import { shadowStatusFromSheetsResult } from "./data/repositoryAdapter.js";
      · localhost/file은 CRM 직접 조회를 비상 경로로 사용할 수 있습니다.
      · Netlify 같은 외부 Origin은 CORS 때문에 Apps Script 서버 프록시만 사용합니다. */
   var CRM_API_BASE = 'https://api.xn--9i1b674cwc38r6pa.com/crm/v3/projects/newarrivals/v2';
-  var CRM_JWT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX25vIjozNzM4NCwidXNlcl9uYW1lIjoi7KGw66eM7Zi4IiwidXNlcl90eXBlIjoiZW1wIiwidXNlcl9pZCI6InBvY2tldC5iZWFzdG1oQGdtYWlsLmNvbSIsImlhdCI6MTc4MzQ5NzA3NCwiZXhwIjoxNzg4NjgxMDc0fQ.nSs7skNAoiXsAZ9fuW73UttHz_boZFnKCrmvCAqeLa0';
+  /* CRM Bearer는 공개 번들에 넣지 않는다. 운영 조회는 Apps Script → Edge 서버 경로만 사용한다. */
+  var CRM_JWT = '';
   var CRM_SYNC_HOURS = 0.25, CRM_SYNC_WINDOW_DAYS = 60, CRM_QUALITY_REV = 10;
   window.crmIsHosted = function () {
     return /^https?:$/.test(window.location.protocol) && !/^(localhost|127\.0\.0\.1)$/.test(window.location.hostname);
   };
-  window.crmShouldSync = function () { if (!CRM_JWT) return false; try { var rev = +localStorage.getItem('crm:qualityRev') || 0; if (rev < CRM_QUALITY_REV) return true; var last = +localStorage.getItem('crm:lastSync') || 0; return (Date.now() - last) > CRM_SYNC_HOURS * 3600000; } catch (e) { return true; } };
+  window.crmShouldSync = function () { if (!CRM_SHEET_URL && !CRM_SERVER_PROXY_BASE) return false; try { var rev = +localStorage.getItem('crm:qualityRev') || 0; if (rev < CRM_QUALITY_REV) return true; var last = +localStorage.getItem('crm:lastSync') || 0; return (Date.now() - last) > CRM_SYNC_HOURS * 3600000; } catch (e) { return true; } };
   window.crmMarkSynced = function () { try { localStorage.setItem('crm:lastSync', String(Date.now())); localStorage.setItem('crm:qualityRev', String(CRM_QUALITY_REV)); } catch (e) {} };
   window.crmInferExplicitSales = function (rawText) {
     var text = String(rawText || '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
@@ -2410,8 +2411,8 @@ function useDB() {
         const syncStart = addDaysISO(syncEnd, -CRM_SYNC_WINDOW_DAYS);
         const syncBase = crmCloneValue(latestDbRef.current || data);
         data = crmCloneValue(syncBase);
-        let syncProxy = null;
-        if (window.crmIsHosted && window.crmIsHosted()) syncProxy = await window.crmFetchRefreshPayload(syncStart, syncEnd);
+        /* localhost도 공개 Bearer 직접 호출 대신 같은 서버 프록시 계약을 사용한다. */
+        const syncProxy = await window.crmFetchRefreshPayload(syncStart, syncEnd);
         const res = await window.crmFetchPremeeting(data, syncProxy ? syncProxy.leads : undefined);
         let crmChanged = !!(res && res.changed);
         if (res && res.db) data = res.db;
@@ -2421,7 +2422,7 @@ function useDB() {
           if (meetingRes && meetingRes.db) data = meetingRes.db;
           if (meetingRes && meetingRes.changed) crmChanged = true;
         }
-        if (window.crmSyncFutureFinance) {
+        if (CRM_JWT && window.crmSyncFutureFinance) {
           const financeRes = await window.crmSyncFutureFinance(data);
           if (financeRes && financeRes.db) data = financeRes.db;
           if (financeRes && financeRes.changed) crmChanged = true;
