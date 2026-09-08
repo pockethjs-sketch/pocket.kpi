@@ -4,3 +4,4 @@ dist/
 .npm-cache/
 *.log
 artifacts/
+supabase/.temp/

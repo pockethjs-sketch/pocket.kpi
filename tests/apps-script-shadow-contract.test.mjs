@@ -22,3 +22,8 @@ test("shadow failure is queued without throwing into primary save", () => {
   assert.match(code, /retrySupabaseShadowQueue/);
 });
 
+test("state reads Supabase only at the current Sheets revision and otherwise falls back", () => {
+  assert.match(code, /String\(shadowState\.revision\) === String\(stateMeta\.revision \|\| ''\)/);
+  assert.match(code, /readBackend = 'supabase'/);
+  assert.match(code, /if \(!stateOnly\) stateOnly = _crmReadStateEnvelope\(\)/);
+});
