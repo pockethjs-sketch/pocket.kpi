@@ -393,7 +393,7 @@ begin
     'deals', (select count(*) from public.deals where organization_id=p_organization_id and archived_at is null),
     'payments', (select count(*) from public.payment_plans where organization_id=p_organization_id and archived_at is null),
     'paymentReceipts', (select count(*) from public.payment_receipts where organization_id=p_organization_id and archived_at is null),
-    'contractEvents', (select count(*) from public.contract_events where organization_id=p_organization_id and archived_at is null),
+    'contractEvents', (select count(distinct coalesce(source_hash, id::text)) from public.contract_events where organization_id=p_organization_id and archived_at is null),
     'marketingDaily', (select count(*) from public.marketing_daily_spend where organization_id=p_organization_id and archived_at is null),
     'dealActivity', (select count(*) from public.deal_activity where organization_id=p_organization_id)
   ) into v_counts;
