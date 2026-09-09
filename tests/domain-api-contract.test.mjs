@@ -36,4 +36,5 @@ test("marketing collection runs in Edge, separates Meta campaign classes, and pr
   assert.match(marketing, /provider_sync_state/);
   assert.match(migration, /payload->>'collector'='supabase-edge'/);
   assert.match(config, /\[functions\.kpi-marketing-sync\][\s\S]*verify_jwt = true/);
+  assert.match(frontend, /directReady[\s\S]*crmFetchSheetAction\('marketing'/);
 });
