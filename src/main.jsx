@@ -1,12 +1,13 @@
 import "./styles.css";
 import { shadowStatusFromSheetsResult } from "./data/repositoryAdapter.js";
 
-/* ===== CRM 저장 연동 설정 =====
-     구글시트 팀공유를 켜려면 아래 CRM_SHEET_URL 에 Apps Script 배포 URL(...exec)을 붙여넣으세요.
-     비워두면 기존처럼 이 브라우저(localStorage)에만 저장됩니다.
-     crm-apps-script.gs 의 TOKEN 과 아래 CRM_TOKEN 은 반드시 같아야 합니다. */
+/* ===== 운영 데이터 연동 설정 =====
+     Supabase 화면별 API가 읽기·쓰기를 담당합니다.
+     Apps Script URL은 CRM/외부 계약 연동과 재해복구용 Sheets 읽기 폴백에만 사용합니다. */
   var CRM_SHEET_URL = 'https://script.google.com/macros/s/AKfycbwscZiacAZFqxAsW0cA6X75OxTkkqLReVoHatUyePPV8ihsWad4GxzmnKaLphJo7sQ/exec';   // ← 구글시트 연동 ON (월별 광고비 포함)
   var CRM_TOKEN = 'pocket-crm-9f3k7x';           // ← crm-apps-script.gs 의 TOKEN 과 동일 (이미 맞춰둠)
+  var KPI_DOMAIN_API_URL = 'https://ilnklntqkdbbtzzbhqrl.supabase.co/functions/v1/kpi-domain-api';
+  var KPI_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlsbmtsbnRxa2RiYnR6emJocXJsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg3Mjk3NDQsImV4cCI6MjEwNDMwNTc0NH0.QoQ6jIFNo75LUtWU7YOvsO9cwWIsWZvlhFeuBgBvNac';
   /* 사내 Nginx 배포에서는 같은 Origin의 서버 프록시를 사용합니다.
      개발자 서버가 다른 도메인이면 이 조건 또는 경로만 변경하면 됩니다. */
   var CRM_SERVER_PROXY_BASE = location.hostname === 'view.xn--9i1b674cwc38r6pa.com' ? '/kpi-api' : '';
@@ -50,7 +51,7 @@ import { shadowStatusFromSheetsResult } from "./data/repositoryAdapter.js";
 
   function crmDelay(ms) {
     return new Promise(function (resolve) { setTimeout(resolve, ms); });
-  }
+  };
 
   window.crmWaitForRemoteCommit = async function (timeoutMs) {
     var deadline = Date.now() + Number(timeoutMs || 30000);
@@ -85,6 +86,32 @@ import { shadowStatusFromSheetsResult } from "./data/repositoryAdapter.js";
         });
       })
       .finally(function () { if (timeout) clearTimeout(timeout); });
+  }
+
+  function crmFetchDomainAction(action, options) {
+    options = options || {};
+    var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var timeout = controller ? setTimeout(function () { controller.abort(); }, Number(options.timeoutMs || 25000)) : null;
+    var request = {
+      method: options.method || 'GET', cache: 'no-store',
+      headers: { 'x-kpi-app-token': CRM_TOKEN, 'Authorization': 'Bearer ' + KPI_SUPABASE_ANON_KEY, 'apikey': KPI_SUPABASE_ANON_KEY }, signal: controller ? controller.signal : undefined
+    };
+    var url = KPI_DOMAIN_API_URL + '?action=' + encodeURIComponent(action) + '&t=' + Date.now();
+    if (request.method === 'POST') {
+      request.headers['Content-Type'] = 'application/json';
+      request.body = JSON.stringify(Object.assign({ action: action }, options.body || {}));
+    }
+    return fetch(url, request).then(function (res) {
+      return res.json().catch(function () { return {}; }).then(function (body) {
+        if (!res.ok || !body || body.error) {
+          var error = new Error((body && body.error) || ('domain_' + res.status));
+          error.status = res.status;
+          error.payload = body;
+          throw error;
+        }
+        return body;
+      });
+    }).finally(function () { if (timeout) clearTimeout(timeout); });
   }
 
   function crmPostSheetAction(action, payload, timeoutMs) {
@@ -142,7 +169,7 @@ import { shadowStatusFromSheetsResult } from "./data/repositoryAdapter.js";
     } catch (e) {}
   }
 
-  window.fetchCrmSheetState = async function () {
+  async function crmFetchLegacySheetState() {
     var localStateText = null;
     var cachedRevision = '';
     var localDirty = false;
@@ -205,6 +232,53 @@ import { shadowStatusFromSheetsResult } from "./data/repositoryAdapter.js";
       window.crmRemoteLoaded = false;
       window.crmRemoteError = String(e && e.name === 'AbortError' ? 'backend_timeout' : (e && e.message || e) || 'sheet_unknown');
       return null;
+    }
+  };
+
+  async function crmFetchDomainState() {
+    var localStateText = null, cachedRevision = '', localDirty = false;
+    try {
+      localStateText = localStorage.getItem(CRM_LOCAL_STATE_KEY);
+      cachedRevision = localStorage.getItem(CRM_REMOTE_REVISION_KEY) || '';
+      localDirty = localStorage.getItem(CRM_LOCAL_DIRTY_KEY) === '1';
+    } catch (e) {}
+    var meta = await crmFetchDomainAction('meta', { timeoutMs: 15000 });
+    crmApplyRemoteEnvelope(meta);
+    var marketingPromise = crmFetchDomainAction('marketing', { timeoutMs: 20000 }).then(function (marketing) {
+      crmApplyMarketingEnvelope(marketing); window.crmMarketingError = ''; return marketing;
+    }).catch(function (error) {
+      window.crmMarketingError = String(error && error.message || error); return null;
+    });
+    var unchanged = !!(localStateText && cachedRevision && !localDirty && meta.revision && cachedRevision === meta.revision);
+    if (unchanged) {
+      await marketingPromise;
+      window.crmRemoteLoaded = true; window.crmRemoteError = '';
+      window.crmLastRemoteValue = localStateText; window.crmOptimisticRemoteValue = localStateText;
+      return { unchanged: true, revision: meta.revision, source: 'supabase-domain-cache',
+        marketingSpend: window.sheetMarketingSpend, marketingDaily: window.sheetMarketingDaily, marketingMeta: window.sheetMarketingMeta };
+    }
+    var results = await Promise.all([
+      crmFetchDomainAction('bootstrap', { timeoutMs: 20000 }),
+      crmFetchDomainAction('crm', { timeoutMs: 25000 }),
+      marketingPromise
+    ]);
+    var assembled = Object.assign({}, results[0].documents || {}, { leads: results[1].leads || [] });
+    assembled.adSpend = window.sheetMarketingSpend || {};
+    assembled.adDaily = window.sheetMarketingDaily || { META: [], NAVER: [], GOOGLE: [] };
+    assembled.adSpendMeta = window.sheetMarketingMeta || {};
+    var value = JSON.stringify(assembled);
+    window.crmRemoteLoaded = true; window.crmRemoteError = '';
+    window.crmLastRemoteValue = value; window.crmOptimisticRemoteValue = value;
+    return { value: value, revision: meta.revision, source: 'supabase-domain',
+      marketingSpend: window.sheetMarketingSpend, marketingDaily: window.sheetMarketingDaily, marketingMeta: window.sheetMarketingMeta };
+  }
+
+  window.fetchCrmSheetState = async function () {
+    try { return await crmFetchDomainState(); }
+    catch (domainError) {
+      window.crmRemoteError = String(domainError && domainError.message || domainError);
+      /* 운영 DB 장애 때만 30일 호환 스냅샷/Sheets 백업으로 복구합니다. */
+      return crmFetchLegacySheetState();
     }
   };
 
@@ -474,34 +548,26 @@ import { shadowStatusFromSheetsResult } from "./data/repositoryAdapter.js";
   }
   function crmSubmitMutationV3(mutation, committedValue, mutationId, attempt) {
     attempt = Number(attempt || 0);
-    var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    var timeout = controller ? setTimeout(function () { controller.abort(); }, 30000) : null;
-    return fetch(CRM_SHEET_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({
-        token: CRM_TOKEN,
-        action: 'save_v2',
-        baseRevision: window.crmRemoteRevision,
-        mutationId: mutationId,
-        mutation: mutation
-      }),
-      signal: controller ? controller.signal : undefined
-    }).then(function (res) {
-      if (!res.ok) throw new Error('sheet_' + res.status);
-      return res.json();
-    }).then(function (result) {
-      if (result && result.error === 'revision_conflict' && attempt < 3) {
-        return crmFetchSheetAction('state', 45000).then(function (latest) {
-          if (!latest || latest.error || !latest.data) throw new Error((latest && latest.error) || 'conflict_reload_failed');
-          crmApplyRemoteEnvelope(latest);
-          var latestState = JSON.parse(latest.data);
+    var nextRevision = new Date().toISOString().split('-').join('').split(':').join('').split('.').join('').replace('T', '').replace('Z', '') + '-' + mutationId.slice(-8);
+    return crmFetchDomainAction('mutation', { method: 'POST', timeoutMs: 30000, body: {
+      baseRevision: window.crmRemoteRevision,
+      nextRevision: nextRevision,
+      mutationId: mutationId,
+      mutation: mutation
+    } }).catch(function (error) {
+      if (error && error.status === 409 && attempt < 3) {
+        return crmFetchDomainState().then(function (latest) {
+          if (!latest || (!latest.value && !latest.unchanged)) throw new Error('conflict_reload_failed');
+          var latestValue = latest.value || window.crmLastRemoteValue;
+          var latestState = JSON.parse(latestValue);
           var rebasedState = crmApplyMutationLocal(latestState, mutation);
           var rebasedValue = JSON.stringify(rebasedState);
-          window.crmLastRemoteValue = latest.data;
+          window.crmLastRemoteValue = latestValue;
           return crmSubmitMutationV3(mutation, rebasedValue, mutationId, attempt + 1);
         });
       }
+      throw error;
+    }).then(function (result) {
       if (!result || !result.ok) throw new Error((result && result.error) || 'save_v2_failed');
       if (Number(result.storageVersion || 0) < 2) throw new Error('storage_v2_not_deployed');
       if (Number(result.mutationVersion || 0) < 3) throw new Error('storage_v3_not_deployed');
@@ -519,7 +585,7 @@ import { shadowStatusFromSheetsResult } from "./data/repositoryAdapter.js";
       result.rebased = attempt > 0;
       window.crmShadowStatus = shadowStatusFromSheetsResult(result);
       return result;
-    }).finally(function () { if (timeout) clearTimeout(timeout); });
+    });
   }
   function crmPrepareStateMutation(nextValue, options) {
     var previousValue = window.crmOptimisticRemoteValue || window.crmLastRemoteValue;
@@ -2299,12 +2365,15 @@ function useDB() {
             latestDbRef.current = data;
             setDb({ ...data });
             window.crmRemoteApplied = true;
-            await window.storage.set(KEY3, JSON.stringify(data), pendingReplay.count ? pendingReplay.saveOptions : { origin: "system", reason: "marketing_refresh" });
+            /* 광고는 Supabase 수집기가 정본을 갱신하므로 브라우저가 다시 저장하지 않습니다.
+               미전송 사용자 변경이 있을 때만 해당 패치를 재생합니다. */
+            if (pendingReplay.count) await window.storage.set(KEY3, JSON.stringify(data), pendingReplay.saveOptions);
+            else try { localStorage.removeItem(CRM_LOCAL_DIRTY_KEY); } catch (e) {}
           } else {
             try { localStorage.removeItem(CRM_LOCAL_DIRTY_KEY); } catch (e) {}
           }
           window.crmRemoteApplied = true;
-          finalState = cachedChanged ? "최신 광고 데이터 반영·저장됨" : "최신 데이터 확인됨";
+          finalState = cachedChanged ? "Supabase 최신 광고 데이터 반영됨" : "최신 데이터 확인됨";
           setSaveState(finalState);
         } else if (remote && remote.value) {
           const cachedBeforeRemote = data;
@@ -8867,19 +8936,20 @@ function SchemaView() {
   const Empty = () => <span className="text-[10px] font-bold text-slate-400">전용 탭 없음 · 공통 원본 사용</span>;
   const architectureNodes = {
     crm: { lane: "외부 원천", title: "본사 CRM API", meta: "읽기 전용", tone: "blue", summary: "리드·TM·프리미팅 원천", details: ["newarrivals/v2 · 유입 DB", "mr_schedules · 프리미팅 일정", "CRM 값은 사용자 입력을 직접 삭제하지 않음"] },
-    ads: { lane: "외부 원천", title: "광고 매체 API", meta: "수집", tone: "blue", summary: "META · NAVER · GOOGLE", details: ["캠페인·일자별 비용/노출/클릭", "META는 잠재고객·포켓 트래픽·빌더진 트래픽 분리", "광고 원본은 수집 시트가 정본"] },
+    ads: { lane: "외부 원천", title: "광고 매체 API", meta: "직접 수집", tone: "blue", summary: "META · NAVER · GOOGLE", details: ["캠페인·일자별 비용/노출/클릭", "META는 잠재고객·포켓 트래픽·빌더진 트래픽 분리", "Supabase Edge가 매체 API를 직접 호출"] },
     contract: { lane: "외부 원천", title: "외부 계약 시트", meta: "검토 후 반영", tone: "blue", summary: "신규 계약 후보 감지", details: ["2026-08 이후 미등록 업체만 후보화", "사용자가 신규 생성 또는 제외", "자동 덮어쓰기하지 않음"] },
     support: { lane: "외부 원천", title: "Supabase", meta: "읽기", tone: "violet", summary: "지원사업 관리 데이터", details: ["지원사업 배정·합격·일정", "지원사업 관리 화면에서 조회", "웹 전체 상태 저장소와는 별도"] },
-    appscript: { lane: "연동 계층", title: "Apps Script Web App", meta: "API 게이트웨이", tone: "amber", summary: "읽기·저장·동기화 중계", details: ["Code.gs · doGet/doPost", "토큰 확인·리비전 충돌 방지", "Google Sheets 접근과 CRM 프록시"] },
-    collector: { lane: "연동 계층", title: "MarketingCollector.gs", meta: "시간 트리거", tone: "amber", summary: "광고 데이터 정기 수집", details: ["META/NAVER/GOOGLE 원본 갱신", "수집 결과와 오류를 시스템 탭에 기록", "웹 접속 여부와 독립 실행"] },
+    appscript: { lane: "연동 계층", title: "Apps Script Web App", meta: "백업·외부연동", tone: "amber", summary: "Sheets 백업과 CRM 프록시", details: ["운영 저장 경로에서는 제외", "Supabase 장애 시 복구 스냅샷 제공", "Google 계약 시트·CRM 프록시 유지"] },
+    collector: { lane: "연동 계층", title: "Supabase Edge + Cron", meta: "6시간", tone: "violet", summary: "광고 API 직접 수집", details: ["META/NAVER/GOOGLE → 관계형 광고 테이블", "공급자별 성공·실패 상태 저장", "웹 접속 여부와 독립 실행"] },
     web: { lane: "웹", title: "Pocket KPI 웹", meta: "React · GitHub Pages", tone: "indigo", summary: "조회·계산·사용자 입력", details: ["통합·마케팅·프리미팅·계약·기타 화면", "서버 저장 성공 전 브라우저 저널 유지", "저장 성공 뒤 서버 리비전으로 화면 갱신"] },
-    journal: { lane: "웹", title: "브라우저 저널", meta: "임시 안전장치", tone: "indigo", summary: "미전송 변경 보관", details: ["localStorage에 저장 대기 작업 보관", "네트워크 복구 후 같은 mutationId로 재전송", "Google Sheets 정본을 대체하지 않음"] },
-    state: { lane: "Google Sheets", title: "현재상태 A / B", meta: "웹 복구 정본", tone: "emerald", summary: "웹 전체 상태 이중 저장", details: ["비활성 슬롯에 먼저 기록 후 검증", "저장메타가 현재 활성 슬롯 지정", "해시·리비전으로 손상/충돌 확인"] },
-    ledgers: { lane: "Google Sheets", title: "구조화 원장", meta: "확인·분석", tone: "emerald", summary: "리드·계약·입금·잔금", details: ["데이터_리드원장 · 계약원장 · 입금원장", "계약_잔금관리 · 계약_잔금로그", "A/B 저장과 함께 동기화되는 확인용 구조"] },
-    marketing: { lane: "Google Sheets", title: "광고 정본 시트", meta: "마케팅 정본", tone: "emerald", summary: "원본_메타광고 · NAVER-GOOGLE", details: ["일별·캠페인별 광고 수치", "대시보드 계산의 광고비 원천", "사용자 계약 입력과 분리 저장"] },
-    audit: { lane: "보호·복구", title: "로그 · 스냅샷", meta: "감사", tone: "slate", summary: "변경 이력과 복구 지점", details: ["시스템_변경로그 · 상태스냅샷", "데이터_계약현황로그 · 잔금로그", "누가·언제·무엇을 바꿨는지 추적"] },
+    journal: { lane: "웹", title: "브라우저 저널", meta: "임시 안전장치", tone: "indigo", summary: "미전송 변경 보관", details: ["localStorage에 저장 대기 작업 보관", "네트워크 복구 후 같은 mutationId로 재전송", "Supabase 정본을 대체하지 않음"] },
+    state: { lane: "Supabase", title: "관계형 운영 DB", meta: "운영 정본", tone: "emerald", summary: "리드·계약·입금·잔금", details: ["화면별 API로 필요한 도메인만 조회", "변경분 patch를 트랜잭션으로 반영", "전체 스냅샷은 30일 복구 호환용"] },
+    ledgers: { lane: "Google Sheets", title: "Sheets 백업 원장", meta: "15분 백업", tone: "amber", summary: "사람 확인·재해 복구", details: ["데이터_리드원장 · 계약원장 · 입금원장", "계약_잔금관리 · 계약_잔금로그", "운영 정본이 아니라 비동기 백업"] },
+    marketing: { lane: "Supabase", title: "광고 관계형 정본", meta: "마케팅 정본", tone: "emerald", summary: "일자·매체·캠페인 분리", details: ["META 잠재·포켓 트래픽·빌더진 트래픽", "NAVER·GOOGLE 일별 성과", "시트 미갱신과 무관하게 웹에서 조회"] },
+    audit: { lane: "보호·복구", title: "작업 로그 · 스냅샷", meta: "복구", tone: "slate", summary: "시간·업체·작업 유형", details: ["계약 생성·동기화·상태 변경 기록", "수정자 이름은 저장 필수조건에서 제외", "일일 체크포인트로 복구"] },
     backup: { lane: "보호·복구", title: "Drive 정기 백업", meta: "파일 백업", tone: "slate", summary: "스프레드시트 복사본", details: ["별도 backup.gs 시간 트리거", "운영 시트 전체를 날짜별 파일로 복제", "A/B와 별개의 최종 복구 수단"] }
   };
+
   const nodeTones = {
     blue: "border-blue-200 bg-blue-50 text-blue-800 hover:border-blue-400",
     violet: "border-violet-200 bg-violet-50 text-violet-800 hover:border-violet-400",
@@ -8917,7 +8987,7 @@ function SchemaView() {
 
       {viewMode === "flow" && <>
         <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-          {[{ label: "웹 복구 정본", value: "현재상태 A/B", tone: "text-indigo-700" }, { label: "마케팅 정본", value: "광고 원본 시트", tone: "text-emerald-700" }, { label: "사용자 입력", value: "즉시 서버 저장", tone: "text-blue-700" }, { label: "최종 보호", value: "로그·스냅샷·Drive", tone: "text-slate-700" }].map((item) => <div key={item.label} className="rounded-md border border-slate-200 bg-white px-3 py-2.5"><p className="text-[8px] font-black text-slate-400">{item.label}</p><p className={"mt-0.5 text-[11px] font-black " + item.tone}>{item.value}</p></div>)}
+          {[{ label: "운영 정본", value: "Supabase 관계형 DB", tone: "text-indigo-700" }, { label: "마케팅 정본", value: "광고 관계형 테이블", tone: "text-emerald-700" }, { label: "사용자 입력", value: "변경분 즉시 저장", tone: "text-blue-700" }, { label: "최종 보호", value: "일일 스냅샷·Sheets·Drive", tone: "text-slate-700" }].map((item) => <div key={item.label} className="rounded-md border border-slate-200 bg-white px-3 py-2.5"><p className="text-[8px] font-black text-slate-400">{item.label}</p><p className={"mt-0.5 text-[11px] font-black " + item.tone}>{item.value}</p></div>)}
         </div>
         <Card cls="overflow-hidden">
           <div className="border-b border-slate-200 bg-slate-50 px-4 py-2.5">
@@ -8934,7 +9004,7 @@ function SchemaView() {
               <div className="space-y-2 rounded-md border border-dashed border-amber-200 bg-amber-50/30 p-2">
                 <p className="px-1 text-[8px] font-black uppercase tracking-wider text-amber-600">2 · 연동 계층</p>
                 <ArchitectureNode id="appscript" /><ArchitectureNode id="collector" />
-                <div className="rounded-md border border-amber-100 bg-white p-2 text-[8px] font-bold leading-4 text-slate-500">CRM·계약·저장은 Web App<br />광고 수집은 Collector 트리거</div>
+                <div className="rounded-md border border-amber-100 bg-white p-2 text-[8px] font-bold leading-4 text-slate-500">운영 저장·광고는 Supabase<br />Apps Script는 백업·외부연동</div>
               </div>
               <FlowArrow />
               <div className="space-y-2 rounded-md border border-dashed border-indigo-200 bg-indigo-50/30 p-2">
@@ -8989,10 +9059,10 @@ function SchemaView() {
       </>}
 
       {viewMode === "safety" && <>
-        <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3"><p className="text-[11px] font-black text-amber-900">저장 원칙</p><p className="mt-1 text-[10px] font-bold leading-4 text-amber-800">사용자 입력은 Apps Script 저장 성공 전까지 브라우저 저널에 남고, 서버에서는 리비전 확인 → 비활성 A/B 기록 → 해시 검증 → 활성 슬롯 전환 순서로 확정됩니다.</p></div>
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3"><p className="text-[11px] font-black text-amber-900">저장 원칙</p><p className="mt-1 text-[10px] font-bold leading-4 text-amber-800">사용자 입력은 Supabase 성공 전까지 브라우저 저널에 남고, 서버에서는 리비전 확인 → 변경분 적용 → 관계형 계약·입금 반영 → 로그·일일 체크포인트를 한 트랜잭션으로 확정합니다.</p></div>
         <Card cls="p-4 overflow-x-auto">
           <div className="flex min-w-[900px] items-stretch gap-2">
-            {[{ no: "1", title: "사용자 입력", desc: "계약·입금·잔금·특이사항" }, { no: "2", title: "브라우저 저널", desc: "성공 전 mutation 보관" }, { no: "3", title: "리비전 확인", desc: "동시 수정 충돌 방지" }, { no: "4", title: "비활성 A/B 기록", desc: "기존 정본을 보존한 채 저장" }, { no: "5", title: "해시 검증·전환", desc: "검증 성공 시에만 활성화" }, { no: "6", title: "원장·로그 동기화", desc: "구조화 확인본과 감사 이력" }].map((step, idx, arr) => <React.Fragment key={step.no}><div className="min-w-0 flex-1 rounded-md border border-slate-200 bg-white p-3"><span className="flex h-5 w-5 items-center justify-center rounded bg-slate-900 text-[9px] font-black text-white">{step.no}</span><p className="mt-2 text-[10px] font-black text-slate-800">{step.title}</p><p className="mt-1 text-[9px] font-bold leading-4 text-slate-400">{step.desc}</p></div>{idx < arr.length - 1 && <div className="flex items-center text-slate-300"><ArrowRight size={15} /></div>}</React.Fragment>) }
+            {[{ no: "1", title: "사용자 입력", desc: "계약·입금·잔금·특이사항" }, { no: "2", title: "브라우저 저널", desc: "성공 전 mutation 보관" }, { no: "3", title: "리비전 확인", desc: "동시 수정 충돌 방지" }, { no: "4", title: "변경분 적용", desc: "전체 JSON 대신 대상 필드만 반영" }, { no: "5", title: "관계형 COMMIT", desc: "계약·입금·잔금을 한 번에 확정" }, { no: "6", title: "비동기 백업", desc: "일일 체크포인트·Sheets·Drive" }].map((step, idx, arr) => <React.Fragment key={step.no}><div className="min-w-0 flex-1 rounded-md border border-slate-200 bg-white p-3"><span className="flex h-5 w-5 items-center justify-center rounded bg-slate-900 text-[9px] font-black text-white">{step.no}</span><p className="mt-2 text-[10px] font-black text-slate-800">{step.title}</p><p className="mt-1 text-[9px] font-bold leading-4 text-slate-400">{step.desc}</p></div>{idx < arr.length - 1 && <div className="flex items-center text-slate-300"><ArrowRight size={15} /></div>}</React.Fragment>) }
           </div>
         </Card>
         <div className="grid gap-3 lg:grid-cols-3">

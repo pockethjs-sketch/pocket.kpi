@@ -11,3 +11,9 @@ major_version = 17
 
 [functions.kpi-shadow-gateway]
 verify_jwt = false
+
+[functions.kpi-domain-api]
+verify_jwt = true
+
+[functions.kpi-marketing-sync]
+verify_jwt = true
