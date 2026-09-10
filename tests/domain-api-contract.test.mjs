@@ -6,6 +6,8 @@ const frontend = await readFile(new URL("../src/main.jsx", import.meta.url), "ut
 const domain = await readFile(new URL("../supabase/functions/kpi-domain-api/index.ts", import.meta.url), "utf8");
 const marketing = await readFile(new URL("../supabase/functions/kpi-marketing-sync/index.ts", import.meta.url), "utf8");
 const migration = await readFile(new URL("../supabase/migrations/20260909031054_relational_domain_api_and_marketing_primary.sql", import.meta.url), "utf8");
+const atomicMarketingMigration = await readFile(new URL("../supabase/migrations/20260910153000_marketing_atomic_provider_commit.sql", import.meta.url), "utf8");
+const marketingCronMigration = await readFile(new URL("../supabase/migrations/20260910160000_marketing_cron_timeout.sql", import.meta.url), "utf8");
 const config = await readFile(new URL("../supabase/config.toml", import.meta.url), "utf8");
 
 test("frontend reads domain endpoints and writes mutations without a whole state upload", () => {
@@ -30,14 +32,44 @@ test("contract and balance state is relationally projected while compatibility s
   assert.match(migration, /commit_primary_mutation/);
 });
 
-test("marketing collection runs in Edge, separates Meta campaign classes, and protects direct rows", () => {
-  for (const code of ["META_LEAD", "META_POCKET_TRAFFIC", "META_BUILDER_TRAFFIC"]) assert.match(marketing, new RegExp(code));
+test("marketing collection runs in Edge, separates all Meta campaign classes, and protects direct rows", () => {
+  for (const code of ["META_LEAD", "META_POCKET_TRAFFIC", "META_BUILDER_TRAFFIC", "META_OTHER"]) {
+    assert.match(marketing, new RegExp(code));
+    assert.match(domain, new RegExp(code));
+  }
+  assert.match(marketing, /objective\.includes\("TRAFFIC"\)/);
+  assert.match(marketing, /builder\.test\(name\)/);
+  assert.match(marketing, /MK_GOOGLE_CUSTOMER_ID/);
   assert.match(marketing, /kpi_read_marketing_config/);
   assert.match(marketing, /provider_sync_state/);
+  assert.match(marketing, /kpi_commit_marketing_provider/);
   assert.match(migration, /payload->>'collector'='supabase-edge'/);
   assert.match(config, /\[functions\.kpi-marketing-sync\][\s\S]*verify_jwt = true/);
   assert.match(frontend, /directReady[\s\S]*crmFetchSheetAction\('marketing'/);
   assert.match(frontend, /\['META', 'NAVER', 'GOOGLE'\]\.every/);
+});
+
+test("direct provider writes validate complete coverage and commit atomically", () => {
+  assert.match(atomicMarketingMigration, /pg_advisory_xact_lock/);
+  assert.match(atomicMarketingMigration, /marketing_date_coverage_failed/);
+  assert.match(atomicMarketingMigration, /marketing_row_validation_failed/);
+  assert.match(atomicMarketingMigration, /payload->>'validated' = 'true'/);
+  assert.match(atomicMarketingMigration, /grant execute[\s\S]*to service_role/);
+  assert.doesNotMatch(atomicMarketingMigration, /grant execute[\s\S]*to anon/);
+  assert.match(marketing, /zero_regression/);
+  assert.match(marketing, /Object\.keys\(collectors\)\.every/);
+});
+
+test("scheduled marketing collection allows enough time for all three provider APIs", () => {
+  assert.match(marketingCronMigration, /timeout_milliseconds\s*:=\s*120000/);
+  assert.match(marketingCronMigration, /0 \*\/6 \* \* \*/);
+});
+
+test("domain response preserves Meta daily and monthly split including unclassified spend", () => {
+  assert.match(domain, /otherSpend/);
+  assert.match(domain, /campaigns:\s*\{ META: metaCampaigns \}/);
+  assert.match(frontend, /기타 캠페인비/);
+  assert.match(frontend, /기타 캠페인/);
 });
 
 test("marketing sync records missing credentials without overwriting the last successful snapshot", () => {

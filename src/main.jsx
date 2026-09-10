@@ -5113,7 +5113,7 @@ function MarketingPlatformDetail({ kind }) {
   const dailyMetaSplitReady = isMeta && periodDailyRows.some((row) => row.leadSpend != null || row.trafficSpend != null);
   const dailyTrafficDetailReady = isMeta && periodDailyRows.some((row) => row.trafficDetailReady === true || (row.pocketTrafficSpend != null && row.builderTrafficSpend != null));
   const dailyAverage = isMeta ? (() => {
-    const spend = dailySum((x) => x.spend), leadSpend = dailySum((x) => x.leadSpend), trafficSpend = dailySum((x) => x.trafficSpend), pocketTrafficSpend = dailySum((x) => x.pocketTrafficSpend), builderTrafficSpend = dailySum((x) => x.builderTrafficSpend), impressions = dailySum((x) => x.impressions), clicks = dailySum((x) => x.clicks), crm = dailySum((x) => x.crm);
+    const spend = dailySum((x) => x.spend), leadSpend = dailySum((x) => x.leadSpend), trafficSpend = dailySum((x) => x.trafficSpend), pocketTrafficSpend = dailySum((x) => x.pocketTrafficSpend), builderTrafficSpend = dailySum((x) => x.builderTrafficSpend), otherSpend = dailySum((x) => x.otherSpend), impressions = dailySum((x) => x.impressions), clicks = dailySum((x) => x.clicks), crm = dailySum((x) => x.crm);
     const cplSpend = dailyMetaSplitReady ? leadSpend : spend;
     return {
       days: dailyDays,
@@ -5123,6 +5123,7 @@ function MarketingPlatformDetail({ kind }) {
         { label: "트래픽 합계", value: dailyDays && dailyMetaSplitReady ? fmtK(Math.round(trafficSpend / dailyDays)) + "원" : "-", tone: "text-slate-700" },
         { label: "포켓 트래픽비", value: dailyDays && dailyTrafficDetailReady ? fmtK(Math.round(pocketTrafficSpend / dailyDays)) + "원" : "-", tone: "text-cyan-700" },
         { label: "빌더진 트래픽비", value: dailyDays && dailyTrafficDetailReady ? fmtK(Math.round(builderTrafficSpend / dailyDays)) + "원" : "-", tone: "text-sky-700" },
+        { label: "기타 캠페인비", value: dailyDays && dailyMetaSplitReady ? fmtK(Math.round(otherSpend / dailyDays)) + "원" : "-", tone: "text-slate-500" },
         { label: "노출", value: dailyDays ? Math.round(impressions / dailyDays).toLocaleString() + "회" : "-", tone: "text-slate-800" },
         { label: "클릭", value: dailyDays ? (clicks / dailyDays).toFixed(1) + "회" : "-", tone: "text-slate-800" },
         { label: "CRM 문의", value: dailyDays ? (crm / dailyDays).toFixed(1) + "건" : "-", tone: "text-indigo-700" },
@@ -5163,8 +5164,9 @@ function MarketingPlatformDetail({ kind }) {
     const trafficSpend = isMeta && campaignSplit ? Number(campaign.traffic || 0) : 0;
     const pocketTrafficSpend = isMeta && trafficDetailReady ? Number(campaign.pocketTraffic || 0) : 0;
     const builderTrafficSpend = isMeta && trafficDetailReady ? Number(campaign.builderTraffic || 0) : 0;
+    const otherSpend = isMeta && campaignSplit ? Number(campaign.other || 0) : 0;
     return {
-      month, sourceSpend, leads, pre, contracts, revenue, spend, leadSpend, trafficSpend, pocketTrafficSpend, builderTrafficSpend, campaignSplit, trafficDetailReady,
+      month, sourceSpend, leads, pre, contracts, revenue, spend, leadSpend, trafficSpend, pocketTrafficSpend, builderTrafficSpend, otherSpend, campaignSplit, trafficDetailReady,
       cpl: leadSpend && leads.length ? Math.round(leadSpend / leads.length) : null,
       preRate: leads.length ? Math.round(pre.length / leads.length * 100) : null,
       contractRate: pre.length ? Math.round(contracts.length / pre.length * 100) : null,
@@ -5173,9 +5175,9 @@ function MarketingPlatformDetail({ kind }) {
   });
   const summaryRows = monthRows.filter((x) => visibleMonths.includes(x.month));
   const summarize = (rows) => rows.reduce((a, x) => {
-    a.spend += x.spend; a.leadSpend += x.leadSpend; a.trafficSpend += x.trafficSpend; a.pocketTrafficSpend += x.pocketTrafficSpend; a.builderTrafficSpend += x.builderTrafficSpend; a.splitMonths += x.campaignSplit ? 1 : 0; a.detailMonths += x.trafficDetailReady ? 1 : 0; a.leads += x.leads.length; a.pre += x.pre.length; a.contracts += x.contracts.length; a.revenue += x.revenue;
+    a.spend += x.spend; a.leadSpend += x.leadSpend; a.trafficSpend += x.trafficSpend; a.pocketTrafficSpend += x.pocketTrafficSpend; a.builderTrafficSpend += x.builderTrafficSpend; a.otherSpend += x.otherSpend; a.splitMonths += x.campaignSplit ? 1 : 0; a.detailMonths += x.trafficDetailReady ? 1 : 0; a.leads += x.leads.length; a.pre += x.pre.length; a.contracts += x.contracts.length; a.revenue += x.revenue;
     return a;
-  }, { spend: 0, leadSpend: 0, trafficSpend: 0, pocketTrafficSpend: 0, builderTrafficSpend: 0, splitMonths: 0, detailMonths: 0, leads: 0, pre: 0, contracts: 0, revenue: 0 });
+  }, { spend: 0, leadSpend: 0, trafficSpend: 0, pocketTrafficSpend: 0, builderTrafficSpend: 0, otherSpend: 0, splitMonths: 0, detailMonths: 0, leads: 0, pre: 0, contracts: 0, revenue: 0 });
   const enrichSummary = (raw) => ({
     ...raw,
     cpl: raw.leadSpend && raw.leads ? Math.round(raw.leadSpend / raw.leads) : null,
@@ -5273,6 +5275,7 @@ function MarketingPlatformDetail({ kind }) {
   const metaTrafficShare = summary.spend ? Math.round(summary.trafficSpend / summary.spend * 100) : 0;
   const metaPocketTrafficShare = summary.spend ? Math.round(summary.pocketTrafficSpend / summary.spend * 100) : 0;
   const metaBuilderTrafficShare = summary.spend ? Math.round(summary.builderTrafficSpend / summary.spend * 100) : 0;
+  const metaOtherShare = summary.spend ? Math.round(summary.otherSpend / summary.spend * 100) : 0;
   return (
     <div className="space-y-4">
       <SecTitle icon={Megaphone} title={isMeta ? "META 성과 대시보드" : "NAVER · GOOGLE 성과 대시보드"}
@@ -5298,7 +5301,7 @@ function MarketingPlatformDetail({ kind }) {
           <div className="text-right"><span className="text-xs font-black text-slate-700">총 {fmtK(summary.spend)}원</span><p className="mt-1 text-[10px] font-bold text-slate-400">트래픽 합계 {fmtK(summary.trafficSpend)}원</p></div>
         </div>
         {metaSplitReady ? <>
-          <div className="mt-3 grid md:grid-cols-3 gap-2.5">
+          <div className="mt-3 grid md:grid-cols-2 xl:grid-cols-4 gap-2.5">
             <div className="rounded-md border border-indigo-200 bg-indigo-50 p-3.5">
               <div className="flex items-center justify-between gap-2"><p className="text-xs font-black text-indigo-900">잠재고객 캠페인</p><span className="text-[10px] font-extrabold text-indigo-600">전체의 {metaLeadShare}%</span></div>
               <p className="mt-1.5 text-xl font-black text-indigo-900 tabular-nums">{fmtK(summary.leadSpend)}원</p>
@@ -5314,8 +5317,13 @@ function MarketingPlatformDetail({ kind }) {
               <p className="mt-1.5 text-xl font-black text-sky-900 tabular-nums">{metaTrafficDetailReady ? fmtK(summary.builderTrafficSpend) + "원" : "분리 전"}</p>
               <p className="mt-1 text-[10px] font-bold text-sky-600">트래픽 캠페인 · 이름에 ‘빌더진’ 포함</p>
             </div>
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-3.5">
+              <div className="flex items-center justify-between gap-2"><p className="text-xs font-black text-slate-800">기타 캠페인</p><span className="text-[10px] font-extrabold text-slate-500">전체의 {metaOtherShare}%</span></div>
+              <p className="mt-1.5 text-xl font-black text-slate-800 tabular-nums">{fmtK(summary.otherSpend)}원</p>
+              <p className="mt-1 text-[10px] font-bold text-slate-500">목적·이름이 세 분류와 일치하지 않는 캠페인</p>
+            </div>
           </div>
-          <div className="mt-3 flex h-2.5 overflow-hidden rounded-sm bg-slate-100"><span className="bg-indigo-500" style={{ width: metaLeadShare + "%" }} />{metaTrafficDetailReady ? <><span className="bg-cyan-400" style={{ width: metaPocketTrafficShare + "%" }} /><span className="bg-sky-500" style={{ width: metaBuilderTrafficShare + "%" }} /></> : <span className="bg-slate-400" style={{ width: metaTrafficShare + "%" }} />}</div>
+          <div className="mt-3 flex h-2.5 overflow-hidden rounded-sm bg-slate-100"><span className="bg-indigo-500" style={{ width: metaLeadShare + "%" }} />{metaTrafficDetailReady ? <><span className="bg-cyan-400" style={{ width: metaPocketTrafficShare + "%" }} /><span className="bg-sky-500" style={{ width: metaBuilderTrafficShare + "%" }} /></> : <span className="bg-slate-400" style={{ width: metaTrafficShare + "%" }} />}<span className="bg-slate-300" style={{ width: metaOtherShare + "%" }} /></div>
           {!metaTrafficDetailReady && <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] font-bold text-amber-800">기존 원본은 트래픽 합계 {fmtK(summary.trafficSpend)}원만 저장해 포켓·빌더진 상세 금액을 재현할 수 없습니다. 새 캠페인 단위 수집부터 두 항목이 분리됩니다.</div>}
         </> : <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] font-bold text-amber-800">현재 원본은 META 총비용만 전달합니다. 캠페인 단위 수집 연결 후 잠재고객·포켓 트래픽·빌더진 트래픽 비용이 분리됩니다.</div>}
       </Card>}
@@ -5355,14 +5363,14 @@ function MarketingPlatformDetail({ kind }) {
       <Card>
         <div className="px-4 pt-4 pb-3">
           <p className="text-sm font-extrabold text-slate-900">월별 성과 원장</p>
-          <p className="text-[10px] text-slate-400 mt-1">광고비는 구글시트, 전환과 매출은 같은 월에 유입된 CRM DB의 누적 성과입니다.</p>
+          <p className="text-[10px] text-slate-400 mt-1">광고비는 광고 API에서 Supabase로 직접 수집하며, 전환과 매출은 같은 월에 유입된 CRM DB의 누적 성과입니다.</p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm min-w-[920px]">
             <thead>
               <tr className="bg-slate-50 border-y border-slate-100 text-[11px] text-slate-400">
                 <th className="px-4 py-2.5 text-left font-semibold">월</th>
-                {isMeta ? <><th className="px-3 py-2.5 text-right font-semibold">총 광고비</th><th className="px-3 py-2.5 text-right font-semibold text-indigo-500">잠재고객 캠페인</th><th className="px-3 py-2.5 text-right font-semibold text-slate-500">트래픽 합계</th><th className="px-3 py-2.5 text-right font-semibold text-cyan-600">포켓 트래픽</th><th className="px-3 py-2.5 text-right font-semibold text-sky-500">빌더진 트래픽</th></> : <>{platforms.map((p) => <th key={p} className="px-3 py-2.5 text-right font-semibold">{p.includes("네이버") ? "NAVER 광고비" : "GOOGLE 광고비"}</th>)}<th className="px-3 py-2.5 text-right font-semibold">합계 광고비</th></>}
+                {isMeta ? <><th className="px-3 py-2.5 text-right font-semibold">총 광고비</th><th className="px-3 py-2.5 text-right font-semibold text-indigo-500">잠재고객 캠페인</th><th className="px-3 py-2.5 text-right font-semibold text-slate-500">트래픽 합계</th><th className="px-3 py-2.5 text-right font-semibold text-cyan-600">포켓 트래픽</th><th className="px-3 py-2.5 text-right font-semibold text-sky-500">빌더진 트래픽</th><th className="px-3 py-2.5 text-right font-semibold text-slate-400">기타</th></> : <>{platforms.map((p) => <th key={p} className="px-3 py-2.5 text-right font-semibold">{p.includes("네이버") ? "NAVER 광고비" : "GOOGLE 광고비"}</th>)}<th className="px-3 py-2.5 text-right font-semibold">합계 광고비</th></>}
                 <th className="px-3 py-2.5 text-right font-semibold">DB</th>
                 <th className="px-3 py-2.5 text-right font-semibold">프리미팅</th>
                 <th className="px-3 py-2.5 text-right font-semibold">계약</th>
@@ -5375,7 +5383,7 @@ function MarketingPlatformDetail({ kind }) {
               {shownRows.map((x) => (
                 <tr key={x.month} className="border-b border-slate-100 hover:bg-slate-50/70">
                   <td className="px-4 py-3 font-extrabold text-slate-800">{x.month}</td>
-                  {isMeta ? <><td className="px-3 py-3 text-right font-black text-slate-900 tabular-nums">{fmtK(x.spend)}원</td><td className="px-3 py-3 text-right font-bold text-indigo-700 tabular-nums">{x.campaignSplit ? fmtK(x.leadSpend) + "원" : "배포 필요"}</td><td className="px-3 py-3 text-right font-bold text-slate-700 tabular-nums">{x.campaignSplit ? fmtK(x.trafficSpend) + "원" : "배포 필요"}</td><td className="px-3 py-3 text-right font-bold text-cyan-700 tabular-nums">{x.trafficDetailReady ? fmtK(x.pocketTrafficSpend) + "원" : "분리 전"}</td><td className="px-3 py-3 text-right font-bold text-sky-700 tabular-nums">{x.trafficDetailReady ? fmtK(x.builderTrafficSpend) + "원" : "분리 전"}</td></> : <>{platforms.map((p) => <td key={p} className="px-3 py-3 text-right font-bold text-slate-700 tabular-nums">{fmtK(x.sourceSpend[p] || 0)}원</td>)}<td className="px-3 py-3 text-right font-black text-slate-900 tabular-nums">{fmtK(x.spend)}원</td></>}
+                  {isMeta ? <><td className="px-3 py-3 text-right font-black text-slate-900 tabular-nums">{fmtK(x.spend)}원</td><td className="px-3 py-3 text-right font-bold text-indigo-700 tabular-nums">{x.campaignSplit ? fmtK(x.leadSpend) + "원" : "배포 필요"}</td><td className="px-3 py-3 text-right font-bold text-slate-700 tabular-nums">{x.campaignSplit ? fmtK(x.trafficSpend) + "원" : "배포 필요"}</td><td className="px-3 py-3 text-right font-bold text-cyan-700 tabular-nums">{x.trafficDetailReady ? fmtK(x.pocketTrafficSpend) + "원" : "분리 전"}</td><td className="px-3 py-3 text-right font-bold text-sky-700 tabular-nums">{x.trafficDetailReady ? fmtK(x.builderTrafficSpend) + "원" : "분리 전"}</td><td className="px-3 py-3 text-right font-bold text-slate-500 tabular-nums">{x.campaignSplit ? fmtK(x.otherSpend) + "원" : "-"}</td></> : <>{platforms.map((p) => <td key={p} className="px-3 py-3 text-right font-bold text-slate-700 tabular-nums">{fmtK(x.sourceSpend[p] || 0)}원</td>)}<td className="px-3 py-3 text-right font-black text-slate-900 tabular-nums">{fmtK(x.spend)}원</td></>}
                   <td className="px-3 py-3 text-right font-bold text-slate-800">{x.leads.length}</td>
                   <td className="px-3 py-3 text-right font-bold text-indigo-700">{x.pre.length}</td>
                   <td className="px-3 py-3 text-right font-bold text-emerald-700">{x.contracts.length}</td>
@@ -5384,7 +5392,7 @@ function MarketingPlatformDetail({ kind }) {
                   <td className={"px-4 py-3 text-right font-black tabular-nums " + (x.roas != null && x.roas >= 100 ? "text-emerald-700" : "text-rose-600")}>{x.roas == null ? "-" : x.roas + "%"}</td>
                 </tr>
               ))}
-              {!shownRows.length && <tr><td colSpan={isMeta ? 12 : platforms.length + 8} className="px-4 py-10 text-center text-xs text-slate-400">선택 기간의 시트 광고비 데이터가 없습니다.</td></tr>}
+              {!shownRows.length && <tr><td colSpan={isMeta ? 13 : platforms.length + 8} className="px-4 py-10 text-center text-xs text-slate-400">선택 기간의 광고비 데이터가 없습니다.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -5393,7 +5401,7 @@ function MarketingPlatformDetail({ kind }) {
         <div className="px-4 pt-4 pb-3 flex items-start justify-between gap-3 flex-wrap">
           <div>
             <p className="text-sm font-extrabold text-slate-900">일별 원본 현황</p>
-            <p className="text-[10px] text-slate-400 mt-1">{isMeta ? "원본_메타광고 시트" : "NAVER-GOOGLE 시트"}의 일별 행을 그대로 요약합니다. 최신일자는 금액이 입력된 마지막 유효행 기준입니다.</p>
+            <p className="text-[10px] text-slate-400 mt-1">{isMeta ? "META 광고 API" : "NAVER·GOOGLE 광고 API"}의 일별 수집값을 요약합니다. 최신일자는 검증을 통과해 저장된 마지막 날짜 기준입니다.</p>
           </div>
           <div className="text-right">
             <span className={"inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-black " + (lagDays == null ? "border-amber-200 bg-amber-50 text-amber-700" : lagDays <= 1 ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-rose-200 bg-rose-50 text-rose-700")}>
@@ -5407,17 +5415,17 @@ function MarketingPlatformDetail({ kind }) {
             <p className="text-[10px] font-black text-slate-700">{pLabel(period)} 일평균</p>
             <p className="text-[9px] font-bold text-slate-400">데이터 입력일 {dailyAverage.days}일 기준 · CPL은 선택 기간 합계 기준</p>
           </div>
-          <div className={"grid divide-x divide-slate-200 " + (isMeta ? "grid-cols-9 min-w-[1160px]" : "grid-cols-6 min-w-[760px]")}>
+          <div className={"grid divide-x divide-slate-200 " + (isMeta ? "grid-cols-10 min-w-[1280px]" : "grid-cols-6 min-w-[760px]")}>
             {dailyAverage.items.map((item) => <div key={item.label} className="px-3 py-2.5 text-right"><p className="text-[9px] font-bold text-slate-400">{item.label.includes("CPL") ? item.label : "일평균 " + item.label}</p><p className={"mt-1 text-sm font-black tabular-nums " + item.tone}>{item.value}</p></div>)}
           </div>
         </div>
         <div className="overflow-x-auto">
           {isMeta ? (
-            <table className="w-full min-w-[1360px] text-xs">
-              <thead><tr className="bg-slate-50 border-y border-slate-100 text-[10px] text-slate-400"><th className="px-4 py-2.5 text-left">일자</th><th className="px-3 py-2.5 text-right">총 광고비</th><th className="px-3 py-2.5 text-right text-indigo-500">잠재고객</th><th className="px-3 py-2.5 text-right text-slate-500">트래픽 합계</th><th className="px-3 py-2.5 text-right text-cyan-600">포켓 트래픽</th><th className="px-3 py-2.5 text-right text-sky-500">빌더진 트래픽</th><th className="px-3 py-2.5 text-right">노출</th><th className="px-3 py-2.5 text-right">클릭</th><th className="px-3 py-2.5 text-right">CRM 문의</th><th className="px-3 py-2.5 text-right">매체 문의전환</th><th className="px-3 py-2.5 text-right">잠재고객 CPL</th><th className="px-3 py-2.5 text-right">CTR</th><th className="px-4 py-2.5 text-right">CPC</th></tr></thead>
+            <table className="w-full min-w-[1460px] text-xs">
+              <thead><tr className="bg-slate-50 border-y border-slate-100 text-[10px] text-slate-400"><th className="px-4 py-2.5 text-left">일자</th><th className="px-3 py-2.5 text-right">총 광고비</th><th className="px-3 py-2.5 text-right text-indigo-500">잠재고객</th><th className="px-3 py-2.5 text-right text-slate-500">트래픽 합계</th><th className="px-3 py-2.5 text-right text-cyan-600">포켓 트래픽</th><th className="px-3 py-2.5 text-right text-sky-500">빌더진 트래픽</th><th className="px-3 py-2.5 text-right text-slate-400">기타</th><th className="px-3 py-2.5 text-right">노출</th><th className="px-3 py-2.5 text-right">클릭</th><th className="px-3 py-2.5 text-right">CRM 문의</th><th className="px-3 py-2.5 text-right">매체 문의전환</th><th className="px-3 py-2.5 text-right">잠재고객 CPL</th><th className="px-3 py-2.5 text-right">CTR</th><th className="px-4 py-2.5 text-right">CPC</th></tr></thead>
               <tbody>
-                {selectedDailyRows.map((x) => <tr key={x.date} className={"border-b border-slate-100 " + (x.date === latestSourceDate ? "bg-emerald-50/60" : "hover:bg-slate-50")}><td className="px-4 py-2.5 font-extrabold text-slate-800">{x.date}</td><td className="px-3 py-2.5 text-right font-black tabular-nums">{fmtK(x.spend)}원</td><td className="px-3 py-2.5 text-right font-bold text-indigo-700 tabular-nums">{x.leadSpend != null ? fmtK(x.leadSpend) + "원" : "-"}</td><td className="px-3 py-2.5 text-right font-bold text-slate-700 tabular-nums">{x.trafficSpend != null ? fmtK(x.trafficSpend) + "원" : "-"}</td><td className="px-3 py-2.5 text-right font-bold text-cyan-700 tabular-nums">{x.trafficDetailReady ? fmtK(x.pocketTrafficSpend) + "원" : "분리 전"}</td><td className="px-3 py-2.5 text-right font-bold text-sky-700 tabular-nums">{x.trafficDetailReady ? fmtK(x.builderTrafficSpend) + "원" : "분리 전"}</td><td className="px-3 py-2.5 text-right tabular-nums text-slate-600">{Number(x.impressions || 0).toLocaleString()}</td><td className="px-3 py-2.5 text-right tabular-nums text-slate-600">{Number(x.clicks || 0).toLocaleString()}</td><td className="px-3 py-2.5 text-right font-bold text-indigo-700">{x.crm || 0}</td><td className="px-3 py-2.5 text-right font-bold text-sky-700">{x.media || 0}</td><td className="px-3 py-2.5 text-right font-bold text-amber-700">{x.crm && x.leadSpend != null ? fmtK(x.leadSpend / x.crm) + "원" : "-"}</td><td className="px-3 py-2.5 text-right tabular-nums">{Number(x.ctr || 0).toFixed(2)}%</td><td className="px-4 py-2.5 text-right tabular-nums">{Number(x.cpc || 0).toLocaleString()}원</td></tr>)}
-                {!selectedDailyRows.length && <tr><td colSpan="13" className="px-4 py-10 text-center text-xs text-slate-400">일별 데이터가 아직 전달되지 않았습니다. Apps Script 최신 코드 배포가 필요합니다.</td></tr>}
+                {selectedDailyRows.map((x) => <tr key={x.date} className={"border-b border-slate-100 " + (x.date === latestSourceDate ? "bg-emerald-50/60" : "hover:bg-slate-50")}><td className="px-4 py-2.5 font-extrabold text-slate-800">{x.date}</td><td className="px-3 py-2.5 text-right font-black tabular-nums">{fmtK(x.spend)}원</td><td className="px-3 py-2.5 text-right font-bold text-indigo-700 tabular-nums">{x.leadSpend != null ? fmtK(x.leadSpend) + "원" : "-"}</td><td className="px-3 py-2.5 text-right font-bold text-slate-700 tabular-nums">{x.trafficSpend != null ? fmtK(x.trafficSpend) + "원" : "-"}</td><td className="px-3 py-2.5 text-right font-bold text-cyan-700 tabular-nums">{x.trafficDetailReady ? fmtK(x.pocketTrafficSpend) + "원" : "분리 전"}</td><td className="px-3 py-2.5 text-right font-bold text-sky-700 tabular-nums">{x.trafficDetailReady ? fmtK(x.builderTrafficSpend) + "원" : "분리 전"}</td><td className="px-3 py-2.5 text-right font-bold text-slate-500 tabular-nums">{x.otherSpend != null ? fmtK(x.otherSpend) + "원" : "-"}</td><td className="px-3 py-2.5 text-right tabular-nums text-slate-600">{Number(x.impressions || 0).toLocaleString()}</td><td className="px-3 py-2.5 text-right tabular-nums text-slate-600">{Number(x.clicks || 0).toLocaleString()}</td><td className="px-3 py-2.5 text-right font-bold text-indigo-700">{x.crm || 0}</td><td className="px-3 py-2.5 text-right font-bold text-sky-700">{x.media || 0}</td><td className="px-3 py-2.5 text-right font-bold text-amber-700">{x.crm && x.leadSpend != null ? fmtK(x.leadSpend / x.crm) + "원" : "-"}</td><td className="px-3 py-2.5 text-right tabular-nums">{Number(x.ctr || 0).toFixed(2)}%</td><td className="px-4 py-2.5 text-right tabular-nums">{Number(x.cpc || 0).toLocaleString()}원</td></tr>)}
+                {!selectedDailyRows.length && <tr><td colSpan="14" className="px-4 py-10 text-center text-xs text-slate-400">일별 데이터가 아직 전달되지 않았습니다.</td></tr>}
               </tbody>
             </table>
           ) : (
@@ -5431,7 +5439,7 @@ function MarketingPlatformDetail({ kind }) {
           )}
         </div>
       </Card>
-      <p className="text-[10px] text-slate-400 px-1">META 비용은 잠재고객·포켓 트래픽·빌더진 트래픽으로 분리합니다. 포켓/빌더진 판정은 트래픽 캠페인군에서 캠페인명 ‘빌더진’ 포함 여부를 사용하며, 노출·클릭·문의·CTR·CPC는 원본 시트의 전체 합계입니다.</p>
+      <p className="text-[10px] text-slate-400 px-1">META 비용은 캠페인 목적과 이름을 함께 사용해 잠재고객·포켓 트래픽·빌더진 트래픽·기타로 분리합니다. 트래픽 목적에서 캠페인명에 ‘빌더진’이 있으면 빌더진, 없으면 포켓 트래픽이며 어떤 규칙에도 맞지 않는 비용은 숨기지 않고 기타로 표시합니다.</p>
     </div>
   );
 }

@@ -37,8 +37,13 @@ async function fetchJson(url: string, init: RequestInit, label: string) {
   let body: any = {};
   try { body = text ? JSON.parse(text) : {}; } catch { throw new Error(`${label}_invalid_json_${response.status}`); }
   if (!response.ok || body?.error) {
-    const code = body?.error?.code || body?.errorCode || response.status;
-    throw new Error(`${label}_http_${code}`);
+    const errorBody = (Array.isArray(body) ? body[0]?.error : body?.error) || {};
+    const code = errorBody.code || body?.errorCode || response.status;
+    const providerError = errorBody?.details?.[0]?.errors?.[0] || errorBody?.errors?.[0] || {};
+    const reason = Object.entries(providerError.errorCode || {}).map(([key, value]) => `${key}:${value}`).join(",")
+      || errorBody.status || errorBody.message || "request_failed";
+    const safeReason = String(reason).replace(/[^A-Za-z0-9가-힣:_., -]/g, "").slice(0, 180).replace(/\s+/g, "_");
+    throw new Error(`${label}_http_${code}_${safeReason}`);
   }
   return body;
 }
@@ -52,8 +57,17 @@ function metaConversions(actions: any[]) {
 async function collectMeta(config: Record<string, string>, start: string, end: string) {
   const account = String(config.MK_META_AD_ACCOUNT_ID || "").replace(/^act_/, "");
   const version = config.MK_META_GRAPH_VERSION || "v25.0";
-  const traffic = new RegExp(config.MK_META_TRAFFIC_PATTERN || "트래픽|traffic|소셜임팩트", "i");
-  const builder = new RegExp(config.MK_META_BUILDER_PATTERN || "빌더진", "i");
+  const traffic = new RegExp(config.MK_META_TRAFFIC_PATTERN || "트래픽|traffic", "i");
+  const builder = new RegExp(config.MK_META_BUILDER_PATTERN || "빌더진|builderjin", "i");
+  const lead = new RegExp(config.MK_META_LEAD_PATTERN || "잠재|리드|lead|전환|conversion|문의|홈페이지", "i");
+  const objectives = new Map<string, string>();
+  let campaignNext = `https://graph.facebook.com/${version}/act_${encodeURIComponent(account)}/campaigns?fields=${encodeURIComponent("id,objective")}&limit=500`;
+  for (let page = 0; campaignNext && page < 50; page++) {
+    const body = await fetchJson(campaignNext, { headers: { authorization: `Bearer ${config.MK_META_ACCESS_TOKEN}` } }, "meta_campaigns");
+    for (const row of Array.isArray(body.data) ? body.data : []) objectives.set(String(row.id || ""), String(row.objective || ""));
+    campaignNext = body?.paging?.next || "";
+  }
+  if (!objectives.size) throw new Error("meta_no_campaigns");
   const fields = "date_start,campaign_id,campaign_name,spend,impressions,clicks,actions";
   let next = `https://graph.facebook.com/${version}/act_${encodeURIComponent(account)}/insights?fields=${encodeURIComponent(fields)}&level=campaign&time_increment=1&time_range=${encodeURIComponent(JSON.stringify({ since: start, until: end }))}&limit=500`;
   const insights: any[] = [];
@@ -62,15 +76,29 @@ async function collectMeta(config: Record<string, string>, start: string, end: s
     insights.push(...(Array.isArray(body.data) ? body.data : []));
     next = body?.paging?.next || "";
   }
-  return insights.map((row) => {
+  const rows: any[] = insights.map((row) => {
     const name = String(row.campaign_name || "");
-    const channel = builder.test(name) ? "META_BUILDER_TRAFFIC" : traffic.test(name) ? "META_POCKET_TRAFFIC" : "META_LEAD";
+    const objective = String(objectives.get(String(row.campaign_id || "")) || "").toUpperCase();
+    const isTraffic = traffic.test(name) || objective.includes("TRAFFIC") || objective === "LINK_CLICKS";
+    const isLead = lead.test(name) || objective.includes("LEAD") || objective.includes("SALES") || objective.includes("CONVERSION");
+    const channel = isTraffic
+      ? (builder.test(name) ? "META_BUILDER_TRAFFIC" : "META_POCKET_TRAFFIC")
+      : isLead ? "META_LEAD" : "META_OTHER";
     return { spend_date: row.date_start, provider: "META", channel_code: channel,
       campaign_external_id: String(row.campaign_id || "") || null, campaign_name: name,
       spend_amount: n(row.spend), impressions: n(row.impressions), clicks: n(row.clicks), conversions: metaConversions(row.actions),
       source_row_key: `edge:meta:${row.date_start}:${row.campaign_id || name}`,
-      payload: { collector: "supabase-edge", campaignClass: channel }, archived_at: null };
+      payload: { collector: "supabase-edge", campaignClass: channel, objective }, archived_at: null };
   });
+  const dates = new Set(rows.map((row) => row.spend_date));
+  for (const date of dateRange(start, end)) if (!dates.has(date)) rows.push({
+    spend_date: date, provider: "META", channel_code: "META_OTHER",
+    campaign_external_id: null, campaign_name: null, spend_amount: 0,
+    impressions: 0, clicks: 0, conversions: 0,
+    source_row_key: `edge:meta:${date}:no-spend`,
+    payload: { collector: "supabase-edge", campaignClass: "META_OTHER", zeroFill: true }, archived_at: null,
+  });
+  return rows;
 }
 
 async function hmacBase64(secret: string, message: string) {
@@ -119,11 +147,14 @@ async function collectGoogle(config: Record<string, string>, start: string, end:
     refresh_token: config.MK_GOOGLE_REFRESH_TOKEN, grant_type: "refresh_token" });
   const oauth = await fetchJson("https://oauth2.googleapis.com/token", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: oauthBody }, "google_oauth");
   const customer = String(config.MK_GOOGLE_CUSTOMER_ID || "").replace(/-/g, "");
-  const query = `SELECT segments.date, campaign.id, metrics.cost_micros, metrics.impressions, metrics.clicks, metrics.conversions FROM campaign WHERE segments.date BETWEEN '${start}' AND '${end}'`;
   const headers: Record<string, string> = { authorization: `Bearer ${oauth.access_token}`, "developer-token": config.MK_GOOGLE_DEVELOPER_TOKEN, "content-type": "application/json" };
   const login = String(config.MK_GOOGLE_LOGIN_CUSTOMER_ID || "").replace(/-/g, "");
   if (login) headers["login-customer-id"] = login;
-  const body = await fetchJson(`https://googleads.googleapis.com/${config.MK_GOOGLE_API_VERSION || "v25"}/customers/${customer}/googleAds:searchStream`, { method: "POST", headers, body: JSON.stringify({ query }) }, "google_ads");
+  const version = config.MK_GOOGLE_API_VERSION || "v25";
+  const query = `SELECT segments.date, campaign.id, metrics.cost_micros, metrics.impressions, metrics.clicks, metrics.conversions FROM campaign WHERE segments.date BETWEEN '${start}' AND '${end}'`;
+  const body = await fetchJson(`https://googleads.googleapis.com/${version}/customers/${customer}/googleAds:searchStream`, {
+    method: "POST", headers, body: JSON.stringify({ query }),
+  }, "google_ads");
   const daily = new Map<string, any>();
   for (const batch of Array.isArray(body) ? body : [body]) for (const row of batch?.results || []) {
     const date = String(row?.segments?.date || ""); const metrics = row?.metrics || {};
@@ -136,7 +167,7 @@ async function collectGoogle(config: Record<string, string>, start: string, end:
     return { spend_date: date, provider: "GOOGLE_ADS", channel_code: "GOOGLE", campaign_external_id: null,
       campaign_name: null, spend_amount: row.spend, impressions: row.impressions, clicks: row.clicks,
       conversions: row.conversions, source_row_key: `edge:google:${date}`,
-      payload: { collector: "supabase-edge" }, archived_at: null };
+      payload: { collector: "supabase-edge", customerId: customer }, archived_at: null };
   });
 }
 
@@ -145,6 +176,35 @@ const required: Record<string, string[]> = {
   NAVER: ["MK_NAVER_API_KEY", "MK_NAVER_SECRET_KEY", "MK_NAVER_CUSTOMER_ID"],
   GOOGLE_ADS: ["MK_GOOGLE_CLIENT_ID", "MK_GOOGLE_CLIENT_SECRET", "MK_GOOGLE_REFRESH_TOKEN", "MK_GOOGLE_DEVELOPER_TOKEN", "MK_GOOGLE_CUSTOMER_ID"],
 };
+
+const allowedChannels: Record<string, Set<string>> = {
+  META: new Set(["META_LEAD", "META_POCKET_TRAFFIC", "META_BUILDER_TRAFFIC", "META_OTHER"]),
+  NAVER: new Set(["NAVER"]),
+  GOOGLE_ADS: new Set(["GOOGLE"]),
+};
+
+function validateRows(provider: string, rows: any[], start: string, end: string, previousAmount: number) {
+  const expectedDates = dateRange(start, end);
+  const actualDates = new Set<string>();
+  let amount = 0;
+  for (const row of rows) {
+    const date = String(row.spend_date || "");
+    const spend = Number(row.spend_amount);
+    if (date < start || date > end || row.provider !== provider || !allowedChannels[provider]?.has(String(row.channel_code || ""))) {
+      throw new Error(`${provider.toLowerCase()}_invalid_row`);
+    }
+    if (!String(row.source_row_key || "") || !Number.isFinite(spend) || spend < 0) throw new Error(`${provider.toLowerCase()}_invalid_metric`);
+    for (const value of [row.impressions, row.clicks, row.conversions]) if (!Number.isFinite(Number(value || 0)) || Number(value || 0) < 0) {
+      throw new Error(`${provider.toLowerCase()}_invalid_metric`);
+    }
+    actualDates.add(date);
+    amount += spend;
+  }
+  const missingDates = expectedDates.filter((date) => !actualDates.has(date));
+  if (missingDates.length) throw new Error(`${provider.toLowerCase()}_date_coverage_${missingDates.length}`);
+  if (amount === 0 && previousAmount > 0) throw new Error(`${provider.toLowerCase()}_zero_regression`);
+  return { amount, days: actualDates.size, rows: rows.length, channels: [...new Set(rows.map((row) => row.channel_code))].sort() };
+}
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
@@ -195,20 +255,24 @@ Deno.serve(async (req) => {
     }
     try {
       const rows = await collect();
-      await client.from("marketing_daily_spend").update({ archived_at: new Date().toISOString() })
-        .eq("organization_id", organizationId).eq("provider", provider).gte("spend_date", start).lte("spend_date", end)
-        .eq("payload->>collector", "supabase-edge");
-      const prepared = rows.map((row) => ({ ...row, organization_id: organizationId, projected_revision: null, updated_at: new Date().toISOString() }));
-      const { error } = await client.from("marketing_daily_spend").upsert(prepared, { onConflict: "organization_id,provider,spend_date,campaign_external_id,source_row_key" });
-      if (error) throw new Error(`upsert_${error.code}`);
-      const amount = rows.reduce((sum, row) => sum + n(row.spend_amount), 0);
-      const { error: stateError } = await client.from("provider_sync_state").upsert({ organization_id: organizationId, provider,
-        status: "SUCCESS", checkpoint: { start, end, collector: "supabase-edge" }, last_attempt_at: attemptedAt,
-        last_success_at: new Date().toISOString(), latest_source_date: end, row_count: rows.length,
-        amount_total: amount, error_code: null, error_detail: null, updated_at: new Date().toISOString(),
-      }, { onConflict: "organization_id,provider" });
-      if (stateError) throw new Error(`sync_state_${stateError.code}`);
-      results[provider] = { ok: true, rows: rows.length, amount, latestDate: end };
+      const { data: previousRows, error: previousError } = await client.from("marketing_daily_spend")
+        .select("spend_amount").eq("organization_id", organizationId).eq("provider", provider)
+        .gte("spend_date", start).lte("spend_date", end).is("archived_at", null);
+      if (previousError) throw new Error(`baseline_${previousError.code}`);
+      const previousAmount = (previousRows || []).reduce((sum, row) => sum + n(row.spend_amount), 0);
+      const validation = validateRows(provider, rows, start, end, previousAmount);
+      const runId = crypto.randomUUID();
+      const { data: committed, error: commitError } = await client.rpc("kpi_commit_marketing_provider", {
+        p_organization_id: organizationId,
+        p_provider: provider,
+        p_run_id: runId,
+        p_start: start,
+        p_end: end,
+        p_rows: rows,
+        p_checkpoint: { collector: "supabase-edge", validation, previousAmount },
+      });
+      if (commitError || !committed?.ok) throw new Error(`atomic_commit_${commitError?.code || "failed"}`);
+      results[provider] = { ok: true, rows: validation.rows, amount: validation.amount, latestDate: end, channels: validation.channels, runId };
     } catch (error) {
       const detail = String(error instanceof Error ? error.message : error).slice(0, 500);
       await client.from("provider_sync_state").upsert({ organization_id: organizationId, provider, status: "FAILED",
@@ -219,6 +283,6 @@ Deno.serve(async (req) => {
     }
   }
   const { data: finalized } = await client.rpc("kpi_finalize_marketing_sync", { p_organization_id: organizationId });
-  const ok = Object.values(results).some((result: any) => result.ok);
-  return json({ ok, start, end, results, finalized, backendVersion: "2026-09-10-marketing-edge-v2" }, ok ? 200 : 502);
+  const ok = Object.keys(collectors).every((provider) => results[provider]?.ok === true);
+  return json({ ok, start, end, results, finalized, backendVersion: "2026-09-10-marketing-edge-v3" }, ok ? 200 : 502);
 });

@@ -35,7 +35,7 @@ function buildMarketing(rows: any[], syncRows: any[]) {
     const key = `${provider}:${row.spend_date}`;
     const target = byProviderDate.get(key) || {
       date: row.spend_date, spend: 0, impressions: 0, clicks: 0, crm: 0,
-      leadSpend: 0, trafficSpend: 0, pocketTrafficSpend: 0, builderTrafficSpend: 0,
+      leadSpend: 0, trafficSpend: 0, pocketTrafficSpend: 0, builderTrafficSpend: 0, otherSpend: 0,
       trafficDetailReady: provider === "META",
     };
     const spend = number(row.spend_amount);
@@ -46,6 +46,7 @@ function buildMarketing(rows: any[], syncRows: any[]) {
     if (row.channel_code === "META_LEAD") target.leadSpend += spend;
     if (row.channel_code === "META_POCKET_TRAFFIC") target.pocketTrafficSpend += spend;
     if (row.channel_code === "META_BUILDER_TRAFFIC") target.builderTrafficSpend += spend;
+    if (row.channel_code === "META_OTHER") target.otherSpend += spend;
     if (String(row.channel_code).includes("TRAFFIC")) target.trafficSpend += spend;
     byProviderDate.set(key, target);
   }
@@ -61,6 +62,22 @@ function buildMarketing(rows: any[], syncRows: any[]) {
       marketingSpend[month][provider] += number(row.spend);
     }
   }
+  const metaCampaigns: Record<string, any> = {};
+  for (const row of marketingDaily.META) {
+    const month = monthKey(row.date);
+    const target = metaCampaigns[month] || {
+      lead: 0, traffic: 0, pocketTraffic: 0, builderTraffic: 0, other: 0,
+      rows: 0, detailedRows: 0,
+    };
+    target.lead += number(row.leadSpend);
+    target.traffic += number(row.trafficSpend);
+    target.pocketTraffic += number(row.pocketTrafficSpend);
+    target.builderTraffic += number(row.builderTrafficSpend);
+    target.other += number(row.otherSpend);
+    target.rows += 1;
+    target.detailedRows += row.trafficDetailReady ? 1 : 0;
+    metaCampaigns[month] = target;
+  }
   const sources = Object.fromEntries((syncRows || []).map((row) => [row.provider === "GOOGLE_ADS" ? "GOOGLE" : row.provider, {
     status: row.status, lastAttemptAt: row.last_attempt_at, lastSuccessAt: row.last_success_at,
     latestDate: row.latest_source_date, rows: row.row_count, amount: number(row.amount_total),
@@ -72,7 +89,10 @@ function buildMarketing(rows: any[], syncRows: any[]) {
   return {
     marketingSpend,
     marketingDaily,
-    marketingMeta: { schema: "supabase-marketing-v1", backendVersion: "2026-09-09-domain-v1", latestDate, sources },
+    marketingMeta: {
+      schema: "supabase-marketing-v2", backendVersion: "2026-09-10-domain-v2", latestDate, sources,
+      campaigns: { META: metaCampaigns },
+    },
   };
 }
 
@@ -97,7 +117,7 @@ Deno.serve(async (req) => {
       supabase.from("provider_sync_state").select("provider,status,last_success_at,latest_source_date,error_code").eq("organization_id", organizationId),
     ]);
     if (currentError || projectionError || syncError) return reply(req, { error: "meta_read_failed" }, 500);
-    return reply(req, { ok: true, storageVersion: 2, mutationVersion: 3, backendVersion: "2026-09-09-domain-v1",
+    return reply(req, { ok: true, storageVersion: 2, mutationVersion: 3, backendVersion: "2026-09-10-domain-v2",
       revision: current?.primary_revision || "", updatedAt: current?.updated_at, projection, providerSync: sync || [] });
   }
 
