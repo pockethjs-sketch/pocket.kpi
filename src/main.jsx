@@ -246,7 +246,9 @@ import { shadowStatusFromSheetsResult } from "./data/repositoryAdapter.js";
     crmApplyRemoteEnvelope(meta);
     var marketingPromise = crmFetchDomainAction('marketing', { timeoutMs: 20000 }).then(function (marketing) {
       var sources = marketing && marketing.marketingMeta && marketing.marketingMeta.sources || {};
-      var directReady = Object.keys(sources).some(function (source) { return sources[source] && sources[source].status === 'SUCCESS'; });
+      var directReady = ['META', 'NAVER', 'GOOGLE'].every(function (source) {
+        return sources[source] && sources[source].status === 'SUCCESS';
+      });
       if (directReady) return marketing;
       /* Vault 자격증명 이관 전에는 기존 수집기를 유지합니다. 첫 직접 수집 성공 뒤에는
          공급자 상태가 SUCCESS가 되어 이 폴백을 자동으로 건너뜁니다. */
