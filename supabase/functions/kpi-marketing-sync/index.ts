@@ -177,7 +177,22 @@ Deno.serve(async (req) => {
   for (const [provider, collect] of Object.entries(collectors)) {
     const missing = required[provider].filter((key) => !String(config[key] || "").trim());
     const attemptedAt = new Date().toISOString();
-    if (missing.length) { results[provider] = { ok: false, error: "not_configured", missing }; continue; }
+    if (missing.length) {
+      const { error: stateError } = await client.from("provider_sync_state").upsert({
+        organization_id: organizationId,
+        provider,
+        status: "DISABLED",
+        checkpoint: { start, end, collector: "supabase-edge", missingCredentialCount: missing.length },
+        last_attempt_at: attemptedAt,
+        error_code: "missing_credentials",
+        error_detail: `${missing.length} required credential(s) are not configured`,
+        updated_at: attemptedAt,
+      }, { onConflict: "organization_id,provider" });
+      results[provider] = stateError
+        ? { ok: false, error: "sync_state_failed", code: stateError.code }
+        : { ok: false, error: "not_configured", missing };
+      continue;
+    }
     try {
       const rows = await collect();
       await client.from("marketing_daily_spend").update({ archived_at: new Date().toISOString() })
@@ -205,5 +220,5 @@ Deno.serve(async (req) => {
   }
   const { data: finalized } = await client.rpc("kpi_finalize_marketing_sync", { p_organization_id: organizationId });
   const ok = Object.values(results).some((result: any) => result.ok);
-  return json({ ok, start, end, results, finalized, backendVersion: "2026-09-09-marketing-edge-v1" }, ok ? 200 : 502);
+  return json({ ok, start, end, results, finalized, backendVersion: "2026-09-10-marketing-edge-v2" }, ok ? 200 : 502);
 });

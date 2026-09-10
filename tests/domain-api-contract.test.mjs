@@ -39,3 +39,13 @@ test("marketing collection runs in Edge, separates Meta campaign classes, and pr
   assert.match(frontend, /directReady[\s\S]*crmFetchSheetAction\('marketing'/);
   assert.match(frontend, /\['META', 'NAVER', 'GOOGLE'\]\.every/);
 });
+
+test("marketing sync records missing credentials without overwriting the last successful snapshot", () => {
+  assert.match(marketing, /status:\s*"DISABLED"/);
+  assert.match(marketing, /error_code:\s*"missing_credentials"/);
+  assert.match(marketing, /missingCredentialCount/);
+  const missingBranch = marketing.match(/if \(missing\.length\) \{([\s\S]*?)continue;/)?.[1] || "";
+  assert.doesNotMatch(missingBranch, /last_success_at/);
+  assert.doesNotMatch(missingBranch, /latest_source_date/);
+  assert.doesNotMatch(missingBranch, /amount_total/);
+});
