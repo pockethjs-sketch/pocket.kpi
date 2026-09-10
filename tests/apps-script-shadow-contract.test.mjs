@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const code = await readFile(new URL("../../pocket-kpi-deploy/Code.gs", import.meta.url), "utf8");
+const calendar = await readFile(new URL("../../pocket-kpi-deploy/crm_lead.gs", import.meta.url), "utf8");
 const frontend = await readFile(new URL("../src/main.jsx", import.meta.url), "utf8");
 
 test("Apps Script commits Supabase primary without synchronous Sheets writes", () => {
@@ -49,6 +50,20 @@ test("state route does not read unused Sheets metadata before Supabase", () => {
   const stateStart = code.indexOf("if (action === 'state')");
   const stateEnd = code.indexOf("var marketing =", stateStart);
   assert.doesNotMatch(code.slice(stateStart, stateEnd), /_crmReadMeta\(\)/);
+});
+
+test("calendar synchronization and mutation baselines use Supabase primary, not Sheets A/B", () => {
+  const calendarStart = calendar.indexOf("function syncPremeetings()");
+  const calendarEnd = calendar.indexOf("lock.releaseLock()", calendarStart);
+  const calendarBody = calendar.slice(calendarStart, calendarEnd);
+  assert.match(calendarBody, /_crmReadSupabasePrimaryEnvelope_\(\)/);
+  assert.doesNotMatch(calendarBody, /_crmReadStateEnvelope\(\)/);
+
+  const saveStart = code.indexOf("function _crmSaveMutationV2(body)");
+  const saveEnd = code.indexOf("function _crmShadowConfig_", saveStart);
+  const saveBody = code.slice(saveStart, saveEnd);
+  assert.match(saveBody, /_crmReadSupabasePrimaryEnvelope_\(\)/);
+  assert.doesNotMatch(saveBody, /_crmReadStateEnvelope\(\)/);
 });
 
 test("public frontend does not embed a CRM bearer token", () => {

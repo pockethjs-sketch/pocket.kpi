@@ -45,8 +45,13 @@ test("marketing collection runs in Edge, separates all Meta campaign classes, an
   assert.match(marketing, /kpi_commit_marketing_provider/);
   assert.match(migration, /payload->>'collector'='supabase-edge'/);
   assert.match(config, /\[functions\.kpi-marketing-sync\][\s\S]*verify_jwt = true/);
-  assert.match(frontend, /directReady[\s\S]*crmFetchSheetAction\('marketing'/);
-  assert.match(frontend, /\['META', 'NAVER', 'GOOGLE'\]\.every/);
+  const domainMarketingStart = frontend.indexOf("crmFetchDomainAction('marketing'");
+  const domainMarketingEnd = frontend.indexOf("var unchanged", domainMarketingStart);
+  const domainMarketingLoader = frontend.slice(domainMarketingStart, domainMarketingEnd);
+  assert.ok(domainMarketingStart >= 0);
+  assert.doesNotMatch(domainMarketingLoader, /crmFetchSheetAction\('marketing'/);
+  assert.doesNotMatch(domainMarketingLoader, /directReady/);
+  assert.match(domainMarketingLoader, /crmApplyMarketingEnvelope/);
 });
 
 test("direct provider writes validate complete coverage and commit atomically", () => {

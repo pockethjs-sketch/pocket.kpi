@@ -245,14 +245,9 @@ import { shadowStatusFromSheetsResult } from "./data/repositoryAdapter.js";
     var meta = await crmFetchDomainAction('meta', { timeoutMs: 15000 });
     crmApplyRemoteEnvelope(meta);
     var marketingPromise = crmFetchDomainAction('marketing', { timeoutMs: 20000 }).then(function (marketing) {
-      var sources = marketing && marketing.marketingMeta && marketing.marketingMeta.sources || {};
-      var directReady = ['META', 'NAVER', 'GOOGLE'].every(function (source) {
-        return sources[source] && sources[source].status === 'SUCCESS';
-      });
-      if (directReady) return marketing;
-      /* Vault 자격증명 이관 전에는 기존 수집기를 유지합니다. 첫 직접 수집 성공 뒤에는
-         공급자 상태가 SUCCESS가 되어 이 폴백을 자동으로 건너뜁니다. */
-      return crmFetchSheetAction('marketing', 20000).catch(function () { return marketing; });
+      /* 공급자 상태가 FAILED/DISABLED여도 Supabase에는 마지막 원자 커밋된 정상 일별값이
+         남아 있습니다. 상태 오류만으로 오래된 Sheets 광고값으로 후퇴하지 않습니다. */
+      return marketing;
     }).then(function (marketing) {
       crmApplyMarketingEnvelope(marketing); window.crmMarketingError = ''; return marketing;
     }).catch(function (error) {
