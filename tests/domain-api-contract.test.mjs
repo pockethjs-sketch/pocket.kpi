@@ -10,6 +10,7 @@ const migration = await readFile(new URL("../supabase/migrations/20260909031054_
 const atomicMarketingMigration = await readFile(new URL("../supabase/migrations/20260910153000_marketing_atomic_provider_commit.sql", import.meta.url), "utf8");
 const marketingCronMigration = await readFile(new URL("../supabase/migrations/20260910160000_marketing_cron_timeout.sql", import.meta.url), "utf8");
 const marketingDailyCronMigration = await readFile(new URL("../supabase/migrations/20260911023801_reduce_marketing_sync_to_daily.sql", import.meta.url), "utf8");
+const activeDealJoinMigration = await readFile(new URL("../supabase/migrations/20260911063801_fix_active_deal_projection_joins.sql", import.meta.url), "utf8");
 const config = await readFile(new URL("../supabase/config.toml", import.meta.url), "utf8");
 
 test("frontend reads domain endpoints and writes mutations without a whole state upload", () => {
@@ -45,6 +46,21 @@ test("contract and balance state is relationally projected while compatibility s
   assert.match(migration, /d\.lead,/);
   assert.match(migration, /app_state_daily_checkpoints/);
   assert.match(migration, /commit_primary_mutation/);
+});
+
+test("deal projection joins only active account and lead rows", () => {
+  assert.match(activeDealJoinMigration, /accounts[\s\S]*archived_at is null/);
+  assert.match(activeDealJoinMigration, /leads[\s\S]*archived_at is null/);
+  assert.match(frontend, /CRM 변경 저장 실패/);
+  assert.match(frontend, /e\.payload && e\.payload\.code/);
+});
+
+test("CRM refresh does not rewrite unchanged ordering and sync timestamps", () => {
+  assert.match(frontend, /function crmDeepEqual/);
+  assert.match(frontend, /if \(crmDeepEqual\(before, after\)\) return ops/);
+  assert.match(frontend, /previousRow\.order != null/);
+  assert.match(frontend, /row\.syncedAt = previousRow\.syncedAt/);
+  assert.match(frontend, /nextQuality\.updatedAt = previousQuality\.updatedAt/);
 });
 
 test("marketing collection runs in Edge, separates all Meta campaign classes, and protects direct rows", () => {

@@ -381,8 +381,25 @@ import { shadowStatusFromSheetsResult } from "./data/repositoryAdapter.js";
   function crmIsPlainObject(value) {
     return !!value && typeof value === 'object' && !Array.isArray(value);
   }
+  function crmDeepEqual(left, right) {
+    if (left === right) return true;
+    if (left == null || right == null || typeof left !== typeof right) return false;
+    if (Array.isArray(left) || Array.isArray(right)) {
+      if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return false;
+      for (var index = 0; index < left.length; index += 1) if (!crmDeepEqual(left[index], right[index])) return false;
+      return true;
+    }
+    if (!crmIsPlainObject(left) || !crmIsPlainObject(right)) return false;
+    var leftKeys = Object.keys(left), rightKeys = Object.keys(right);
+    if (leftKeys.length !== rightKeys.length) return false;
+    for (var keyIndex = 0; keyIndex < leftKeys.length; keyIndex += 1) {
+      var key = leftKeys[keyIndex];
+      if (!Object.prototype.hasOwnProperty.call(right, key) || !crmDeepEqual(left[key], right[key])) return false;
+    }
+    return true;
+  }
   function crmCollectPatchOps(before, after, path, ops) {
-    if (JSON.stringify(before) === JSON.stringify(after)) return ops;
+    if (crmDeepEqual(before, after)) return ops;
     if (!crmIsPlainObject(before) || !crmIsPlainObject(after)) {
       ops.push({ op: 'set', path: path.slice(), value: crmCloneValue(after) });
       return ops;
@@ -532,7 +549,7 @@ import { shadowStatusFromSheetsResult } from "./data/repositoryAdapter.js";
         (after || []).forEach(function (item) { afterMap[String(item[idField])] = item; });
         Object.keys(afterMap).forEach(function (id) {
           if (!beforeMap[id]) upsert.push(afterMap[id]);
-          else if (JSON.stringify(beforeMap[id]) !== JSON.stringify(afterMap[id])) {
+          else if (!crmDeepEqual(beforeMap[id], afterMap[id])) {
             var ops = crmCollectPatchOps(beforeMap[id], afterMap[id], [], []);
             if (ops.length) patches.push({ id: id, ops: ops });
           }
@@ -550,7 +567,7 @@ import { shadowStatusFromSheetsResult } from "./data/repositoryAdapter.js";
       if (!(key in next)) {
         mutation.deleteDocuments.push(key);
         mutation.changedCount += 1;
-      } else if (JSON.stringify(before) !== JSON.stringify(after)) {
+      } else if (!crmDeepEqual(before, after)) {
         mutation.documents[key] = after;
         mutation.changedCount += 1;
       }
@@ -897,7 +914,15 @@ import { shadowStatusFromSheetsResult } from "./data/repositoryAdapter.js";
       };
     };
     var mergeCrmSheet = function (lead, rec, order) {
-      var before = JSON.stringify(lead.crmSheet || null), row = sheetRowFrom(rec, order);
+      var previousRow = lead.crmSheet || null, before = crmCloneValue(previousRow), row = sheetRowFrom(rec, order);
+      /* 조회 범위의 시작일이 하루씩 이동해도 기존 전체 행의 순번을 다시 쓰지 않습니다.
+         syncedAt도 원본 값이 실제로 달라졌을 때만 바꿔 무의미한 대량 저장을 막습니다. */
+      if (previousRow && previousRow.order != null) row.order = previousRow.order;
+      if (previousRow) {
+        var previousComparable = Object.assign({}, previousRow, { syncedAt: '' });
+        var nextComparable = Object.assign({}, row, { syncedAt: '' });
+        if (crmDeepEqual(previousComparable, nextComparable)) row.syncedAt = previousRow.syncedAt || row.syncedAt;
+      }
       lead.crmSheet = row;
       lead.createdAt = row.inflowDate || lead.createdAt;
       lead.company = row.company || lead.company;
@@ -907,7 +932,7 @@ import { shadowStatusFromSheetsResult } from "./data/repositoryAdapter.js";
       lead.channel = mapCh(row.inflowRaw);
       lead.projNo = row.projectNo;
       if (row.inquiry) lead.memo = '[문의] ' + row.inquiry.slice(0, 300);
-      return before !== JSON.stringify(row);
+      return !crmDeepEqual(before, row);
     };
     /* CRM의 구조화된 값 중 해석이 명확한 항목만 TM 진단에 선입력합니다.
        애매하거나 없는 값은 추측하지 않고 리드 상세에서 담당자가 보완합니다. */
@@ -970,9 +995,18 @@ import { shadowStatusFromSheetsResult } from "./data/repositoryAdapter.js";
       return { items: items, raw: raw };
     };
     var mergeCrmQuality = function (lead, rec) {
-      var before = JSON.stringify({ q: lead.crmQuality || null, s: lead.score && lead.score.tm && lead.score.tm.autoImported || null });
+      var before = crmCloneValue({ q: lead.crmQuality || null, s: lead.score && lead.score.tm && lead.score.tm.autoImported || null });
       var q = crmQualityFrom(rec), keys = Object.keys(q.items);
-      lead.crmQuality = { source: 'newarrivals-v2', values: q.raw, mapped: keys, updatedAt: iso(now) };
+      var previousQuality = lead.crmQuality || null;
+      var nextQuality = { source: 'newarrivals-v2', values: q.raw, mapped: keys, updatedAt: iso(now) };
+      if (previousQuality) {
+        var previousQualityComparable = Object.assign({}, previousQuality, { updatedAt: '' });
+        var nextQualityComparable = Object.assign({}, nextQuality, { updatedAt: '' });
+        if (crmDeepEqual(previousQualityComparable, nextQualityComparable)) {
+          nextQuality.updatedAt = previousQuality.updatedAt || nextQuality.updatedAt;
+        }
+      }
+      lead.crmQuality = nextQuality;
       if (keys.length) {
         lead.score = lead.score || {};
         var tm = lead.score.tm = lead.score.tm || { items: {} };
@@ -991,8 +1025,8 @@ import { shadowStatusFromSheetsResult } from "./data/repositoryAdapter.js";
         tm.source = tm.source || 'crm';
         if (Object.keys(tm.items).length === 5 && !tm.doneAt) tm.doneAt = dOnly(rec.reg_dt) || iso(now);
       }
-      var after = JSON.stringify({ q: lead.crmQuality || null, s: lead.score && lead.score.tm && lead.score.tm.autoImported || null });
-      return before !== after;
+      var after = { q: lead.crmQuality || null, s: lead.score && lead.score.tm && lead.score.tm.autoImported || null };
+      return !crmDeepEqual(before, after);
     };
     var uid = function () { return 'l' + Math.random().toString(36).slice(2, 9); };
     var changed = false, corrected = 0, added = 0;
@@ -1274,7 +1308,7 @@ import { shadowStatusFromSheetsResult } from "./data/repositoryAdapter.js";
       }
       var lead = strongLead;
       var existedBeforeSync = !!lead;
-      var beforeRecord = existedBeforeSync ? JSON.stringify(lead) : '';
+      var beforeRecord = existedBeforeSync ? crmCloneValue(lead) : null;
       var contactRow = Array.isArray(meeting.client_contact) ? meeting.client_contact[0] : null;
       if (!lead) {
         lead = { id: id, calendarOnly: true, company: company, contact: String(meeting.client_name || (contactRow && contactRow.name) || ''), phone: fmtPhone(contactRow && contactRow.number), email: String(meeting.client_email || ''), channel: 'CRM 캘린더', creative: '', buildup: '', buildups: [], lineItems: [], grade: '', status: completed ? '프리미팅 완료' : '프리미팅 확정', ctype: '신규', tmOwner: '', salesOwner: owner, expected: 0, contractAmount: 0, paid: 0, payments: [], sent: {}, newsletter: false, pushLog: [], projNo: meeting.proj_no || null, crmFinanceAuto: { policy: 'future-only-v1', enabledAt: new Date().toISOString() }, premeetingDoneAt: completed ? dayValue : '', premeetingAt: dayValue, bookedAt: dayValue, createdAt: '', memo: '', crmMeetings: [], history: [{ date: dayValue, type: completed ? '미팅' : '일정', note: completed ? 'CRM 캘린더 내방체크 프리미팅 수동수집' : 'CRM 캘린더 프리미팅 일정 수동수집 · 방문 미확인' }] };
@@ -1302,7 +1336,7 @@ import { shadowStatusFromSheetsResult } from "./data/repositoryAdapter.js";
       lead.crmMeetings.sort(function (a, b) { return String(a.startAt || '').localeCompare(String(b.startAt || '')); });
       lead.crmMeeting = lead.crmMeetings[lead.crmMeetings.length - 1] || meetingEntry;
       byMeeting[String(meeting.ms_no)] = lead;
-      if (existedBeforeSync && beforeRecord !== JSON.stringify(lead)) { updated += 1; changed = true; }
+      if (existedBeforeSync && !crmDeepEqual(beforeRecord, lead)) { updated += 1; changed = true; }
     });
     return { changed: changed, db: db, count: rows.length, completed: completedCount, scheduled: scheduledCount, added: added, updated: updated, nameMatched: nameMatched, ownerFilled: ownerFilled };
   };
@@ -2533,7 +2567,9 @@ function useDB() {
             setDb({ ...data });
             await window.storage.set(KEY3, JSON.stringify(data), { origin: "crm_sync", reason: "automatic_crm_refresh", allowedLeadRemovals: [] });
           } catch (e) {
-            finalState = "CRM 변경 병합 저장 실패 · 사용자 입력은 로컬 보관됨";
+            const mergeCode = String((e && e.payload && e.payload.code) || (e && e.message) || e || "unknown");
+            console.error("CRM merge commit failed", { code: mergeCode, status: e && e.status });
+            finalState = "CRM 변경 저장 실패 · " + mergeCode + " · 사용자 입력은 로컬 보관됨";
           }
         } else {
           data = latestDbRef.current || data;
