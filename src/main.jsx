@@ -2565,11 +2565,14 @@ function useDB() {
             latestDbRef.current = data;
             skip.current = true;
             setDb({ ...data });
-            await window.storage.set(KEY3, JSON.stringify(data), { origin: "crm_sync", reason: "automatic_crm_refresh", allowedLeadRemovals: [] });
+            const crmSaveResult = await window.storage.set(KEY3, JSON.stringify(data), { origin: "crm_sync", reason: "automatic_crm_refresh", allowedLeadRemovals: [] });
+            finalState = crmSaveResult && crmSaveResult.unchanged
+              ? "CRM DB 최신 상태 확인됨"
+              : "CRM DB 동기화 완료";
           } catch (e) {
             const mergeCode = String((e && e.payload && e.payload.code) || (e && e.message) || e || "unknown");
             console.error("CRM merge commit failed", { code: mergeCode, status: e && e.status });
-            finalState = "CRM 변경 저장 실패 · " + mergeCode + " · 사용자 입력은 로컬 보관됨";
+            finalState = "CRM DB 저장 실패 · " + mergeCode + " · 브라우저 임시보관 · 다음 갱신 때 재시도";
           }
         } else {
           data = latestDbRef.current || data;
