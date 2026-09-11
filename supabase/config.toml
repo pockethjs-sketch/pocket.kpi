@@ -17,3 +17,6 @@ verify_jwt = true
 
 [functions.kpi-marketing-sync]
 verify_jwt = true
+
+[functions.kpi-crm-sync]
+verify_jwt = false

@@ -5,6 +5,7 @@ import { readFile } from "node:fs/promises";
 const frontend = await readFile(new URL("../src/main.jsx", import.meta.url), "utf8");
 const domain = await readFile(new URL("../supabase/functions/kpi-domain-api/index.ts", import.meta.url), "utf8");
 const marketing = await readFile(new URL("../supabase/functions/kpi-marketing-sync/index.ts", import.meta.url), "utf8");
+const crmSync = await readFile(new URL("../supabase/functions/kpi-crm-sync/index.ts", import.meta.url), "utf8");
 const migration = await readFile(new URL("../supabase/migrations/20260909031054_relational_domain_api_and_marketing_primary.sql", import.meta.url), "utf8");
 const atomicMarketingMigration = await readFile(new URL("../supabase/migrations/20260910153000_marketing_atomic_provider_commit.sql", import.meta.url), "utf8");
 const marketingCronMigration = await readFile(new URL("../supabase/migrations/20260910160000_marketing_cron_timeout.sql", import.meta.url), "utf8");
@@ -22,6 +23,19 @@ test("domain edge keeps service role server-side and checks the public app bound
   assert.doesNotMatch(frontend, /SUPABASE_SERVICE_ROLE_KEY/);
   assert.match(config, /\[functions\.kpi-domain-api\][\s\S]*verify_jwt = true/);
   assert.match(frontend, /Authorization.*Bearer.*KPI_SUPABASE_ANON_KEY/);
+});
+
+test("CRM refresh uses the domain API first and keeps Apps Script only as fallback", () => {
+  const refreshStart = frontend.indexOf("window.crmFetchRefreshPayload");
+  const direct = frontend.indexOf("crmFetchDomainAction('crm_refresh'", refreshStart);
+  const sheet = frontend.indexOf("CRM_SHEET_URL.replace", direct);
+  assert.ok(refreshStart >= 0 && direct > refreshStart && sheet > direct);
+  assert.match(domain, /action === "crm_refresh"/);
+  assert.match(domain, /functions\/v1\/kpi-crm-sync/);
+  assert.match(domain, /Bearer \$\{serviceRole\}/);
+  assert.match(crmSync, /verifyInternalService/);
+  assert.match(crmSync, /!internalService && !\(await verify\(req, raw\)\)/);
+  assert.match(config, /\[functions\.kpi-crm-sync\][\s\S]*verify_jwt = false/);
 });
 
 test("contract and balance state is relationally projected while compatibility snapshots remain", () => {

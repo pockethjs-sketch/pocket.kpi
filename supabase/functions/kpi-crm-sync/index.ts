@@ -7,6 +7,19 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 });
 const hex = (bytes: Uint8Array) => [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
 
+function safeEqual(left: string, right: string) {
+  if (!left || left.length !== right.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < left.length; i++) mismatch |= left.charCodeAt(i) ^ right.charCodeAt(i);
+  return mismatch === 0;
+}
+
+function verifyInternalService(req: Request) {
+  const expected = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+  const supplied = String(req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
+  return safeEqual(supplied, expected);
+}
+
 async function verify(req: Request, raw: string) {
   const secret = Deno.env.get("KPI_SHADOW_HMAC_SECRET") || "";
   const timestamp = req.headers.get("x-kpi-timestamp") || "";
@@ -44,7 +57,8 @@ async function sha256(value: unknown) {
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
   const raw = await req.text();
-  if (!(await verify(req, raw))) return json({ error: "unauthorized" }, 401);
+  const internalService = verifyInternalService(req);
+  if (!internalService && !(await verify(req, raw))) return json({ error: "unauthorized" }, 401);
   let body: any;
   try { body = JSON.parse(raw); } catch { return json({ error: "bad_json" }, 400); }
   const start = String(body.start || "");
@@ -52,8 +66,8 @@ Deno.serve(async (req) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end) || start > end) {
     return json({ error: "invalid_date_range" }, 400);
   }
-  // crmToken is accepted only after HMAC verification and is never persisted or returned.
-  const token = String(Deno.env.get("CRM_BEARER_TOKEN") || body.crmToken || "");
+  // crmToken fallback is accepted only on the legacy HMAC path and is never persisted or returned.
+  const token = String(Deno.env.get("CRM_BEARER_TOKEN") || (!internalService ? body.crmToken : "") || "");
   const organizationId = Deno.env.get("KPI_ORGANIZATION_ID") || "";
   if (!token || !organizationId) return json({ error: "server_not_configured" }, 503);
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {

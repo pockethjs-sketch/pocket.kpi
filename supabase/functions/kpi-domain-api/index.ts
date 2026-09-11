@@ -12,7 +12,7 @@ function cors(req: Request) {
   const origin = req.headers.get("origin") || "";
   return {
     "access-control-allow-origin": ALLOWED_ORIGINS.has(origin) ? origin : "https://pockethjs-sketch.github.io",
-    "access-control-allow-headers": "content-type,x-kpi-app-token",
+    "access-control-allow-headers": "authorization,apikey,content-type,x-kpi-app-token",
     "access-control-allow-methods": "GET,POST,OPTIONS",
     vary: "origin",
   };
@@ -146,6 +146,33 @@ Deno.serve(async (req) => {
     ]);
     if (error || syncError) return reply(req, { error: "marketing_read_failed", code: error?.code || syncError?.code }, 500);
     return reply(req, { ok: true, ...buildMarketing(rows || [], syncRows || []) });
+  }
+
+  if (action === "crm_refresh") {
+    if (req.method !== "POST") return reply(req, { error: "method_not_allowed" }, 405);
+    const start = String(body.start || "");
+    const end = String(body.end || "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end) || start > end) {
+      return reply(req, { error: "invalid_date_range" }, 400);
+    }
+    const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+    if (!serviceRole || !supabaseUrl) return reply(req, { error: "crm_sync_not_configured" }, 503);
+    try {
+      const response = await fetch(`${supabaseUrl}/functions/v1/kpi-crm-sync`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${serviceRole}`, apikey: serviceRole },
+        body: JSON.stringify({ start, end }),
+        signal: AbortSignal.timeout(60_000),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload?.ok) {
+        return reply(req, { error: payload?.error || "crm_sync_failed", message: payload?.message || "" }, response.status || 502);
+      }
+      return reply(req, payload);
+    } catch (error) {
+      return reply(req, { error: "crm_sync_unreachable", message: String(error instanceof Error ? error.message : error) }, 502);
+    }
   }
 
   if (action === "mutation") {

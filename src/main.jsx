@@ -8,8 +8,8 @@ import { shadowStatusFromSheetsResult } from "./data/repositoryAdapter.js";
   var CRM_TOKEN = 'pocket-crm-9f3k7x';           // ← crm-apps-script.gs 의 TOKEN 과 동일 (이미 맞춰둠)
   var KPI_DOMAIN_API_URL = 'https://ilnklntqkdbbtzzbhqrl.supabase.co/functions/v1/kpi-domain-api';
   var KPI_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlsbmtsbnRxa2RiYnR6emJocXJsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg3Mjk3NDQsImV4cCI6MjEwNDMwNTc0NH0.QoQ6jIFNo75LUtWU7YOvsO9cwWIsWZvlhFeuBgBvNac';
-  /* 사내 Nginx 배포에서는 같은 Origin의 서버 프록시를 사용합니다.
-     개발자 서버가 다른 도메인이면 이 조건 또는 경로만 변경하면 됩니다. */
+  /* 사내 Nginx 배포에서는 같은 Origin 프록시를 우선 사용합니다.
+     그 외 환경은 Supabase Edge를 사용하고 Apps Script는 장애 폴백으로만 남깁니다. */
   var CRM_SERVER_PROXY_BASE = location.hostname === 'view.xn--9i1b674cwc38r6pa.com' ? '/kpi-api' : '';
   window.crmRemoteLoaded = false;
   window.crmRemoteError = '';
@@ -287,7 +287,7 @@ import { shadowStatusFromSheetsResult } from "./data/repositoryAdapter.js";
   };
 
   /* CRM 갱신은 사내 서버에서는 동일 Origin Nginx 프록시를 우선 사용하고,
-     그 외 환경에서는 Apps Script 서버 프록시를 사용합니다. */
+     그 외 환경에서는 Supabase Edge를 사용합니다. Apps Script는 장애 fallback입니다. */
   window.crmFetchRefreshPayload = async function (startDay, endDay) {
     if (CRM_SERVER_PROXY_BASE) {
       var crmStart = String(startDay || '');
@@ -323,7 +323,17 @@ import { shadowStatusFromSheetsResult } from "./data/repositoryAdapter.js";
       });
       return { ok: true, start: crmStart, end: crmEnd, leads: leadRows, meetings: meetingRows, proxyVersion: 'nginx-calendar-all-v2' };
     }
-    if (!CRM_SHEET_URL) throw new Error('sheet_url_missing');
+    try {
+      var directPayload = await crmFetchDomainAction('crm_refresh', {
+        method: 'POST', timeoutMs: 60000,
+        body: { start: String(startDay || ''), end: String(endDay || '') }
+      });
+      if (!Array.isArray(directPayload.leads) || !Array.isArray(directPayload.meetings)) throw new Error('direct_proxy_invalid');
+      return directPayload;
+    } catch (directError) {
+      window.crmDirectRefreshError = String(directError && directError.message || directError);
+    }
+    if (!CRM_SHEET_URL) throw new Error(window.crmDirectRefreshError || 'sheet_url_missing');
     var params = new URLSearchParams({
       token: CRM_TOKEN,
       action: 'crm_refresh',
