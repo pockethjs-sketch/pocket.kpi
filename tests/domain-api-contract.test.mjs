@@ -9,6 +9,7 @@ const crmSync = await readFile(new URL("../supabase/functions/kpi-crm-sync/index
 const migration = await readFile(new URL("../supabase/migrations/20260909031054_relational_domain_api_and_marketing_primary.sql", import.meta.url), "utf8");
 const atomicMarketingMigration = await readFile(new URL("../supabase/migrations/20260910153000_marketing_atomic_provider_commit.sql", import.meta.url), "utf8");
 const marketingCronMigration = await readFile(new URL("../supabase/migrations/20260910160000_marketing_cron_timeout.sql", import.meta.url), "utf8");
+const marketingDailyCronMigration = await readFile(new URL("../supabase/migrations/20260911023801_reduce_marketing_sync_to_daily.sql", import.meta.url), "utf8");
 const config = await readFile(new URL("../supabase/config.toml", import.meta.url), "utf8");
 
 test("frontend reads domain endpoints and writes mutations without a whole state upload", () => {
@@ -79,9 +80,11 @@ test("direct provider writes validate complete coverage and commit atomically", 
   assert.match(marketing, /Object\.keys\(collectors\)\.every/);
 });
 
-test("scheduled marketing collection allows enough time for all three provider APIs", () => {
+test("scheduled marketing collection keeps the API timeout and runs once daily", () => {
   assert.match(marketingCronMigration, /timeout_milliseconds\s*:=\s*120000/);
-  assert.match(marketingCronMigration, /0 \*\/6 \* \* \*/);
+  assert.match(marketingDailyCronMigration, /cron\.alter_job/);
+  assert.match(marketingDailyCronMigration, /0 0 \* \* \*/);
+  assert.doesNotMatch(marketingDailyCronMigration, /update\s+cron\.job/i);
 });
 
 test("domain response preserves Meta daily and monthly split including unclassified spend", () => {

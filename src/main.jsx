@@ -8962,7 +8962,7 @@ function SchemaView() {
     contract: { lane: "외부 원천", title: "외부 계약 시트", meta: "검토 후 반영", tone: "blue", summary: "신규 계약 후보 감지", details: ["2026-08 이후 미등록 업체만 후보화", "사용자가 신규 생성 또는 제외", "자동 덮어쓰기하지 않음"] },
     support: { lane: "외부 원천", title: "Supabase", meta: "읽기", tone: "violet", summary: "지원사업 관리 데이터", details: ["지원사업 배정·합격·일정", "지원사업 관리 화면에서 조회", "웹 전체 상태 저장소와는 별도"] },
     appscript: { lane: "연동 계층", title: "Apps Script Web App", meta: "백업·외부연동", tone: "amber", summary: "Sheets 백업과 CRM 프록시", details: ["운영 저장 경로에서는 제외", "Supabase 장애 시 복구 스냅샷 제공", "Google 계약 시트·CRM 프록시 유지"] },
-    collector: { lane: "연동 계층", title: "Supabase Edge + Cron", meta: "6시간", tone: "violet", summary: "광고 API 직접 수집", details: ["META/NAVER/GOOGLE → 관계형 광고 테이블", "공급자별 성공·실패 상태 저장", "웹 접속 여부와 독립 실행"] },
+    collector: { lane: "연동 계층", title: "Supabase Edge + Cron", meta: "매일 오전 9시", tone: "violet", summary: "광고 API 직접 수집", details: ["META/NAVER/GOOGLE → 관계형 광고 테이블", "공급자별 성공·실패 상태 저장", "웹 접속 여부와 독립 실행"] },
     web: { lane: "웹", title: "Pocket KPI 웹", meta: "React · GitHub Pages", tone: "indigo", summary: "조회·계산·사용자 입력", details: ["통합·마케팅·프리미팅·계약·기타 화면", "서버 저장 성공 전 브라우저 저널 유지", "저장 성공 뒤 서버 리비전으로 화면 갱신"] },
     journal: { lane: "웹", title: "브라우저 저널", meta: "임시 안전장치", tone: "indigo", summary: "미전송 변경 보관", details: ["localStorage에 저장 대기 작업 보관", "네트워크 복구 후 같은 mutationId로 재전송", "Supabase 정본을 대체하지 않음"] },
     state: { lane: "Supabase", title: "관계형 운영 DB", meta: "운영 정본", tone: "emerald", summary: "리드·계약·입금·잔금", details: ["화면별 API로 필요한 도메인만 조회", "변경분 patch를 트랜잭션으로 반영", "전체 스냅샷은 30일 복구 호환용"] },
