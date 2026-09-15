@@ -1,6 +1,7 @@
 import "./styles.css";
 import ContractOwnerSheet, { ContractCustomerTypeLabel } from "./ContractOwnerSheet.jsx";
 import ContractMonthlyPerformance from "./ContractMonthlyPerformance.jsx";
+import RecentSyncActivity from "./RecentSyncActivity.jsx";
 import { shadowStatusFromSheetsResult } from "./data/repositoryAdapter.js";
 
 /* ===== 운영 데이터 연동 설정 =====
@@ -117,6 +118,11 @@ import { shadowStatusFromSheetsResult } from "./data/repositoryAdapter.js";
   }
 
   window.crmFetchContractHistory = () => crmFetchDomainAction('contract_history');
+  window.crmFetchSyncActivity = async () => {
+    const payload = await crmFetchDomainAction('bootstrap');
+    if (!payload.ok || !payload.documents || (payload.documents.contractStatusLogs != null && !Array.isArray(payload.documents.contractStatusLogs))) throw new Error('sync_logs_invalid');
+    return { logs: payload.documents.contractStatusLogs || [], revision: payload.revision };
+  };
 
   function crmPostSheetAction(action, payload, timeoutMs, attempt = 0) {
     var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
@@ -3920,6 +3926,7 @@ function DealsView() {
   const [contractReviewError, setContractReviewError] = useState("");
   const [contractApplyingId, setContractApplyingId] = useState("");
   const [contractLogOpen, setContractLogOpen] = useState(false);
+  const [dealsTab, setDealsTab] = useState('companies');
   const [contractLogQuery, setContractLogQuery] = useState("");
   const contractReviewRunning = useRef(false);
   const [contractAutoSync, setContractAutoSync] = useState(null);
@@ -4405,6 +4412,9 @@ function DealsView() {
   return (
     <div className="space-y-4">
       <SecTitle icon={Handshake} title="프리미팅 기업" sub={"CRM 캘린더의 프리미팅 일정부터 방문 완료·계약까지 관리하는 시트입니다 (" + pLabel(period) + "). 방문 미확인은 프리미팅 확정으로 분리 · 셀에서 바로 편집 · 헤더 클릭으로 정렬."} />
+      <div role="tablist" aria-label="프리미팅 기업 보기" className="flex gap-1 border-b border-slate-200">
+        {[['companies', '기업 목록'], ['sync', '최근 동기화']].map(([key, label]) => <button key={key} type="button" role="tab" id={'deals-tab-' + key} tabIndex={dealsTab === key ? 0 : -1} aria-selected={dealsTab === key} aria-controls={'deals-panel-' + key} onClick={() => setDealsTab(key)} onKeyDown={event => { if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return; event.preventDefault(); const next = event.key === 'Home' ? 'companies' : event.key === 'End' ? 'sync' : key === 'companies' ? 'sync' : 'companies'; setDealsTab(next); document.getElementById('deals-tab-' + next)?.focus(); }} className={'border-b-2 px-4 py-2.5 text-sm font-bold ' + (dealsTab === key ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-800')}>{label}</button>)}
+      </div>
       <div className="border border-slate-200 rounded-md px-3 py-2 text-xs text-slate-600 bg-white">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span>매일 오전 9시 이후 1회 자동 갱신 · 프리미팅은 오늘 포함 최근 3일 · 미래 일정 제외</span>
@@ -4421,6 +4431,7 @@ function DealsView() {
         {contractReviewError && <p className="mt-1 text-red-600">최근 확인 실패 · 마지막 반영 내역은 유지됩니다. 다시 확인해주세요.</p>}
         {!!(contractAutoSync?.blocked || []).length && <details className="mt-2"><summary className="cursor-pointer text-amber-700">자동 반영 보류 업체·이유 보기</summary><ul className="mt-2 space-y-1">{contractAutoSync.blocked.map((item) => <li key={item.sourceKey}>{item.company} — {String(item.reason || '').replace(/contractAmount/g, '계약액').replace(/contractAt/g, '계약일').replace(/status/g, '진행 상태')}</li>)}</ul></details>}
       </div>
+      {dealsTab === 'sync' ? <div role="tabpanel" id="deals-panel-sync" aria-labelledby="deals-tab-sync"><RecentSyncActivity loadLogs={window.crmFetchSyncActivity} leads={db.leads} openLead={openLead} reloadKey={[syncSchedule?.premeeting?.at, syncSchedule?.sheet?.at, premeetingResult?.checkedAt, contractAutoSync?.checkedAt].join('|')}/></div> : <div role="tabpanel" id="deals-panel-companies" aria-labelledby="deals-tab-companies" className="space-y-4">
       <Card cls="p-3">
         <div className="flex flex-col 2xl:flex-row 2xl:items-center gap-3">
           <div className="flex items-center gap-4 flex-wrap min-w-0">
@@ -4703,6 +4714,7 @@ function DealsView() {
         <span className="text-slate-400">입금 칸의 회차 버튼을 누르면 결제 스케줄(선금·중도금·잔금)을 편집할 수 있습니다.</span>
       </div>
       <p className="text-xs text-slate-400">계약 체크 = 리드 상태 '계약 완료'와 동일 (해제 시 견적·제안 발송으로 복귀). 결제 스케줄이 있으면 <b>회차 예정일</b> 기준, 없으면 계약 3일 후부터 '오늘의 액션 → 입금 확인 · 결제 푸시'에 자동으로 올라옵니다.</p>
+      </div>}
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="딜 직접 추가">
         <div className="space-y-3">
           <Fld label="회사명 *"><Inp value={nd.company} onChange={(e) => setNd({ ...nd, company: e.target.value })} /></Fld>
@@ -4834,7 +4846,7 @@ function DealsView() {
               </div>
             </div>
           </div>
-          <p className="text-[11px] leading-5 text-slate-400">로그는 계약 데이터와 함께 Google Sheet에 저장됩니다. 과거 작업 시각은 근거 없이 역산하지 않으며, 이 기능 적용 이후 발생한 작업부터 기록합니다.</p>
+          <p className="text-[11px] leading-5 text-slate-400">로그는 계약 데이터와 함께 Supabase에 저장되고 Google Sheet에는 비동기 백업됩니다. 자동 반영만 모아보려면 ‘최근 동기화’ 탭을 사용하세요. 기록되지 않은 과거 시각은 추정하지 않습니다.</p>
         </div>
       </Modal>
       <PayModal id={payId} onClose={() => setPayId(null)} upPay={upPay} applyPreset={applyPreset} />
