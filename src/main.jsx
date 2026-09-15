@@ -7095,13 +7095,12 @@ function ContractHubView() {
   const { db, period, go, openLead } = useApp();
   const [metricOpen, setMetricOpen] = useState(null);
   const [buildupOpen, setBuildupOpen] = useState(null);
-  const [recentContractLimit, setRecentContractLimit] = useState(10);
+  const [contractView, setContractView] = useState("owner");
+  const [contractSearch, setContractSearch] = useState("");
+  const [contractOwner, setContractOwner] = useState("all");
   const r = pRange(period);
   const contractValue = (l) => l.contractAmount || paySum(l) || 0;
   const contracts = db.leads.filter((l) => l.status === "계약 완료" && inR(l.contractAt, r) && contractValue(l) > 0);
-  const recentContracts = [...contracts].sort((a, b) => (b.contractAt || "").localeCompare(a.contractAt || ""));
-  const visibleRecentContracts = recentContracts.slice(0, recentContractLimit);
-  useEffect(() => setRecentContractLimit(10), [period.mode, period.year, period.month, period.date]);
   const meetings = db.leads.filter((l) => inR(meetingDoneDate(l), r));
   const convertedMeetings = meetings.filter((l) => l.status === "계약 완료" && contractValue(l) > 0);
   const contractAmount = contracts.reduce((s, l) => s + contractValue(l), 0);
@@ -7170,6 +7169,52 @@ function ContractHubView() {
   /* 계약일 건수와 프리미팅일 건수를 섞지 않고, 같은 프리미팅 코호트 안에서만 전환 계산 */
   const conv = pct(convertedMeetings.length, meetings.length);
   const outstandingRate = pct(outstanding, contractAmount);
+  const contractGradeLabel = (value) => {
+    const raw = String(value || "").trim();
+    if (["상", "높음"].includes(raw)) return "상";
+    if (["중", "중간"].includes(raw)) return "중";
+    if (["하", "낮음"].includes(raw)) return "하";
+    if (raw === "드랍") return "드랍";
+    return "미평가";
+  };
+  const contractGradeTone = (value) => ({
+    "상": "border-emerald-200 bg-emerald-50 text-emerald-700",
+    "중": "border-amber-200 bg-amber-50 text-amber-700",
+    "하": "border-slate-200 bg-slate-100 text-slate-600",
+    "드랍": "border-rose-200 bg-rose-50 text-rose-700",
+    "미평가": "border-slate-200 bg-white text-slate-400",
+  }[contractGradeLabel(value)]);
+  const ownerTones = [
+    { header: "border-rose-200 bg-rose-50", text: "text-rose-700", dot: "bg-rose-500" },
+    { header: "border-amber-200 bg-amber-50", text: "text-amber-700", dot: "bg-amber-500" },
+    { header: "border-sky-200 bg-sky-50", text: "text-sky-700", dot: "bg-sky-500" },
+    { header: "border-violet-200 bg-violet-50", text: "text-violet-700", dot: "bg-violet-500" },
+    { header: "border-teal-200 bg-teal-50", text: "text-teal-700", dot: "bg-teal-500" },
+  ];
+  const ownerSummaries = [...new Set(contracts.map((l) => l.salesOwner || "미배정"))].map((owner) => {
+    const rows = contracts.filter((l) => (l.salesOwner || "미배정") === owner);
+    return { owner, rows, count: rows.length, amount: rows.reduce((sum, l) => sum + contractValue(l), 0) };
+  }).sort((a, b) => {
+    if (a.owner === "미배정") return 1;
+    if (b.owner === "미배정") return -1;
+    return b.amount - a.amount || a.owner.localeCompare(b.owner, "ko");
+  });
+  const normalizedContractSearch = contractSearch.trim().toLowerCase();
+  const contractRows = [...contracts].filter((l) => {
+    if (contractOwner !== "all" && (l.salesOwner || "미배정") !== contractOwner) return false;
+    if (!normalizedContractSearch) return true;
+    return [l.company, l.channel, l.grade, contractBuildupKey(l), l.salesOwner, l.ctype]
+      .some((value) => String(value || "").toLowerCase().includes(normalizedContractSearch));
+  }).sort((a, b) => (b.contractAt || "").localeCompare(a.contractAt || "") || String(a.company || "").localeCompare(String(b.company || ""), "ko"));
+  const contractOwnerGroups = ownerSummaries.map((summary, index) => ({
+    ...summary,
+    tone: ownerTones[index % ownerTones.length],
+    rows: contractRows.filter((l) => (l.salesOwner || "미배정") === summary.owner),
+  })).filter((summary) => summary.rows.length > 0);
+  useEffect(() => {
+    setContractOwner("all");
+    setContractSearch("");
+  }, [period.mode, period.y, period.m, period.d, period.start, period.end]);
   return (
     <div className="space-y-4">
       <SecTitle icon={Handshake} title="계약 총괄" sub={pLabel(period) + " 계약일 기준 계약 금액과 입금일 기준 입금 금액을 분리해 봅니다."}
@@ -7200,6 +7245,157 @@ function ContractHubView() {
             lines: ["계약했지만 아직 실제로 받지 못한 금액입니다.", "계약금액 카드와 동일한 계약일 코호트 " + contracts.length + "건을 대상으로 계산합니다.", "미수 " + fmtK(outstanding) + "원 = 계약금액의 " + outstandingRate + "%", "계약금액과 미수금이 비슷하면 입금 회차가 없거나 실제 입금 등록이 누락됐을 가능성이 있습니다."]
           }} /></button>
       </div>
+      <Card>
+        <div className="px-4 pt-4 pb-3 border-b border-slate-100">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-sm font-extrabold text-slate-900">{pLabel(period)} 계약 리스트</p>
+                <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[9px] font-bold text-slate-500">계약일 기준</span>
+              </div>
+              <p className="text-[10px] text-slate-400 mt-1">담당자별 계약 기업과 채널·등급·프로그램·계약액을 한 화면에서 비교합니다.</p>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <label className="relative block">
+                <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  value={contractSearch}
+                  onChange={(event) => setContractSearch(event.target.value)}
+                  placeholder="업체·채널·프로그램 검색"
+                  className="h-8 w-52 rounded-lg border border-slate-200 bg-white pl-8 pr-3 text-[11px] font-medium text-slate-700 outline-none focus:border-indigo-400"
+                />
+              </label>
+              <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+                {[{ value: "owner", label: "담당자별" }, { value: "list", label: "전체 목록" }].map((item) => (
+                  <button
+                    key={item.value}
+                    type="button"
+                    onClick={() => setContractView(item.value)}
+                    className={"h-7 rounded-md px-3 text-[10px] font-extrabold transition-colors " + (contractView === item.value ? "bg-slate-900 text-white shadow-sm" : "text-slate-500 hover:text-slate-800")}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="mt-3 flex items-center gap-1.5 overflow-x-auto pb-1">
+            <button
+              type="button"
+              onClick={() => setContractOwner("all")}
+              className={"shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-extrabold " + (contractOwner === "all" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-500")}
+            >
+              전체 {contracts.length}
+            </button>
+            {ownerSummaries.map((summary, index) => {
+              const tone = ownerTones[index % ownerTones.length];
+              const active = contractOwner === summary.owner;
+              return (
+                <button
+                  key={summary.owner}
+                  type="button"
+                  onClick={() => setContractOwner(summary.owner)}
+                  className={"shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-extrabold " + (active ? tone.header + " " + tone.text : "border-slate-200 bg-white text-slate-500")}
+                >
+                  {summary.owner} {summary.count}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 border-b border-slate-100 bg-slate-50/60">
+          {[
+            ["표시 계약", contractRows.length + "건", "text-slate-800"],
+            ["표시 계약액", fmtK(contractRows.reduce((sum, l) => sum + contractValue(l), 0)) + "원", "text-indigo-700"],
+            ["누적 입금", fmtK(contractRows.reduce((sum, l) => sum + actualPaid(l), 0)) + "원", "text-teal-700"],
+            ["미수금", fmtK(contractRows.reduce((sum, l) => sum + Math.max(0, contractValue(l) - actualPaid(l)), 0)) + "원", "text-rose-700"],
+          ].map(([label, value, tone], index) => (
+            <div key={label} className={"px-4 py-3 " + (index % 2 ? "border-l border-slate-100" : "") + (index > 1 ? " border-t border-slate-100 lg:border-t-0 lg:border-l" : "") }>
+              <p className="text-[9px] font-bold text-slate-400">{label}</p>
+              <p className={"mt-1 text-sm font-black " + tone}>{value}</p>
+            </div>
+          ))}
+        </div>
+        {contractView === "owner" ? (
+          <div className="grid grid-cols-1 2xl:grid-cols-2 gap-3 p-3 bg-slate-50/40">
+            {contractOwnerGroups.map((group) => {
+              const groupPaid = group.rows.reduce((sum, l) => sum + actualPaid(l), 0);
+              const groupAmount = group.rows.reduce((sum, l) => sum + contractValue(l), 0);
+              return (
+                <section key={group.owner} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                  <div className={"flex items-center justify-between gap-3 border-b px-3 py-2.5 " + group.tone.header}>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className={"h-2 w-2 shrink-0 rounded-full " + group.tone.dot} />
+                      <p className={"truncate text-xs font-black " + group.tone.text}>{group.owner}</p>
+                    </div>
+                    <div className="flex items-center gap-3 text-[10px] font-extrabold">
+                      <span className="text-slate-500">{group.rows.length}건</span>
+                      <span className={group.tone.text}>{fmtK(groupAmount)}원</span>
+                    </div>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <div className="min-w-[620px]">
+                      <div className="grid grid-cols-[minmax(150px,1.4fr)_82px_60px_minmax(105px,.9fr)_96px] gap-2 bg-slate-50 px-3 py-2 text-[9px] font-bold text-slate-400">
+                        <span>업체명</span><span>채널</span><span>등급</span><span>프로그램</span><span className="text-right">계약액</span>
+                      </div>
+                      <div className="divide-y divide-slate-100">
+                        {group.rows.map((l) => (
+                          <button key={l.id} type="button" onClick={() => openLead(l.id)} className="grid w-full grid-cols-[minmax(150px,1.4fr)_82px_60px_minmax(105px,.9fr)_96px] items-center gap-2 px-3 py-2.5 text-left hover:bg-indigo-50/60">
+                            <span className="min-w-0">
+                              <span className="block truncate text-[11px] font-extrabold text-slate-800">{l.company || "업체명 없음"}</span>
+                              <span className="mt-0.5 block truncate text-[9px] text-slate-400">{fmtDate(l.contractAt)} · {l.ctype || "구분 미지정"}</span>
+                            </span>
+                            <span className="truncate text-[10px] font-medium text-slate-500">{channelGroupName(l.channel)}</span>
+                            <span><span className={"inline-flex rounded-md border px-1.5 py-0.5 text-[9px] font-extrabold " + contractGradeTone(l.grade)}>{contractGradeLabel(l.grade)}</span></span>
+                            <span className="truncate text-[10px] font-bold text-slate-600">{contractBuildupKey(l)}</span>
+                            <span className="text-right text-[11px] font-black text-indigo-700">{fmtK(contractValue(l))}원</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 border-t border-slate-100 bg-slate-50/70 px-3 py-2 text-[9px] font-bold text-slate-500">
+                    <span>계약 {group.rows.length}건 · 누적 입금 {fmtK(groupPaid)}원</span>
+                    <span className={group.tone.text}>회수율 {groupAmount > 0 ? pct(groupPaid, groupAmount) : 0}%</span>
+                  </div>
+                </section>
+              );
+            })}
+            {!contractOwnerGroups.length && <div className="2xl:col-span-2"><Empty text="조건에 맞는 계약이 없습니다." /></div>}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <div className="min-w-[1060px]">
+              <div className="grid grid-cols-[76px_minmax(160px,1.4fr)_82px_60px_78px_minmax(110px,.9fr)_100px_100px_96px_76px] gap-2 bg-slate-50 px-4 py-2 text-[9px] font-bold text-slate-400">
+                <span>계약일</span><span>업체명</span><span>채널</span><span>등급</span><span>담당자</span><span>프로그램</span><span className="text-right">계약액</span><span className="text-right">누적 입금</span><span className="text-right">미수금</span><span className="text-right">수금 상태</span>
+              </div>
+              <div className="divide-y divide-slate-100">
+                {contractRows.map((l) => {
+                  const paid = actualPaid(l);
+                  const due = Math.max(0, contractValue(l) - paid);
+                  const status = due <= 0 ? "수금 완료" : paid > 0 ? "일부 수금" : "미수";
+                  const statusTone = due <= 0 ? "text-emerald-700 bg-emerald-50" : paid > 0 ? "text-amber-700 bg-amber-50" : "text-rose-700 bg-rose-50";
+                  return (
+                    <button key={l.id} type="button" onClick={() => openLead(l.id)} className="grid w-full grid-cols-[76px_minmax(160px,1.4fr)_82px_60px_78px_minmax(110px,.9fr)_100px_100px_96px_76px] items-center gap-2 px-4 py-2.5 text-left hover:bg-indigo-50/60">
+                      <span className="text-[10px] text-slate-400">{fmtDate(l.contractAt)}</span>
+                      <span className="truncate text-[11px] font-extrabold text-slate-800">{l.company || "업체명 없음"}</span>
+                      <span className="truncate text-[10px] text-slate-500">{channelGroupName(l.channel)}</span>
+                      <span><span className={"inline-flex rounded-md border px-1.5 py-0.5 text-[9px] font-extrabold " + contractGradeTone(l.grade)}>{contractGradeLabel(l.grade)}</span></span>
+                      <span className="truncate text-[10px] font-bold text-slate-600">{l.salesOwner || "미배정"}</span>
+                      <span className="truncate text-[10px] font-bold text-slate-600">{contractBuildupKey(l)}</span>
+                      <span className="text-right text-[10px] font-black text-indigo-700">{fmtK(contractValue(l))}원</span>
+                      <span className="text-right text-[10px] font-bold text-teal-700">{fmtK(paid)}원</span>
+                      <span className={"text-right text-[10px] font-bold " + (due > 0 ? "text-rose-600" : "text-slate-400")}>{fmtK(due)}원</span>
+                      <span className="text-right"><span className={"inline-flex rounded-full px-2 py-1 text-[9px] font-extrabold " + statusTone}>{status}</span></span>
+                    </button>
+                  );
+                })}
+                {!contractRows.length && <Empty text="조건에 맞는 계약이 없습니다." />}
+              </div>
+            </div>
+          </div>
+        )}
+      </Card>
       <Card>
         <div className="px-4 pt-4 pb-3 flex items-start justify-between gap-3 flex-wrap">
           <div>
@@ -7233,35 +7429,6 @@ function ContractHubView() {
         </div>
         <div className="px-4 py-2.5 border-t border-slate-100 bg-slate-50/60 text-[9px] text-slate-400">
           계약·계약액·누적 회수·미수금은 선택 기간에 계약된 기업 기준 · 기간 입금은 선택 기간에 실제 입금된 금액 기준
-        </div>
-      </Card>
-      <Card>
-        <div className="px-4 pt-4 pb-2 flex items-center justify-between gap-2">
-          <p className="text-sm font-bold text-slate-800">최근 계약</p>
-          <span className="text-xs text-slate-400">기업 클릭 = 상세</span>
-        </div>
-        <div className="divide-y divide-slate-100 px-3 pb-3">
-          {visibleRecentContracts.map((l) => (
-            <button key={l.id} onClick={() => openLead(l.id)} className="w-full grid grid-cols-[76px_minmax(120px,1fr)_minmax(100px,.7fr)_110px_110px] gap-3 items-center px-1 py-2 text-left hover:bg-emerald-50 rounded">
-              <span className="text-xs text-slate-400">{fmtDate(l.contractAt)}</span>
-              <span className="text-sm font-bold text-slate-800 truncate">{l.company}</span>
-              <span className="text-xs text-slate-500 truncate">{l.buildup || "미지정"} · {l.salesOwner || "미배정"}</span>
-              <span className="text-xs font-bold text-slate-700 text-right">{fmtK(contractValue(l))}원</span>
-              <span className="text-xs font-bold text-teal-600 text-right">입금 {fmtK(actualPaid(l))}원</span>
-            </button>
-          ))}
-          {!contracts.length && <Empty text="기간 내 계약이 없습니다." />}
-          {recentContractLimit < recentContracts.length && (
-            <div className="pt-3">
-              <button
-                type="button"
-                onClick={() => setRecentContractLimit((current) => current + 10)}
-                className="w-full h-9 rounded-xl border border-dashed border-slate-300 bg-slate-50 text-xs font-extrabold text-slate-500 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 transition-colors"
-              >
-                + 계약 {Math.min(10, recentContracts.length - recentContractLimit)}건 더보기
-              </button>
-            </div>
-          )}
         </div>
       </Card>
       <Modal open={!!selectedBuildup} onClose={() => setBuildupOpen(null)} wide title={selectedBuildup ? pLabel(period) + " " + selectedBuildup.key + " 성과 기업 " + selectedBuildup.companyRows.length + "개사" : ""}>
