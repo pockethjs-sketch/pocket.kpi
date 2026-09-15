@@ -148,6 +148,23 @@ import { shadowStatusFromSheetsResult } from "./data/repositoryAdapter.js";
     return crmPostSheetAction('contract_change_status', { changeId: changeId, status: status, actor: actor || 'web' }, 30000);
   };
 
+  window.crmSyncNewContracts = async function () {
+    return crmPostSheetAction('contract_auto_sync', {}, 90000);
+  };
+  window.crmReadPrimaryContractState = async function () {
+    // No Sheets fallback and no global revision changes until both reads agree.
+    for (var attempt = 0; attempt < 3; attempt += 1) {
+      var results = await Promise.all([
+        crmFetchDomainAction('bootstrap', { timeoutMs: 25000 }),
+        crmFetchDomainAction('crm', { timeoutMs: 25000 })
+      ]);
+      if (results[0].revision && results[0].revision === results[1].revision) {
+        return { revision: results[0].revision, state: Object.assign({}, results[0].documents, { leads: results[1].leads }) };
+      }
+    }
+    throw new Error('contract_state_revision_busy');
+  };
+
   function crmApplyRemoteEnvelope(payload) {
     if (!payload || typeof payload !== 'object') return;
     window.crmRemoteRevision = String(payload.revision || window.crmRemoteRevision || '');
@@ -2336,6 +2353,41 @@ function useDB() {
   const [db, setDb] = useState(null);
   const [saveState, setSaveState] = useState("불러오는 중");
   const timer = useRef(null); const skip = useRef(true); const latestDbRef = useRef(null);
+  useEffect(() => {
+    const refresh = async () => {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        await window.crmWaitForRemoteCommit(45000);
+        const baseline = window.crmLastRemoteValue;
+        if (!baseline || !latestDbRef.current) throw new Error('remote_baseline_missing');
+        const remote = await window.crmReadPrimaryContractState();
+        if (baseline !== window.crmLastRemoteValue || Number(window.crmPendingRemoteSaves || 0) > 0) continue;
+        const latest = latestDbRef.current;
+        const localChanges = crmBuildMutation(baseline, JSON.stringify(latest), { origin: 'user', reason: 'contract_sync_local_edits', allowedLeadRemovals: [] });
+        // Marketing has an independent source; contract refresh must not clear its cached values.
+        const fresh = { ...remote.state, adSpend: latest.adSpend, adDaily: latest.adDaily, adSpendMeta: latest.adSpendMeta };
+        const value = JSON.stringify(fresh);
+        window.crmLastRemoteValue = value;
+        window.crmOptimisticRemoteValue = value;
+        window.crmRemoteRevision = remote.revision;
+        localStorage.setItem(CRM_REMOTE_REVISION_KEY, remote.revision);
+        const merged = crmApplyMutationLocal(fresh, localChanges);
+        clearTimeout(timer.current);
+        latestDbRef.current = merged;
+        skip.current = true;
+        setDb({ ...merged });
+        localStorage.setItem(KEY3, JSON.stringify(merged));
+        if (localChanges.changedCount) {
+          const saved = await window.storage.set(KEY3, JSON.stringify(merged), { origin: 'user', reason: 'contract_sync_local_edits' });
+          if (!saved || !saved.ok || saved.pending) throw new Error('contract_sync_local_edits_pending');
+        }
+        setSaveState('계약 시트 자동 반영 · Supabase 저장 확인');
+        return;
+      }
+      throw new Error('contract_state_revision_busy');
+    };
+    window.crmReloadAfterContractSync = refresh;
+    return () => { if (window.crmReloadAfterContractSync === refresh) delete window.crmReloadAfterContractSync; };
+  }, []);
   useEffect(() => { (async () => {
     let data = null;
     let initialSource = "";
@@ -3880,26 +3932,45 @@ function DealsView() {
   const [contractApplyingId, setContractApplyingId] = useState("");
   const [contractLogOpen, setContractLogOpen] = useState(false);
   const [contractLogQuery, setContractLogQuery] = useState("");
+  const contractReviewRunning = useRef(false);
+  const [contractAutoSync, setContractAutoSync] = useState(null);
   const refreshContractReview = async (showToast = false) => {
-    if (!window.crmFetchContractSheetChanges || contractReviewBusy) return;
+    if (!window.crmFetchContractSheetChanges || contractReviewRunning.current) return;
+    if (!window.crmRemoteApplied || !window.crmRemoteLoaded || window.crmSyncInProgress) {
+      if (showToast) toast("CRM 최신 데이터 확인 후 계약 시트를 다시 확인해주세요");
+      return;
+    }
+    contractReviewRunning.current = true;
     setContractReviewBusy(true);
     try {
+      await window.crmWaitForRemoteCommit(45000);
+      const sync = await window.crmSyncNewContracts();
+      if (!sync || sync.action !== 'contract_auto_sync') throw new Error('contract_auto_not_deployed');
+      if ((sync.updated || []).length || sync.revision !== window.crmRemoteRevision) await window.crmReloadAfterContractSync();
+      setContractAutoSync({ ...sync, checkedAt: new Date().toISOString() });
       const payload = await window.crmFetchContractSheetChanges();
       setContractReview(payload);
       setContractReviewError("");
-      if (showToast) toast(payload.pending ? "8월 이후 미등록 계약 업체 " + payload.pending + "곳을 확인했습니다" : "추가할 신규 계약 업체가 없습니다");
+      if (showToast || (sync.updated || []).length) toast("계약 자동 반영 " + (sync.updated || []).length + "곳 · 확인 필요 " + (sync.blocked || []).length + "곳 · 미등록 " + payload.pending + "곳");
     } catch (error) {
       const message = String(error && error.message || error || "contract_review_failed");
       setContractReviewError(message);
       if (showToast) toast(message === "contract_review_not_deployed" ? "신규 계약 업체 확인 기능이 Apps Script에 아직 배포되지 않았습니다" : "계약 시트 신규 업체 확인 실패 · " + message);
     } finally {
       setContractReviewBusy(false);
+      contractReviewRunning.current = false;
     }
   };
   useEffect(() => {
     refreshContractReview(false);
+    const readyTimer = (!window.crmRemoteApplied || !window.crmRemoteLoaded || window.crmSyncInProgress) ? setInterval(() => {
+      if (window.crmRemoteApplied && window.crmRemoteLoaded && !window.crmSyncInProgress) {
+        clearInterval(readyTimer);
+        refreshContractReview(false);
+      }
+    }, 3000) : null;
     const timer = setInterval(() => refreshContractReview(false), 5 * 60 * 1000);
-    return () => clearInterval(timer);
+    return () => { clearInterval(timer); clearInterval(readyTimer); };
   }, []);
   const sortBy = (k) => { if (sortKey === k) setSortDir((v) => -v); else { setSortKey(k); setSortDir(1); } };
   const arrow = (k) => sortKey === k ? <span className="text-indigo-500">{sortDir > 0 ? "▲" : "▼"}</span> : <span className="text-slate-300">↕</span>;
@@ -4364,6 +4435,15 @@ function DealsView() {
   return (
     <div className="space-y-4">
       <SecTitle icon={Handshake} title="프리미팅 기업" sub={"CRM 캘린더의 프리미팅 일정부터 방문 완료·계약까지 관리하는 시트입니다 (" + pLabel(period) + "). 방문 미확인은 프리미팅 확정으로 분리 · 셀에서 바로 편집 · 헤더 클릭으로 정렬."} />
+      <div className="border border-slate-200 rounded-md px-3 py-2 text-xs text-slate-600 bg-white">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span>계약 시트 자동 연동 · 신규 + 프리미팅 기업 고유 매칭 · 부가세 포함 · 기존 입력 충돌 시 보류</span>
+          <button className="text-indigo-600 font-bold disabled:opacity-40" disabled={contractReviewBusy} onClick={() => refreshContractReview(true)}>{contractReviewBusy ? '확인·저장 중…' : '계약 시트 확인'}</button>
+        </div>
+        {contractAutoSync && <p className="mt-1">최근 확인 {new Date(contractAutoSync.checkedAt).toLocaleTimeString('ko-KR')} · 자동 반영 {(contractAutoSync.updated || []).length}곳 · 동일 원본 {contractAutoSync.unchanged || 0}곳 · 확인 필요 {(contractAutoSync.blocked || []).length}곳</p>}
+        {contractReviewError && <p className="mt-1 text-red-600">최근 확인 실패 · 마지막 반영 내역은 유지됩니다. 다시 확인해주세요.</p>}
+        {!!(contractAutoSync?.blocked || []).length && <details className="mt-2"><summary className="cursor-pointer text-amber-700">자동 반영 보류 업체·이유 보기</summary><ul className="mt-2 space-y-1">{contractAutoSync.blocked.map((item) => <li key={item.sourceKey}>{item.company} — {String(item.reason || '').replace(/contractAmount/g, '계약액').replace(/contractAt/g, '계약일').replace(/status/g, '진행 상태')}</li>)}</ul></details>}
+      </div>
       <Card cls="p-3">
         <div className="flex flex-col 2xl:flex-row 2xl:items-center gap-3">
           <div className="flex items-center gap-4 flex-wrap min-w-0">
@@ -9132,9 +9212,9 @@ function SchemaView() {
   const architectureNodes = {
     crm: { lane: "외부 원천", title: "본사 CRM API", meta: "읽기 전용", tone: "blue", summary: "리드·TM·프리미팅 원천", details: ["newarrivals/v2 · 유입 DB", "mr_schedules · 프리미팅 일정", "CRM 값은 사용자 입력을 직접 삭제하지 않음"] },
     ads: { lane: "외부 원천", title: "광고 매체 API", meta: "직접 수집", tone: "blue", summary: "META · NAVER · GOOGLE", details: ["캠페인·일자별 비용/노출/클릭", "META는 잠재고객·포켓 트래픽·빌더진 트래픽 분리", "Supabase Edge가 매체 API를 직접 호출"] },
-    contract: { lane: "외부 원천", title: "외부 계약 시트", meta: "검토 후 반영", tone: "blue", summary: "신규 계약 후보 감지", details: ["2026-08 이후 미등록 업체만 후보화", "사용자가 신규 생성 또는 제외", "자동 덮어쓰기하지 않음"] },
+    contract: { lane: "외부 원천", title: "외부 계약 시트", meta: "신규 고유 매칭 자동 반영", tone: "blue", summary: "기존 프리미팅 기업의 계약액·내용 보완", details: ["2026-08 이후 신규 계약 + 프리미팅 기업 1:1 매칭", "별도가 × 1.1 · 포함가 명시는 그대로", "기존 입력 충돌·동명이업체는 보류, 입금·잔금 보존", "페이지 진입·5분·수동 확인 시 Supabase 저장", "미등록 업체는 기존처럼 생성·제외 선택"] },
     support: { lane: "외부 원천", title: "Supabase", meta: "읽기", tone: "violet", summary: "지원사업 관리 데이터", details: ["지원사업 배정·합격·일정", "지원사업 관리 화면에서 조회", "웹 전체 상태 저장소와는 별도"] },
-    appscript: { lane: "연동 계층", title: "Apps Script Web App", meta: "백업·외부연동", tone: "amber", summary: "Sheets 백업과 CRM 프록시", details: ["운영 저장 경로에서는 제외", "Supabase 장애 시 복구 스냅샷 제공", "Google 계약 시트·CRM 프록시 유지"] },
+    appscript: { lane: "연동 계층", title: "Apps Script Web App", meta: "백업·외부연동", tone: "amber", summary: "Sheets 백업과 계약 시트 연동", details: ["사용자 직접 저장은 Supabase 직행", "신규 계약 고유 매칭 후 Supabase 최신 리비전에 patch", "Supabase 장애 시 복구 스냅샷 제공", "Google 계약 시트·CRM 장애 프록시 유지"] },
     collector: { lane: "연동 계층", title: "Supabase Edge + Cron", meta: "매일 오전 9시", tone: "violet", summary: "광고 API 직접 수집", details: ["META/NAVER/GOOGLE → 관계형 광고 테이블", "공급자별 성공·실패 상태 저장", "웹 접속 여부와 독립 실행"] },
     web: { lane: "웹", title: "Pocket KPI 웹", meta: "React · GitHub Pages", tone: "indigo", summary: "조회·계산·사용자 입력", details: ["통합·마케팅·프리미팅·계약·기타 화면", "서버 저장 성공 전 브라우저 저널 유지", "저장 성공 뒤 서버 리비전으로 화면 갱신"] },
     journal: { lane: "웹", title: "브라우저 저널", meta: "임시 안전장치", tone: "indigo", summary: "미전송 변경 보관", details: ["localStorage에 저장 대기 작업 보관", "네트워크 복구 후 같은 mutationId로 재전송", "Supabase 정본을 대체하지 않음"] },
