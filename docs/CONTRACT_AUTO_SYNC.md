@@ -7,8 +7,8 @@
 - 읽기 전용 원천: Google Sheet `1vNlj417n1JE0HTOky5FCKS0_Y5daeor7oIok3SXMbss`, `계약 프로세스`, gid 0.
 - 실제 헤더: A 날짜 / B 업체명 / C 프리 / N 프로젝트 / O 별도가 / P 비고 / Q 신규/기존. H 대금 지급 확인은 자동 계약 반영에서 입금으로 사용하지 않는다.
 - 과거 파서는 N을 금액 포함 텍스트, O를 비고, P를 신규/기존으로 잘못 읽었다. 이제 필수 헤더 이름으로 찾고 누락·중복이면 오류로 중단한다.
-- `프리미팅 기업` 진입·열려 있는 동안 5분 간격·`계약 시트 확인` → Apps Script POST `contract_auto_sync` → Supabase 최신 정본 조회 → 변경 patch와 활동 로그를 같은 저장 요청으로 COMMIT → 같은 리비전의 bootstrap/crm을 재조회.
-- 페이지를 닫으면 이 확인은 실행되지 않는다. 새 Cron은 만들지 않았다. 광고 일일 수집 및 15분 Sheets 백업 일정은 그대로다.
+- `시트 동기화` 버튼 또는 매일 한국시간 09시 이후 서버 작업 → Apps Script POST `contract_auto_sync` / 동일 서버 함수 → Supabase 최신 정본 조회 → 변경 patch와 활동 로그를 같은 저장 요청으로 COMMIT → 같은 리비전의 bootstrap/crm을 재조회.
+- 9/15 후속 요청으로 페이지 진입·5분 간격 자동 쓰기를 제거했다. 페이지를 닫아도 일일 작업이 실행된다. 최초 예약일은 9/16이며, 5분 시계 확인 중 당일 09시 이후 첫 실행에서만 원천 동기화한다. 광고 일일 수집 및 15분 Sheets 백업 일정은 그대로다. 세부 사항은 [DAILY_SYNC.md](DAILY_SYNC.md).
 - 운영 정본은 KPI 전용 Supabase. 시트는 계약 원천 및 비동기 복구 백업이며 원천 계약 프로세스 시트를 수정하지 않는다.
 
 ## 자동 처리 대상
@@ -47,7 +47,7 @@
 - 테스트 대상 순수 로직: `scripts/contract-sheet-sync-core.mjs`.
 - `node scripts/build-contract-sync.mjs`가 같은 로직을 `../pocket-kpi-deploy/Code.gs`의 GENERATED 구간에 기계적으로 삽입한다. GS 복사본을 여러 개 만들지 않는다.
 - 서버 통합: `_crmContractSourceGroups`, `_crmAutoSyncNewContracts`, POST 라우트. 기존 `_crmContractSourceGroupsLegacy`는 호출하지 않는 보관 코드.
-- Apps Script 동일 배포 ID 유지, **버전 56**, backend `2026-09-15-contract-auto-sync-v27`. Code만 교체하고 나머지 스크립트·권한 설정 보존.
+- 최초 자동 계약 반영 배포는 버전 56. 일일 동기화 후속 배포는 같은 배포 ID의 **버전 58**, backend `2026-09-15-daily-sync-v28`. Code와 crm_lead를 갱신했고 마케팅·백업 파일 및 권한 설정은 보존.
 - 프런트: `src/main.jsx`의 동기화 호출·DB 재조회·프리미팅 기업 상태 표시. DB 스키마 및 Edge Function 변경 없음.
 - 웹 배포 결과는 `PROJECT_STATE.md`에 기록한다.
 

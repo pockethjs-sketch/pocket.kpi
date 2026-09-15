@@ -4,9 +4,12 @@ import { readFile } from "node:fs/promises";
 
 const source = await readFile(new URL("../src/main.jsx", import.meta.url), "utf8");
 
-test("manual CRM refresh requests the selected period and keeps only premeeting type", () => {
-  assert.match(source, /const rangeStart = r \? r\[0\] : "2026-08-01"/);
-  assert.match(source, /const rangeEnd = r \? r\[1\] : today/);
+test("manual premeeting refresh uses the shared recent-three-day server action", () => {
+  assert.match(source, /crmPostSheetAction\('premeeting_sync', \{\}, 90000\)/);
+  const body=source.slice(source.indexOf('const refreshTodayPremeetings ='),source.indexOf('const addDeal ='));
+  assert.match(body,/crmSyncRecentPremeetings/);
+  assert.match(body,/crmReloadAfterContractSync/);
+  assert.doesNotMatch(body,/rangeStart = r/);
   assert.match(source, /Number\(meeting\.mr_type\) === 1/);
 });
 

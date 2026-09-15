@@ -53,8 +53,8 @@ test("state route does not read unused Sheets metadata before Supabase", () => {
 });
 
 test("calendar synchronization and mutation baselines use Supabase primary, not Sheets A/B", () => {
-  const calendarStart = calendar.indexOf("function syncPremeetings()");
-  const calendarEnd = calendar.indexOf("lock.releaseLock()", calendarStart);
+  const calendarStart = calendar.indexOf("function _crmRunPremeetingSync(body)");
+  const calendarEnd = calendar.indexOf("function _crmRunSheetSync", calendarStart);
   const calendarBody = calendar.slice(calendarStart, calendarEnd);
   assert.match(calendarBody, /_crmReadSupabasePrimaryEnvelope_\(\)/);
   assert.doesNotMatch(calendarBody, /_crmReadStateEnvelope\(\)/);
