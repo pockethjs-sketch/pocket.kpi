@@ -1,5 +1,5 @@
 import "./styles.css";
-import ContractOwnerSheet from "./ContractOwnerSheet.jsx";
+import ContractOwnerSheet, { ContractCustomerTypeLabel } from "./ContractOwnerSheet.jsx";
 import { shadowStatusFromSheetsResult } from "./data/repositoryAdapter.js";
 
 /* ===== 운영 데이터 연동 설정 =====
@@ -7099,13 +7099,16 @@ function ContractHubView() {
   const [contractView, setContractView] = useState("owner");
   const [contractSearch, setContractSearch] = useState("");
   const [contractOwner, setContractOwner] = useState("all");
+  const [contractCustomerType, setContractCustomerType] = useState("전체");
+  const matchesContractCustomerType = (lead) => contractCustomerType === "전체" || (lead.ctype || "신규") === contractCustomerType;
   const r = pRange(period);
   const contractValue = (l) => l.contractAmount || paySum(l) || 0;
-  const contracts = db.leads.filter((l) => l.status === "계약 완료" && inR(l.contractAt, r) && contractValue(l) > 0);
-  const meetings = db.leads.filter((l) => inR(meetingDoneDate(l), r));
+  const periodContracts = db.leads.filter((l) => l.status === "계약 완료" && inR(l.contractAt, r) && contractValue(l) > 0);
+  const contracts = periodContracts.filter(matchesContractCustomerType);
+  const meetings = db.leads.filter((l) => inR(meetingDoneDate(l), r) && matchesContractCustomerType(l));
   const convertedMeetings = meetings.filter((l) => l.status === "계약 완료" && contractValue(l) > 0);
   const contractAmount = contracts.reduce((s, l) => s + contractValue(l), 0);
-  const revenueRows = db.leads.flatMap((l) => payRows(l).filter((p) => p.paidAt && inR(p.paidAt, r) && (p.amount || 0) > 0).map((p) => ({ l, p })));
+  const revenueRows = db.leads.filter(matchesContractCustomerType).flatMap((l) => payRows(l).filter((p) => p.paidAt && inR(p.paidAt, r) && (p.amount || 0) > 0).map((p) => ({ l, p })));
   const revenue = revenueRows.reduce((s, x) => s + (x.p.amount || 0), 0);
   const outstandingRows = contracts.map((l) => ({ l, amount: Math.max(0, contractValue(l) - actualPaid(l)), date: l.contractAt })).filter((x) => x.amount > 0);
   const outstanding = outstandingRows.reduce((s, x) => s + x.amount, 0);
@@ -7231,6 +7234,15 @@ function ContractHubView() {
               <p className="text-[10px] text-slate-400 mt-1">선택 기간의 계약 완료 기업 · 담당자별 계약액 순</p>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
+              <div role="group" aria-label="계약 고객 구분" className="flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+                {["전체", "신규", "기존"].map((type) => (
+                  <button key={type} type="button" aria-pressed={contractCustomerType === type}
+                    onClick={() => { setContractCustomerType(type); setContractOwner("all"); }}
+                    className={"h-7 rounded-md px-3 text-xs font-extrabold " + (contractCustomerType === type ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100")}>
+                    {type} <span className="ml-1 tabular-nums">{periodContracts.filter((lead) => type === "전체" || (lead.ctype || "신규") === type).length}</span>
+                  </button>
+                ))}
+              </div>
               <label className="relative block">
                 <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
@@ -7281,7 +7293,7 @@ function ContractHubView() {
           </div>
         </div>
         {contractView === "owner" ? (
-          <ContractOwnerSheet groups={contractOwnerGroups} title={pLabel(period)} valueOf={contractValue} channelOf={channelGroupName} gradeOf={contractGradeLabel} programOf={contractBuildupKey} onOpen={openLead} />
+          <ContractOwnerSheet groups={contractOwnerGroups} title={pLabel(period)} customerType={contractCustomerType} valueOf={contractValue} channelOf={channelGroupName} gradeOf={contractGradeLabel} programOf={contractBuildupKey} onOpen={openLead} />
         ) : (
           <div className="overflow-x-auto">
             <div className="min-w-[1060px]">
@@ -7297,7 +7309,7 @@ function ContractHubView() {
                   return (
                     <button key={l.id} type="button" onClick={() => openLead(l.id)} className="grid w-full grid-cols-[76px_minmax(160px,1.4fr)_82px_60px_78px_minmax(110px,.9fr)_100px_100px_96px_76px] items-center gap-2 px-4 py-2.5 text-left hover:bg-indigo-50/60">
                       <span className="text-[10px] text-slate-400">{fmtDate(l.contractAt)}</span>
-                      <span className="truncate text-[11px] font-extrabold text-slate-800">{l.company || "업체명 없음"}</span>
+                      <span className="flex items-center gap-1.5 min-w-0 text-[11px] font-extrabold text-slate-800"><ContractCustomerTypeLabel value={l.ctype} /><span className="truncate">{l.company || "업체명 없음"}</span></span>
                       <span className="truncate text-[10px] text-slate-500">{channelGroupName(l.channel)}</span>
                       <span><span className={"inline-flex rounded-md border px-1.5 py-0.5 text-[9px] font-extrabold " + contractGradeTone(l.grade)}>{contractGradeLabel(l.grade)}</span></span>
                       <span className="truncate text-[10px] font-bold text-slate-600">{l.salesOwner || "미배정"}</span>

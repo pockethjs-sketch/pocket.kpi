@@ -165,7 +165,11 @@
 .contract-sheet tbody tr:nth-child(even) td { background: #fafbfc; }
 .contract-sheet tbody tr:hover td { background: #edf3ff; }
 .contract-sheet .contract-sheet-company { padding: 0; text-align: left; }
-.contract-sheet-company button { display: block; width: 100%; padding: 6px 7px; overflow: hidden; text-overflow: ellipsis; text-align: left; font-size: 12px; line-height: 18px; font-weight: 650; }
+.contract-sheet-company button { display: flex; align-items: center; gap: 5px; width: 100%; padding: 6px 7px; overflow: hidden; text-align: left; font-size: 12px; line-height: 18px; font-weight: 650; }
+.contract-sheet-company-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.contract-customer-type { display: inline-block; flex-shrink: 0; padding: 0 3px; border-radius: 3px; font-size: 10px; line-height: 17px; font-weight: 700; white-space: nowrap; }
+.contract-customer-new { background: #e4efff; color: #1d4ed8; }
+.contract-customer-existing { background: #eee7fa; color: #6d28d9; }
 .contract-sheet-company button:hover { color: #1d4ed8; text-decoration: underline; }
 .contract-sheet-company button:focus-visible { outline: 2px solid #2563eb; outline-offset: -2px; }
 .contract-sheet .contract-sheet-program { color: #9e3331; font-size: 11px; font-weight: 600; }

@@ -3,7 +3,12 @@ import React, { Fragment } from "react";
 const colors = ["#edab9b", "#ffe39a", "#a9c9ed", "#cfb5df", "#a6d8c6"];
 const money = (value) => "₩" + Number(value || 0).toLocaleString("ko-KR");
 
-export default function ContractOwnerSheet({ groups, title, valueOf, channelOf, gradeOf, programOf, onOpen }) {
+export function ContractCustomerTypeLabel({ value }) {
+  const type = value || "신규";
+  return <span className={"contract-customer-type " + (type === "기존" ? "contract-customer-existing" : "contract-customer-new")}>{type}</span>;
+}
+
+export default function ContractOwnerSheet({ groups, title, customerType = "전체", valueOf, channelOf, gradeOf, programOf, onOpen }) {
   if (!groups.length) return <p className="p-10 text-center text-sm text-slate-600">조건에 맞는 계약이 없습니다.</p>;
   const count = groups.reduce((sum, group) => sum + group.rows.length, 0);
   const total = groups.reduce((sum, group) => sum + group.rows.reduce((subtotal, lead) => subtotal + valueOf(lead), 0), 0);
@@ -11,7 +16,7 @@ export default function ContractOwnerSheet({ groups, title, valueOf, channelOf, 
   return (
     <section className="contract-sheet" aria-label="담당자별 계약 성과">
       <div className="contract-sheet-title">
-        <h2>{title} 계약 리스트</h2>
+        <h2>{title} · {customerType} 계약 리스트</h2>
         <p>계약일 기준 · 최종 계약금액 · 업체명 클릭 시 상세</p>
       </div>
       <div className="contract-sheet-overflow" tabIndex={0} role="region" aria-label="담당자별 계약 표, 좌우로 스크롤 가능">
@@ -38,8 +43,8 @@ export default function ContractOwnerSheet({ groups, title, valueOf, channelOf, 
               const lead = group.rows[index];
               if (!lead) return <Fragment key={group.owner}><td className="contract-sheet-divider" /><td /><td /><td /><td /></Fragment>;
               return <Fragment key={group.owner}>
-                <td className="contract-sheet-divider contract-sheet-company"><button type="button" onClick={() => onOpen(lead.id)} title={`${lead.company} · ${lead.ctype || "구분 미지정"} · ${lead.contractAt || ""}`}>
-                  {lead.company || "업체명 없음"}
+                <td className="contract-sheet-divider contract-sheet-company"><button type="button" onClick={() => onOpen(lead.id)} title={`${lead.company} · ${lead.ctype || "신규"} · ${lead.contractAt || ""}`}>
+                  <ContractCustomerTypeLabel value={lead.ctype} /><span className="contract-sheet-company-name">{lead.company || "업체명 없음"}</span>
                 </button></td>
                 <td title={lead.channel || "미지정"}>{channelOf(lead.channel)}</td>
                 <td>{gradeOf(lead.grade) === "미평가" ? "—" : gradeOf(lead.grade)}</td>
@@ -57,7 +62,7 @@ export default function ContractOwnerSheet({ groups, title, valueOf, channelOf, 
           </tr></tfoot>
         </table>
       </div>
-      <div className="contract-sheet-total"><span>전체 계약 합계 <span className="contract-sheet-total-count">{count}건</span></span><strong>{money(total)}</strong></div>
+      <div className="contract-sheet-total"><span>{customerType} 계약 합계 <span className="contract-sheet-total-count">{count}건</span></span><strong>{money(total)}</strong></div>
     </section>
   );
 }

@@ -34,3 +34,9 @@ Date: 2026-09-15
 - Initial revised capture: shared table replaces vertically wrapping cards. No actionable P0/P1/P2 visual differences for the user's requested adaptation; row count, slightly larger text, and fewer blank rows are intentional.
 
 final result: passed
+
+## Follow-up: 신규 / 기존 구분
+
+- Added customer-type filter and compact company labels, preserving the five-column table.
+- Ran actual ContractHubView code against new/existing/missing-type sample leads: all three selections produced the expected owner rows, contract sum, paid sum and outstanding sum. Missing type follows the existing app's 신규 default.
+- Build and 49 existing tests passed. This follow-up verifies classification behavior; no signed-in production-data audit was performed.
