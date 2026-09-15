@@ -5,10 +5,10 @@ const money = (value) => "₩" + Number(value || 0).toLocaleString("ko-KR");
 
 export function ContractCustomerTypeLabel({ value }) {
   const type = value || "신규";
-  return <span className={"contract-customer-type " + (type === "기존" ? "contract-customer-existing" : "contract-customer-new")}>{type}</span>;
+  return <span className={"contract-customer-type " + (type === "구분 미상" ? "contract-customer-unknown" : type === "기존" ? "contract-customer-existing" : "contract-customer-new")}>{type}</span>;
 }
 
-export default function ContractOwnerSheet({ groups, title, customerType = "전체", valueOf, channelOf, gradeOf, programOf, onOpen }) {
+export default function ContractOwnerSheet({ groups, title, customerType = "전체", valueOf, channelOf, gradeOf, programOf, onOpen, description = "계약일 기준 · 최종 계약금액 · 업체명 클릭 시 상세" }) {
   if (!groups.length) return <p className="p-10 text-center text-sm text-slate-600">조건에 맞는 계약이 없습니다.</p>;
   const count = groups.reduce((sum, group) => sum + group.rows.length, 0);
   const total = groups.reduce((sum, group) => sum + group.rows.reduce((subtotal, lead) => subtotal + valueOf(lead), 0), 0);
@@ -17,7 +17,7 @@ export default function ContractOwnerSheet({ groups, title, customerType = "전�
     <section className="contract-sheet" aria-label="담당자별 계약 성과">
       <div className="contract-sheet-title">
         <h2>{title} · {customerType} 계약 리스트</h2>
-        <p>계약일 기준 · 최종 계약금액 · 업체명 클릭 시 상세</p>
+        <p>{description}</p>
       </div>
       <div className="contract-sheet-overflow" tabIndex={0} role="region" aria-label="담당자별 계약 표, 좌우로 스크롤 가능">
         <table style={{ minWidth: 40 + groups.length * 400 }}>

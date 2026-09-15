@@ -170,6 +170,32 @@
 .contract-customer-type { display: inline-block; flex-shrink: 0; padding: 0 3px; border-radius: 3px; font-size: 10px; line-height: 17px; font-weight: 700; white-space: nowrap; }
 .contract-customer-new { background: #e4efff; color: #1d4ed8; }
 .contract-customer-existing { background: #eee7fa; color: #6d28d9; }
+.contract-customer-unknown { background: #f1f3f5; color: #626b78; }
+.contract-monthly { min-width: 0; color: #172033; }
+.contract-monthly-toolbar { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; padding:16px; }
+.contract-monthly-toolbar h2,.contract-monthly-toolbar h3 { font-size:16px; font-weight:800; }
+.contract-monthly-toolbar p { margin-top:4px; font-size:12px; color:#64748b; }
+.contract-monthly-toolbar label { font-size:12px; }
+.contract-monthly-toolbar select,.contract-monthly-toolbar button { padding:6px 10px; border:1px solid #cbd5e1; border-radius:4px; background:white; font-size:12px; }
+.contract-monthly-toolbar button[aria-pressed=true] { background:#182437; color:white; }
+.contract-monthly-note { background:#f5f7fa; padding:10px 16px; font-size:12px; line-height:1.8; color:#526072; }
+.contract-monthly-scroll { max-width:100%; overflow:auto; max-height:65vh; }
+.contract-monthly-scroll table { border-collapse:separate; border-spacing:0; width:100%; font-size:12px; font-variant-numeric:tabular-nums; }
+.contract-monthly-scroll th,.contract-monthly-scroll td { border-bottom:1px solid #cbd2dc; border-right:1px solid #cbd2dc; padding:11px 12px; white-space:nowrap; text-align:right; min-width:132px; }
+.contract-monthly-scroll thead th { position:sticky; top:0; z-index:2; background:#e5ebf3; color:#24344b; font-weight:800; }
+.contract-monthly-scroll thead th:first-child { z-index:3; }
+.contract-monthly-scroll tr>th:first-child { position:sticky; left:0; text-align:left; min-width:118px; background:#eef2f7; z-index:1; }
+.contract-monthly-scroll thead tr>th:first-child { z-index:3; }
+.contract-monthly-scroll tbody tr:nth-child(even) td { background:#fafbfd; }
+.contract-monthly-scroll tbody tr.is-selected td,.contract-monthly-scroll tbody tr:hover td { background:#eef4ff; }
+.contract-monthly-scroll th button { color:#1e40af; font-weight:800; text-decoration:underline; text-underline-offset:3px; }
+.contract-monthly button:focus-visible,.contract-monthly select:focus-visible { outline:2px solid #2563eb; outline-offset:2px; }
+.contract-monthly .monthly-total { color:#172c4f; font-weight:800; background:#f0f5fc; }
+.contract-monthly .monthly-source { text-align:left; color:#64748b; font-size:11px; }
+.contract-monthly small { display:block; font-size:10px; font-weight:500; color:#78716c; }
+.contract-monthly .monthly-up { color:#137153; }
+.contract-monthly .monthly-down { color:#b42318; }
+.contract-monthly-detail { border-top:3px solid #465c7b; margin-top:16px; }
 .contract-sheet-company button:hover { color: #1d4ed8; text-decoration: underline; }
 .contract-sheet-company button:focus-visible { outline: 2px solid #2563eb; outline-offset: -2px; }
 .contract-sheet .contract-sheet-program { color: #9e3331; font-size: 11px; font-weight: 600; }

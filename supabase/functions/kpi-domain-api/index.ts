@@ -137,6 +137,31 @@ Deno.serve(async (req) => {
     return reply(req, { ok: true, leads: (data || []).map((row) => row.source_payload), revision: data?.[0]?.projected_revision || "" });
   }
 
+  if (action === "contract_history") {
+    // Paginate explicitly: PostgREST max_rows must not silently truncate older months.
+    const readAll = async (table: string, order: string) => {
+      const rows: any[] = [];
+      for (let offset = 0; ; offset += 500) {
+        const { data, error } = await supabase.from(table).select("*")
+          .eq("organization_id", organizationId).order("month").order(order).range(offset, offset + 499);
+        if (error) throw error;
+        rows.push(...(data || []));
+        if ((data || []).length < 500) return rows;
+        if (offset >= 49500) throw new Error("history_limit_exceeded");
+      }
+    };
+    try {
+      const [months, owners, details] = await Promise.all([
+        readAll("contract_history_months", "source_id"),
+        readAll("contract_history_owners", "source_column"),
+        readAll("contract_history_details", "source_cell"),
+      ]);
+      return reply(req, { ok: true, months, owners, details });
+    } catch {
+      return reply(req, { error: "contract_history_read_failed" }, 500);
+    }
+  }
+
   if (action === "marketing") {
     const [{ data: rows, error }, { data: syncRows, error: syncError }] = await Promise.all([
       supabase.from("marketing_daily_spend").select("spend_date,provider,channel_code,spend_amount,impressions,clicks,conversions,payload")

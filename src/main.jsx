@@ -1,5 +1,6 @@
 import "./styles.css";
 import ContractOwnerSheet, { ContractCustomerTypeLabel } from "./ContractOwnerSheet.jsx";
+import ContractMonthlyPerformance from "./ContractMonthlyPerformance.jsx";
 import { shadowStatusFromSheetsResult } from "./data/repositoryAdapter.js";
 
 /* ===== 운영 데이터 연동 설정 =====
@@ -114,6 +115,8 @@ import { shadowStatusFromSheetsResult } from "./data/repositoryAdapter.js";
       });
     }).finally(function () { if (timeout) clearTimeout(timeout); });
   }
+
+  window.crmFetchContractHistory = () => crmFetchDomainAction('contract_history');
 
   function crmPostSheetAction(action, payload, timeoutMs) {
     var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
@@ -7231,7 +7234,7 @@ function ContractHubView() {
                 <p className="text-sm font-extrabold text-slate-900">계약 성과 비교</p>
                 <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[9px] font-bold text-slate-500">계약일 기준</span>
               </div>
-              <p className="text-[10px] text-slate-400 mt-1">선택 기간의 계약 완료 기업 · 담당자별 계약액 순</p>
+              <p className="text-[10px] text-slate-400 mt-1">{contractView === "monthly" ? "과거 시트 실적 + 현재 CRM · 비교 연도 별도 선택" : "선택 기간의 계약 완료 기업 · 담당자별 계약액 순"}</p>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <div role="group" aria-label="계약 고객 구분" className="flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
@@ -7239,11 +7242,11 @@ function ContractHubView() {
                   <button key={type} type="button" aria-pressed={contractCustomerType === type}
                     onClick={() => { setContractCustomerType(type); setContractOwner("all"); }}
                     className={"h-7 rounded-md px-3 text-xs font-extrabold " + (contractCustomerType === type ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100")}>
-                    {type} <span className="ml-1 tabular-nums">{periodContracts.filter((lead) => type === "전체" || (lead.ctype || "신규") === type).length}</span>
+                    {type} {contractView !== "monthly" && <span className="ml-1 tabular-nums">{periodContracts.filter((lead) => type === "전체" || (lead.ctype || "신규") === type).length}</span>}
                   </button>
                 ))}
               </div>
-              <label className="relative block">
+              <label className={contractView === "monthly" ? "hidden" : "relative block"}>
                 <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   value={contractSearch}
@@ -7254,7 +7257,7 @@ function ContractHubView() {
                 />
               </label>
               <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
-                {[{ value: "owner", label: "담당자별" }, { value: "list", label: "전체 목록" }].map((item) => (
+                {[{ value: "owner", label: "담당자별" }, { value: "list", label: "전체 목록" }, { value: "monthly", label: "월별 비교·과거 실적" }].map((item) => (
                   <button
                     key={item.value}
                     type="button"
@@ -7268,7 +7271,7 @@ function ContractHubView() {
               </div>
             </div>
           </div>
-          <div className="mt-3 flex items-center gap-1.5 overflow-x-auto pb-1">
+          <div className={contractView === "monthly" ? "hidden" : "mt-3 flex items-center gap-1.5 overflow-x-auto pb-1"}>
             <button
               type="button"
               onClick={() => setContractOwner("all")}
@@ -7292,7 +7295,9 @@ function ContractHubView() {
             })}
           </div>
         </div>
-        {contractView === "owner" ? (
+        {contractView === "monthly" ? (
+          <ContractMonthlyPerformance leads={db.leads} period={period} customerType={contractCustomerType} valueOf={contractValue} openLead={openLead} />
+        ) : contractView === "owner" ? (
           <ContractOwnerSheet groups={contractOwnerGroups} title={pLabel(period)} customerType={contractCustomerType} valueOf={contractValue} channelOf={channelGroupName} gradeOf={contractGradeLabel} programOf={contractBuildupKey} onOpen={openLead} />
         ) : (
           <div className="overflow-x-auto">
@@ -7327,7 +7332,7 @@ function ContractHubView() {
           </div>
         )}
       </Card>
-      <details className="rounded-lg border border-slate-200 bg-white">
+      <details className={contractView === "monthly" ? "hidden" : "rounded-lg border border-slate-200 bg-white"}>
         <summary className="cursor-pointer px-4 py-3 text-sm font-bold text-slate-700">입금·미수 및 빌드업별 상세</summary>
         <div className="space-y-3 p-3">
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
@@ -9099,7 +9104,7 @@ function SchemaView() {
     { category: "프리미팅", name: "프리미팅 총괄 대시보드", read: [], write: ["데이터_계약원장", "데이터_입금원장"], external: ["CRM API"], use: "프리미팅·계약·빌드업 성과" },
     { category: "프리미팅", name: "TM · DB 품질/전환", read: [], write: ["마케팅_유입DB", "데이터_리드원장"], external: ["CRM API"], use: "유입일별 DB 품질과 전환" },
     { category: "프리미팅", name: "프리미팅 기업", read: [], write: ["프리미팅_계약현황", "데이터_계약원장", "데이터_입금원장", "데이터_계약현황로그"], external: ["CRM API"], use: "프리미팅 이후 계약·입금과 활동 이력 관리" },
-    { category: "계약", name: "계약 총괄 대시보드", read: [], write: ["데이터_계약원장", "데이터_입금원장"], external: [], use: "계약액·입금액·미수금 집계" },
+    { category: "계약", name: "계약 총괄 대시보드", read: ["Supabase leads", "contract_history_months", "contract_history_owners", "contract_history_details"], write: [], external: ["광고/KPI 리포트 월별계약·월별성과 (과거 이관 원천)"], use: "현재 계약·입금·미수 집계 + 과거 월별 실적 비교 (동일 월은 시트 우선, 중복 합산 없음)" },
     { category: "계약", name: "지원사업 관리", read: [], write: [], external: ["Supabase", "CRM API"], use: "지원사업 배정·합격·일정" },
     { category: "계약", name: "잔금 관리", read: [], write: ["계약_잔금관리", "계약_잔금로그", "데이터_입금원장"], external: [], use: "선금·중도금·잔금과 변경 이력" },
     { category: "계약", name: "포켓비즈", read: [], write: ["계약_포켓비즈"], external: [], use: "구독사·MRR·입금 상태" },
@@ -9286,7 +9291,7 @@ const VIEW_DATA_SOURCES = {
   premeetingHub: { sheet: "프리미팅 기업 저장 데이터", crm: "프리미팅 캘린더 일정과 담당자" },
   tmManagement: { sheet: "날짜별 DB 품질·전환 집계", crm: "유입일·TM 품질정보·후처리·프리미팅 전환" },
   deals: { sheet: "프리미팅 기업의 단계·금액·담당자 저장 데이터", crm: "프리미팅 일정과 고객사 정보" },
-  contractHub: { sheet: "계약금액·입금금액·미수금 데이터", crm: "계약 전 고객사·담당자 정보" },
+  contractHub: { sheet: "현재 계약: Supabase / 과거 실적: 시트에서 별도 DB 이관", crm: "계약 전 고객사·담당자 정보" },
   supportManagement: { sheet: "지원사업 고객의 합격·연장 관리 데이터", crm: "계약 고객 기본정보", support: "배정 지원사업과 합격 이력" },
   ltvExpansion: { sheet: "기존 고객의 선금·중도금·잔금 회차와 특이사항·상태", crm: "기존 계약 고객 기본정보" },
   balance: { sheet: "구형 잔금액·예정일·회수 상태 화면", crm: "계약 고객 기본정보" },

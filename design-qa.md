@@ -40,3 +40,12 @@ final result: passed
 - Added customer-type filter and compact company labels, preserving the five-column table.
 - Ran actual ContractHubView code against new/existing/missing-type sample leads: all three selections produced the expected owner rows, contract sum, paid sum and outstanding sum. Missing type follows the existing app's 신규 default.
 - Build and 49 existing tests passed. This follow-up verifies classification behavior; no signed-in production-data audit was performed.
+
+## 2026-09-15 Monthly history comparison
+
+- Added dense, aligned month/owner matrix, fixed month column, metric/year controls and sheet-style drilldown.
+- Production component tested with actual imported historical rows and synthetic current rows in an isolated browser, not the user's browser.
+- 1526px desktop and 390px mobile: year switch, amount/count switch, unknown historical classification, live new/existing filter, monthly details and summary-only months passed; no page horizontal overflow, table scroll works, runtime exceptions 0.
+- Scoped monthly matrix CSS to avoid changing the nested owner table.
+- API independently verified against all 30 source months and 421 detail rows. Personal business data is not shipped in the static site.
+- Result: passed. Screenshots retained in ignored artifacts/contract-monthly-{desktop,mobile}.png.
