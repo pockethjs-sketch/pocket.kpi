@@ -1,4 +1,5 @@
 import "./styles.css";
+import ContractOwnerSheet from "./ContractOwnerSheet.jsx";
 import { shadowStatusFromSheetsResult } from "./data/repositoryAdapter.js";
 
 /* ===== 운영 데이터 연동 설정 =====
@@ -7217,43 +7218,17 @@ function ContractHubView() {
   }, [period.mode, period.y, period.m, period.d, period.start, period.end]);
   return (
     <div className="space-y-4">
-      <SecTitle icon={Handshake} title="계약 총괄" sub={pLabel(period) + " 계약일 기준 계약 금액과 입금일 기준 입금 금액을 분리해 봅니다."}
+      <SecTitle icon={Handshake} title="계약 총괄" sub={pLabel(period) + " · 담당자별 계약 실적"}
         right={<Btn size="xs" kind="primary" onClick={() => go("ltvExpansion")}>잔금 관리</Btn>} />
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-        <button type="button" onClick={() => setMetricOpen("completed")} className="text-left"><StatBig label="계약 완료" value={contracts.length} unit="건" accent="border-emerald-500" sub={"프리미팅 코호트 전환 " + conv + "% · 클릭=기업 목록"}
-          tooltip={{
-            title: "프리미팅 → 계약 전환율",
-            formula: "계약 완료 " + convertedMeetings.length + "건 ÷ 프리미팅 " + meetings.length + "건 × 100",
-            lines: ["분모: 선택 기간에 프리미팅을 진행한 고객", "분자: 같은 고객군 중 현재 상태가 계약 완료이고 계약금액이 있는 고객", "카드의 계약 완료 " + contracts.length + "건은 계약일 기준이라 전환율 분자와 집계 기준이 다릅니다."]
-          }} /></button>
-        <button type="button" onClick={() => setMetricOpen("contract")} className="text-left"><StatBig label="계약 금액" value={fmtK(contractAmount)} unit="원" accent="border-indigo-500" sub="계약일 기준 · 클릭=기업 목록"
-          tooltip={{
-            title: "계약 금액이란?",
-            formula: "선택 기간에 계약을 완료한 고객과 약정한 총 계약액의 합계",
-            lines: ["아직 받지 않은 선금·중도금·잔금도 포함합니다.", "Σ (contractAmount, 없으면 결제 회차 합계) · " + contracts.length + "건", "계약일이 선택 기간에 포함되고 계약금액이 0원보다 큰 고객만 집계합니다.", "전액 수금된 계약만 입금금액과 동일하며, 분할 수금 중인 계약은 계약금액이 더 큽니다."]
-          }} /></button>
-        <button type="button" onClick={() => setMetricOpen("paid")} className="text-left"><StatBig label="입금 금액" value={fmtK(revenue)} unit="원" accent="border-teal-500" sub={paidCompanies.length + "개사 · 입금일 기준"}
-          tooltip={{
-            title: "입금 금액이란?",
-            formula: "선택 기간에 실제 입금 완료된 결제 회차의 합계",
-            lines: ["계좌·카드 등으로 실제 받은 선금·중도금·잔금만 포함합니다.", "계약일이 아니라 각 결제 회차의 실제 입금일을 기준으로 해당 월에 집계합니다.", "계약금액보다 작으면 아직 미수금이 남은 것이며, 같으면 전액 수금된 계약입니다.", "현재 " + paidCompanies.length + "개사에서 실제 입금된 금액입니다."]
-          }} /></button>
-        <button type="button" onClick={() => setMetricOpen("outstanding")} className="text-left"><StatBig label="미수금" value={fmtK(outstanding)} unit="원" accent="border-rose-500" sub={outstandingRows.length + "개사 · 계약액의 " + outstandingRate + "%"}
-          tooltip={{
-            title: "미수금이란?",
-            formula: "Σ max(계약금액 - 누적 실입금, 0)",
-            lines: ["계약했지만 아직 실제로 받지 못한 금액입니다.", "계약금액 카드와 동일한 계약일 코호트 " + contracts.length + "건을 대상으로 계산합니다.", "미수 " + fmtK(outstanding) + "원 = 계약금액의 " + outstandingRate + "%", "계약금액과 미수금이 비슷하면 입금 회차가 없거나 실제 입금 등록이 누락됐을 가능성이 있습니다."]
-          }} /></button>
-      </div>
       <Card>
         <div className="px-4 pt-4 pb-3 border-b border-slate-100">
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <p className="text-sm font-extrabold text-slate-900">{pLabel(period)} 계약 리스트</p>
+                <p className="text-sm font-extrabold text-slate-900">계약 성과 비교</p>
                 <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[9px] font-bold text-slate-500">계약일 기준</span>
               </div>
-              <p className="text-[10px] text-slate-400 mt-1">담당자별 계약 기업과 채널·등급·프로그램·계약액을 한 화면에서 비교합니다.</p>
+              <p className="text-[10px] text-slate-400 mt-1">선택 기간의 계약 완료 기업 · 담당자별 계약액 순</p>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <label className="relative block">
@@ -7261,6 +7236,7 @@ function ContractHubView() {
                 <input
                   value={contractSearch}
                   onChange={(event) => setContractSearch(event.target.value)}
+                  aria-label="업체·채널·프로그램 검색"
                   placeholder="업체·채널·프로그램 검색"
                   className="h-8 w-52 rounded-lg border border-slate-200 bg-white pl-8 pr-3 text-[11px] font-medium text-slate-700 outline-none focus:border-indigo-400"
                 />
@@ -7271,6 +7247,7 @@ function ContractHubView() {
                     key={item.value}
                     type="button"
                     onClick={() => setContractView(item.value)}
+                    aria-pressed={contractView === item.value}
                     className={"h-7 rounded-md px-3 text-[10px] font-extrabold transition-colors " + (contractView === item.value ? "bg-slate-900 text-white shadow-sm" : "text-slate-500 hover:text-slate-800")}
                   >
                     {item.label}
@@ -7303,66 +7280,8 @@ function ContractHubView() {
             })}
           </div>
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 border-b border-slate-100 bg-slate-50/60">
-          {[
-            ["표시 계약", contractRows.length + "건", "text-slate-800"],
-            ["표시 계약액", fmtK(contractRows.reduce((sum, l) => sum + contractValue(l), 0)) + "원", "text-indigo-700"],
-            ["누적 입금", fmtK(contractRows.reduce((sum, l) => sum + actualPaid(l), 0)) + "원", "text-teal-700"],
-            ["미수금", fmtK(contractRows.reduce((sum, l) => sum + Math.max(0, contractValue(l) - actualPaid(l)), 0)) + "원", "text-rose-700"],
-          ].map(([label, value, tone], index) => (
-            <div key={label} className={"px-4 py-3 " + (index % 2 ? "border-l border-slate-100" : "") + (index > 1 ? " border-t border-slate-100 lg:border-t-0 lg:border-l" : "") }>
-              <p className="text-[9px] font-bold text-slate-400">{label}</p>
-              <p className={"mt-1 text-sm font-black " + tone}>{value}</p>
-            </div>
-          ))}
-        </div>
         {contractView === "owner" ? (
-          <div className="grid grid-cols-1 2xl:grid-cols-2 gap-3 p-3 bg-slate-50/40">
-            {contractOwnerGroups.map((group) => {
-              const groupPaid = group.rows.reduce((sum, l) => sum + actualPaid(l), 0);
-              const groupAmount = group.rows.reduce((sum, l) => sum + contractValue(l), 0);
-              return (
-                <section key={group.owner} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                  <div className={"flex items-center justify-between gap-3 border-b px-3 py-2.5 " + group.tone.header}>
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className={"h-2 w-2 shrink-0 rounded-full " + group.tone.dot} />
-                      <p className={"truncate text-xs font-black " + group.tone.text}>{group.owner}</p>
-                    </div>
-                    <div className="flex items-center gap-3 text-[10px] font-extrabold">
-                      <span className="text-slate-500">{group.rows.length}건</span>
-                      <span className={group.tone.text}>{fmtK(groupAmount)}원</span>
-                    </div>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <div className="min-w-[620px]">
-                      <div className="grid grid-cols-[minmax(150px,1.4fr)_82px_60px_minmax(105px,.9fr)_96px] gap-2 bg-slate-50 px-3 py-2 text-[9px] font-bold text-slate-400">
-                        <span>업체명</span><span>채널</span><span>등급</span><span>프로그램</span><span className="text-right">계약액</span>
-                      </div>
-                      <div className="divide-y divide-slate-100">
-                        {group.rows.map((l) => (
-                          <button key={l.id} type="button" onClick={() => openLead(l.id)} className="grid w-full grid-cols-[minmax(150px,1.4fr)_82px_60px_minmax(105px,.9fr)_96px] items-center gap-2 px-3 py-2.5 text-left hover:bg-indigo-50/60">
-                            <span className="min-w-0">
-                              <span className="block truncate text-[11px] font-extrabold text-slate-800">{l.company || "업체명 없음"}</span>
-                              <span className="mt-0.5 block truncate text-[9px] text-slate-400">{fmtDate(l.contractAt)} · {l.ctype || "구분 미지정"}</span>
-                            </span>
-                            <span className="truncate text-[10px] font-medium text-slate-500">{channelGroupName(l.channel)}</span>
-                            <span><span className={"inline-flex rounded-md border px-1.5 py-0.5 text-[9px] font-extrabold " + contractGradeTone(l.grade)}>{contractGradeLabel(l.grade)}</span></span>
-                            <span className="truncate text-[10px] font-bold text-slate-600">{contractBuildupKey(l)}</span>
-                            <span className="text-right text-[11px] font-black text-indigo-700">{fmtK(contractValue(l))}원</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between gap-2 border-t border-slate-100 bg-slate-50/70 px-3 py-2 text-[9px] font-bold text-slate-500">
-                    <span>계약 {group.rows.length}건 · 누적 입금 {fmtK(groupPaid)}원</span>
-                    <span className={group.tone.text}>회수율 {groupAmount > 0 ? pct(groupPaid, groupAmount) : 0}%</span>
-                  </div>
-                </section>
-              );
-            })}
-            {!contractOwnerGroups.length && <div className="2xl:col-span-2"><Empty text="조건에 맞는 계약이 없습니다." /></div>}
-          </div>
+          <ContractOwnerSheet groups={contractOwnerGroups} title={pLabel(period)} valueOf={contractValue} channelOf={channelGroupName} gradeOf={contractGradeLabel} programOf={contractBuildupKey} onOpen={openLead} />
         ) : (
           <div className="overflow-x-auto">
             <div className="min-w-[1060px]">
@@ -7396,6 +7315,35 @@ function ContractHubView() {
           </div>
         )}
       </Card>
+      <details className="rounded-lg border border-slate-200 bg-white">
+        <summary className="cursor-pointer px-4 py-3 text-sm font-bold text-slate-700">입금·미수 및 빌드업별 상세</summary>
+        <div className="space-y-3 p-3">
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+        <button type="button" onClick={() => setMetricOpen("completed")} className="text-left"><StatBig label="계약 완료" value={contracts.length} unit="건" accent="border-emerald-500" sub={"프리미팅 코호트 전환 " + conv + "% · 클릭=기업 목록"}
+          tooltip={{
+            title: "프리미팅 → 계약 전환율",
+            formula: "계약 완료 " + convertedMeetings.length + "건 ÷ 프리미팅 " + meetings.length + "건 × 100",
+            lines: ["분모: 선택 기간에 프리미팅을 진행한 고객", "분자: 같은 고객군 중 현재 상태가 계약 완료이고 계약금액이 있는 고객", "카드의 계약 완료 " + contracts.length + "건은 계약일 기준이라 전환율 분자와 집계 기준이 다릅니다."]
+          }} /></button>
+        <button type="button" onClick={() => setMetricOpen("contract")} className="text-left"><StatBig label="계약 금액" value={fmtK(contractAmount)} unit="원" accent="border-indigo-500" sub="계약일 기준 · 클릭=기업 목록"
+          tooltip={{
+            title: "계약 금액이란?",
+            formula: "선택 기간에 계약을 완료한 고객과 약정한 총 계약액의 합계",
+            lines: ["아직 받지 않은 선금·중도금·잔금도 포함합니다.", "Σ (contractAmount, 없으면 결제 회차 합계) · " + contracts.length + "건", "계약일이 선택 기간에 포함되고 계약금액이 0원보다 큰 고객만 집계합니다.", "전액 수금된 계약만 입금금액과 동일하며, 분할 수금 중인 계약은 계약금액이 더 큽니다."]
+          }} /></button>
+        <button type="button" onClick={() => setMetricOpen("paid")} className="text-left"><StatBig label="입금 금액" value={fmtK(revenue)} unit="원" accent="border-teal-500" sub={paidCompanies.length + "개사 · 입금일 기준"}
+          tooltip={{
+            title: "입금 금액이란?",
+            formula: "선택 기간에 실제 입금 완료된 결제 회차의 합계",
+            lines: ["계좌·카드 등으로 실제 받은 선금·중도금·잔금만 포함합니다.", "계약일이 아니라 각 결제 회차의 실제 입금일을 기준으로 해당 월에 집계합니다.", "계약금액보다 작으면 아직 미수금이 남은 것이며, 같으면 전액 수금된 계약입니다.", "현재 " + paidCompanies.length + "개사에서 실제 입금된 금액입니다."]
+          }} /></button>
+        <button type="button" onClick={() => setMetricOpen("outstanding")} className="text-left"><StatBig label="미수금" value={fmtK(outstanding)} unit="원" accent="border-rose-500" sub={outstandingRows.length + "개사 · 계약액의 " + outstandingRate + "%"}
+          tooltip={{
+            title: "미수금이란?",
+            formula: "Σ max(계약금액 - 누적 실입금, 0)",
+            lines: ["계약했지만 아직 실제로 받지 못한 금액입니다.", "계약금액 카드와 동일한 계약일 코호트 " + contracts.length + "건을 대상으로 계산합니다.", "미수 " + fmtK(outstanding) + "원 = 계약금액의 " + outstandingRate + "%", "계약금액과 미수금이 비슷하면 입금 회차가 없거나 실제 입금 등록이 누락됐을 가능성이 있습니다."]
+          }} /></button>
+      </div>
       <Card>
         <div className="px-4 pt-4 pb-3 flex items-start justify-between gap-3 flex-wrap">
           <div>
@@ -7431,6 +7379,8 @@ function ContractHubView() {
           계약·계약액·누적 회수·미수금은 선택 기간에 계약된 기업 기준 · 기간 입금은 선택 기간에 실제 입금된 금액 기준
         </div>
       </Card>
+        </div>
+      </details>
       <Modal open={!!selectedBuildup} onClose={() => setBuildupOpen(null)} wide title={selectedBuildup ? pLabel(period) + " " + selectedBuildup.key + " 성과 기업 " + selectedBuildup.companyRows.length + "개사" : ""}>
         {selectedBuildup && (
           <div className="space-y-3">

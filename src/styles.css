@@ -145,3 +145,33 @@
       justify-content:flex-start!important;
     }
   }
+/* Shared rows keep every salesperson's contracts and totals aligned. */
+.contract-sheet { min-width: 0; color: #172033; }
+.contract-sheet-title { background: #555b63; color: white; padding: 13px 16px; text-align: center; }
+.contract-sheet-title h2 { font-size: 17px; font-weight: 800; }
+.contract-sheet-title p { margin-top: 3px; font-size: 11px; color: #eef0f3; }
+.contract-sheet-overflow { max-width: 100%; max-height: 65vh; overflow: auto; }
+.contract-sheet table { border-collapse: separate; border-spacing: 0; width: 100%; table-layout: fixed; font-size: 12px; }
+.contract-sheet th, .contract-sheet td { height: 30px; padding: 4px 6px; border-right: 1px solid #c6cbd2; border-bottom: 1px solid #c6cbd2; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.contract-sheet thead th { position: sticky; z-index: 2; font-weight: 700; }
+.contract-sheet-owners th { top: 0; height: 38px; color: #18212e; }
+.contract-sheet-owners th > div { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 5px; }
+.contract-sheet-owners th span:first-child { font-size: 14px; font-weight: 800; }
+.contract-sheet-owner-total { font-size: 12px; font-variant-numeric: tabular-nums; }
+.contract-sheet-columns th { top: 38px; background: #f0f1f3; height: 29px; font-size: 11px; }
+.contract-sheet .contract-sheet-divider { border-left: 2px solid #737c87; }
+.contract-sheet .contract-sheet-number { position: sticky; left: 0; background: #f1f3f5; z-index: 1; font-size: 11px; color: #4b5563; }
+.contract-sheet thead .contract-sheet-number { z-index: 4; }
+.contract-sheet tbody tr:nth-child(even) td { background: #fafbfc; }
+.contract-sheet tbody tr:hover td { background: #edf3ff; }
+.contract-sheet .contract-sheet-company { padding: 0; text-align: left; }
+.contract-sheet-company button { display: block; width: 100%; padding: 6px 7px; overflow: hidden; text-overflow: ellipsis; text-align: left; font-size: 12px; line-height: 18px; font-weight: 650; }
+.contract-sheet-company button:hover { color: #1d4ed8; text-decoration: underline; }
+.contract-sheet-company button:focus-visible { outline: 2px solid #2563eb; outline-offset: -2px; }
+.contract-sheet .contract-sheet-program { color: #9e3331; font-size: 11px; font-weight: 600; }
+.contract-sheet .contract-sheet-money { text-align: right; font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 650; letter-spacing: -.3px; }
+.contract-sheet tfoot td, .contract-sheet tfoot th { position: sticky; bottom: 0; z-index: 2; height: 40px; background: #e9eef6; border-top: 2px solid #737c87; font-weight: 800; }
+.contract-sheet .contract-sheet-count { text-align: left; padding-left: 10px; }
+.contract-sheet-total { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 13px 16px; border-top: 2px solid #737c87; background: #fff; font-size: 14px; font-weight: 800; }
+.contract-sheet-total-count { margin-left: 10px; font-size: 13px; font-weight: 600; color: #475569; }
+.contract-sheet-total strong { font-size: 20px; color: #b42318; font-variant-numeric: tabular-nums; }
