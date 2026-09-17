@@ -165,3 +165,79 @@ export function _crmPlanContractAutoSync(groups, state, now, hash) {
   return { updated: updated, blocked: blocked, unchanged: unchanged, mutation: { origin: 'contract_sheet_sync', reason: 'new_contract_auto_sync',
     collections: { leads: { idField: 'id', patches: patches }, contractStatusLogs: { idField: 'id', upsert: logs } } } };
 }
+
+// H confirms collection, but supplies no collection date. Only a unique, fully
+// reconcilable single installment can be confirmed without inventing cash.
+export function _crmPlanContractPaymentSync(groups, state, now, hash) {
+  var patches = [], logs = [], updated = [], blocked = [], unchanged = 0;
+  var today = new Date(Date.parse(now) + 9 * 3600000).toISOString().slice(0, 10);
+  var leads = (state.leads || []).filter(function (l) { return l && !l.archivedAt && !l.archived_at; });
+  var sourceMatches = {};
+  groups.filter(function (g) { return g.paymentChecked; }).forEach(function (g) {
+    leads.forEach(function (l) {
+      if (_crmSyncAliases(l.company).some(function (a) { return g.aliases.indexOf(a) >= 0; }))
+        sourceMatches[l.id] = (sourceMatches[l.id] || 0) + 1;
+    });
+  });
+  groups.forEach(function (g) {
+    if (!g.paymentChecked) return;
+    var candidates = leads.filter(function (l) { return _crmSyncAliases(l.company).some(function (a) { return g.aliases.indexOf(a) >= 0; }); });
+    var reject = function (reason) { blocked.push({ company: g.company, sourceKey: g.sourceKey, reason: reason }); };
+    if (candidates.length !== 1) { reject(candidates.length ? '동명이업체/별칭 중복' : '저장된 업체 없음'); return; }
+    var l = candidates[0], row = g.rows[0];
+    if (sourceMatches[l.id] !== 1) { reject('여러 원본 업체가 같은 DB 업체에 매칭됨'); return; }
+    if (g.rows.length !== 1 || !row.paymentChecked || row.paymentAmount || !/^(✔|입금\s*완료|지급\s*완료)$/.test(row.paymentText)) {
+      reject('복수 계약 또는 일부 입금: 회차별 확인 필요'); return;
+    }
+    if (row.date > today || !g.amountKnown || g.amount <= 0 || Number(l.contractAmount || 0) !== g.amount || l.status !== '계약 완료') {
+      reject('계약 상태·금액·날짜 불일치'); return;
+    }
+    if (l.contractSheetSync && l.contractSheetSync.sourceKey && l.contractSheetSync.sourceKey !== g.sourceKey) {
+      reject('다른 계약 원본과 연결됨'); return;
+    }
+    var payments = l.payments || [], p = payments[0];
+    if (payments.length !== 1 || !p || p.crmManaged || Number(p.amount || 0) !== g.amount) {
+      reject('DB 결제 회차와 계약액 불일치'); return;
+    }
+    var paymentHash = hash(JSON.stringify([g.sourceKey, row.date, row.dealText, g.amount, row.paymentText]));
+    if (p.paidAt || p.paidConfirmed) { unchanged += 1; return; }
+    if (l.contractSheetPaymentSync || Number(l.paid || 0) > 0) { reject('이전 자동 반영 또는 별도 입금 기록 확인 필요'); return; }
+    var nextPayments = payments.map(function (x) { var next = {}; Object.keys(x).forEach(function (key) { next[key] = x[key]; }); next.paidConfirmed = true; return next; });
+    var metadata = { sourceKey: g.sourceKey, paymentHash: paymentHash, sourceDate: row.date, confirmedAt: now, amount: g.amount, actualPaidAt: null };
+    patches.push({ id: String(l.id), ops: [
+      { op: 'set', path: ['payments'], value: nextPayments },
+      { op: 'set', path: ['paid'], value: g.amount },
+      { op: 'set', path: ['contractSheetPaymentSync'], value: metadata }
+    ] });
+    logs.push({ id: 'contract-paid-' + hash(String(l.id) + paymentHash).slice(0, 32), at: now, date: today,
+      company: l.company, leadId: l.id, action: '외부 시트 자동 반영', source: '계약 프로세스 시트', actor: '시스템',
+      detail: 'H열 입금 완료 확인 · ' + g.amount.toLocaleString('en-US') + '원 · 실제 입금일 미기재',
+      meta: { sourceKey: g.sourceKey, paymentHash: paymentHash, before: { paid: Number(l.paid || 0), paidConfirmed: false },
+        after: { paid: g.amount, paidConfirmed: true }, sourceRow: row.row } });
+    updated.push({ id: l.id, company: l.company, paid: g.amount, actualPaidAt: null });
+  });
+  return { updated: updated, blocked: blocked, unchanged: unchanged, mutation: { origin: 'contract_sheet_sync', reason: 'contract_payment_confirmation',
+    collections: { leads: { idField: 'id', patches: patches }, contractStatusLogs: { idField: 'id', upsert: logs } } } };
+}
+
+export function _crmPlanContractAndPaymentSync(groups, state, now, hash) {
+  var contract = _crmPlanContractAutoSync(groups, state, now, hash);
+  var projected = JSON.parse(JSON.stringify(state));
+  (contract.mutation.collections.leads.patches || []).forEach(function (patch) {
+    var lead = (projected.leads || []).find(function (l) { return String(l.id) === String(patch.id); });
+    if (lead) patch.ops.forEach(function (op) { lead[op.path[0]] = op.value; });
+  });
+  var payment = _crmPlanContractPaymentSync(groups, projected, now, hash);
+  var patches = contract.mutation.collections.leads.patches.slice();
+  payment.mutation.collections.leads.patches.forEach(function (patch) {
+    var existing = patches.find(function (p) { return String(p.id) === String(patch.id); });
+    if (existing) existing.ops = existing.ops.concat(patch.ops);
+    else patches.push(patch);
+  });
+  return { updated: contract.updated, blocked: contract.blocked, unchanged: contract.unchanged,
+    paymentUpdated: payment.updated, paymentBlocked: payment.blocked, paymentUnchanged: payment.unchanged,
+    mutation: { origin: 'contract_sheet_sync', reason: 'new_contract_and_payment_sync', collections: {
+      leads: { idField: 'id', patches: patches }, contractStatusLogs: { idField: 'id',
+        upsert: contract.mutation.collections.contractStatusLogs.upsert.concat(payment.mutation.collections.contractStatusLogs.upsert) }
+    } } };
+}

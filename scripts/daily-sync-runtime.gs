@@ -15,6 +15,7 @@ function _crmSyncRecord(kind, result) {
   var compact = { ok: !!result.ok, at: _crmIso(), date: crmRecentPremeetingRange(_crmIso()).end,
     revision: result.revision || '', count: result.count || 0, added: result.added || 0,
     updated: Array.isArray(result.updated) ? result.updated.length : (result.updated || 0),
+    paymentUpdated: Array.isArray(result.paymentUpdated) ? result.paymentUpdated.length : 0,
     blocked: (result.blocked || []).length, range: result.range || null, error: result.ok ? '' : 'sync_failed' };
   PropertiesService.getScriptProperties().setProperty('KPI_SYNC_' + kind, JSON.stringify(compact));
   return result;

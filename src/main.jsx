@@ -3946,13 +3946,13 @@ function DealsView() {
       const sync = runSync ? await window.crmSyncNewContracts() : null;
       if (runSync && (!sync || sync.action !== 'contract_auto_sync')) throw new Error('contract_auto_not_deployed');
       if (sync) {
-        if ((sync.updated || []).length || sync.revision !== window.crmRemoteRevision) await window.crmReloadAfterContractSync();
+        if ((sync.updated || []).length || (sync.paymentUpdated || []).length || sync.revision !== window.crmRemoteRevision) await window.crmReloadAfterContractSync();
         setContractAutoSync({ ...sync, checkedAt: new Date().toISOString() });
       }
       const payload = await window.crmFetchContractSheetChanges();
       setContractReview(payload);
       setContractReviewError("");
-      if (sync && (showToast || (sync.updated || []).length)) toast("계약 자동 반영 " + (sync.updated || []).length + "곳 · 확인 필요 " + (sync.blocked || []).length + "곳 · 미등록 " + payload.pending + "곳");
+      if (sync && (showToast || (sync.updated || []).length || (sync.paymentUpdated || []).length)) toast("계약 자동 반영 " + (sync.updated || []).length + "곳 · 입금 완료 " + (sync.paymentUpdated || []).length + "곳 · 확인 필요 " + ((sync.blocked || []).length + (sync.paymentBlocked || []).length) + "곳 · 미등록 " + payload.pending + "곳");
     } catch (error) {
       const message = String(error && error.message || error || "contract_review_failed");
       setContractReviewError(message);
@@ -4423,13 +4423,14 @@ function DealsView() {
             <Btn size="xs" disabled={contractReviewBusy || crmSyncBusy} onClick={() => refreshContractReview(true)}><RefreshCw size={12} className={contractReviewBusy ? 'animate-spin' : ''}/>{contractReviewBusy ? '시트 확인 중…' : '시트 동기화'}</Btn>
           </div>
         </div>
-        <p className="mt-1">계약 시트: 신규 + 고유 매칭 · 부가세 포함 · 기존 입력 충돌 시 보류</p>
+        <p className="mt-1">계약 시트: 신규 + 고유 매칭 · 부가세 포함 · H열 ✔는 계약액·미납 회차가 일치할 때 입금 완료 확인 (실제 입금일은 추정하지 않음)</p>
         {syncSchedule && <p className={'mt-1 ' + (syncSchedule.statusError || syncSchedule.triggerCount !== 1 ? 'text-red-600' : '')}>{syncSchedule.statusError ? '자동 갱신 상태 조회 실패' : syncSchedule.triggerCount === 1 ? '서버 자동 갱신 활성 · 페이지를 닫아도 실행 (예약 시각에서 수분 지연 가능)' : '서버 자동 갱신 설정 확인 필요'}{syncSchedule.daily && ' · 최근 자동 실행 ' + syncSchedule.daily.date + (syncSchedule.daily.ok ? ' 완료' : ' 실패 · 수동 확인 필요')}</p>}
         {(visiblePremeetingResult || syncSchedule?.premeeting) && <p className="mt-1">프리미팅 최근 결과: {visiblePremeetingResult ? `${visiblePremeetingResult.range.start}~${visiblePremeetingResult.range.end} · 일정 ${visiblePremeetingResult.count}건 · 신규 ${visiblePremeetingResult.added}곳 · 수정 ${visiblePremeetingResult.updated}곳` : `${new Date(syncSchedule.premeeting.at).toLocaleString('ko-KR')} · ${syncSchedule.premeeting.ok ? '완료' : '실패'}`}</p>}
-        {syncSchedule?.sheet && <p className="mt-1">시트 최근 결과: {new Date(syncSchedule.sheet.at).toLocaleString('ko-KR')} · {syncSchedule.sheet.ok ? '완료' : '실패'}</p>}
-        {contractAutoSync && <p className="mt-1">최근 확인 {new Date(contractAutoSync.checkedAt).toLocaleTimeString('ko-KR')} · 자동 반영 {(contractAutoSync.updated || []).length}곳 · 동일 원본 {contractAutoSync.unchanged || 0}곳 · 확인 필요 {(contractAutoSync.blocked || []).length}곳</p>}
+        {syncSchedule?.sheet && <p className="mt-1">시트 최근 결과: {new Date(syncSchedule.sheet.at).toLocaleString('ko-KR')} · {syncSchedule.sheet.ok ? `계약 ${syncSchedule.sheet.updated || 0}곳 · 입금 ${syncSchedule.sheet.paymentUpdated || 0}곳 확인` : '실패'}</p>}
+        {contractAutoSync && <p className="mt-1">최근 확인 {new Date(contractAutoSync.checkedAt).toLocaleTimeString('ko-KR')} · 계약 반영 {(contractAutoSync.updated || []).length}곳 · 입금 완료 {(contractAutoSync.paymentUpdated || []).length}곳 · 계약 보류 {(contractAutoSync.blocked || []).length}곳 · 입금 보류 {(contractAutoSync.paymentBlocked || []).length}곳</p>}
         {contractReviewError && <p className="mt-1 text-red-600">최근 확인 실패 · 마지막 반영 내역은 유지됩니다. 다시 확인해주세요.</p>}
         {!!(contractAutoSync?.blocked || []).length && <details className="mt-2"><summary className="cursor-pointer text-amber-700">자동 반영 보류 업체·이유 보기</summary><ul className="mt-2 space-y-1">{contractAutoSync.blocked.map((item) => <li key={item.sourceKey}>{item.company} — {String(item.reason || '').replace(/contractAmount/g, '계약액').replace(/contractAt/g, '계약일').replace(/status/g, '진행 상태')}</li>)}</ul></details>}
+        {!!(contractAutoSync?.paymentBlocked || []).length && <details className="mt-2"><summary className="cursor-pointer text-amber-700">입금 반영 보류 업체·이유 보기</summary><ul className="mt-2 space-y-1">{contractAutoSync.paymentBlocked.map((item) => <li key={item.sourceKey}>{item.company} — {item.reason}</li>)}</ul></details>}
       </div>
       {dealsTab === 'sync' ? <div role="tabpanel" id="deals-panel-sync" aria-labelledby="deals-tab-sync"><RecentSyncActivity loadLogs={window.crmFetchSyncActivity} leads={db.leads} openLead={openLead} reloadKey={[syncSchedule?.premeeting?.at, syncSchedule?.sheet?.at, premeetingResult?.checkedAt, contractAutoSync?.checkedAt].join('|')}/></div> : <div role="tabpanel" id="deals-panel-companies" aria-labelledby="deals-tab-companies" className="space-y-4">
       <Card cls="p-3">

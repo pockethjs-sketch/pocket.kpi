@@ -39,7 +39,7 @@ export function filterSyncActivity(rows, { days = '7', source = 'all', result = 
   );
 }
 
-const labels = { contractAmount: '계약액', contractAt: '계약일', status: '상태', buildup: '빌드업', buildups: '빌드업 목록', memo: '메모' };
+const labels = { contractAmount: '계약액', contractAt: '계약일', status: '상태', buildup: '빌드업', buildups: '빌드업 목록', memo: '메모', paid: '누적 입금액', paidConfirmed: '입금 확인' };
 export function syncChanges(log) {
   const before = log.meta?.before, after = log.meta?.after;
   if (before && after) return Object.keys(after).filter(key => labels[key] && JSON.stringify(before[key]) !== JSON.stringify(after[key]))
@@ -52,6 +52,7 @@ export function syncChanges(log) {
 export function formatSyncValue(key, value) {
   if (value === undefined) return '기록 없음';
   if (value === null || value === '') return '미입력';
-  if (key === 'contractAmount' && Number.isFinite(Number(value))) return Number(value).toLocaleString('ko-KR') + '원';
+  if ((key === 'contractAmount' || key === 'paid') && Number.isFinite(Number(value))) return Number(value).toLocaleString('ko-KR') + '원';
+  if (key === 'paidConfirmed') return value ? '완료' : '미완료';
   return Array.isArray(value) ? value.join(', ') || '미입력' : String(value);
 }

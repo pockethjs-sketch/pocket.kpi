@@ -31,6 +31,13 @@ test('only stored before/after values are displayed; zero money is not missing a
  assert.equal(formatSyncValue('contractAmount',0),'0원');assert.equal(formatSyncValue('contractAmount',5500000),'5,500,000원');
  assert.deepEqual(syncChanges(log('2',{meta:{}})),[]);
 });
+test('confirmed H-column payment is visible as a monetary sync change without inventing a date',()=>{
+ const row=log('payment',{action:'외부 시트 자동 반영',detail:'H열 입금 완료 확인',meta:{before:{paid:0,paidConfirmed:false},after:{paid:5500000,paidConfirmed:true}}});
+ assert.deepEqual(syncChanges(row).map(c=>c.key),['paid','paidConfirmed']);
+ assert.equal(formatSyncValue('paid',5500000),'5,500,000원');
+ assert.equal(formatSyncValue('paidConfirmed',true),'완료');
+ assert.equal(filterSyncActivity(syncActivityRows([row]),{source:'sheet',now}).length,1);
+});
 test('legacy date-only logs have no invented exact timestamp; unknown time is available only in all history',()=>{
  const rows=syncActivityRows([log('1',{at:'2026-09-15'}),log('2',{at:''})]);
  assert.ok(rows.every(r=>r.time===0));assert.equal(filterSyncActivity(rows,{now}).length,0);assert.equal(filterSyncActivity(rows,{days:'all',now}).length,2);
