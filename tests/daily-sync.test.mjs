@@ -13,6 +13,16 @@ test('unattended and manual use identical logic; repeated results create no patc
  assert.equal(a.leads.length,1);assert.equal(a.leads[0].crmMeetings.length,2);assert.equal(a.leads[0].status,'프리미팅 완료');
  const next=plan([row(),row({ms_no:2,mr_checked:1})],a,now,hash);assert.equal(next.added+next.updated,0);assert.equal(next.mutation.collections.contractStatusLogs.upsert.length,0);
 });
+test('deleting a synced company does not exclude its CRM meeting from the three-day import',()=>{
+ const first=apply({leads:[]},plan([row()],{leads:[]},now,hash));
+ assert.equal(first.leads.length,1);
+ const deleted={leads:[]};
+ const again=plan([row()],deleted,now,hash);
+ assert.equal(again.added,1);
+ assert.equal(again.mutation.collections.leads.upsert[0].id,first.leads[0].id);
+ const expired=plan([row({start_dt:'2026-09-12T01:00:00Z'})],deleted,now,hash);
+ assert.equal(expired.added,0);
+});
 test('existing financial data, manual notes, completed state and old meetings survive',()=>{
  const l={id:'crm-1',projNo:1,status:'계약 완료',company:'사용자명',contractAmount:500,contractAt:'2026-08-01',paid:300,payments:[{id:'p',amount:300}],memo:'특이사항',salesOwner:'담당',crmMeeting:{msNo:9,type:1,startAt:'2026-08-01T00:00:00Z'},history:[]};
  const s={leads:[l]},a=apply(s,plan([row()],s,now,hash)).leads[0];
@@ -61,6 +71,13 @@ test('DB/quality refresh cannot create meetings through retired broad-range or f
  assert.doesNotMatch(source,/var (?:new)?[Cc]alendarDate =/);
  assert.match(source,/refreshContractReview\(false, false\)/);
  assert.doesNotMatch(source,/setInterval\([^\n]*refreshContractReview/);
+});
+
+test('premeeting view keeps manual sync actions without the verbose schedule box',()=>{
+ const source=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+ assert.match(source,/onClick=\{refreshTodayPremeetings\}/);
+ assert.match(source,/onClick=\{\(\) => refreshContractReview\(true\)\}/);
+ assert.doesNotMatch(source,/매일 오전 9시 이후 1회 자동 갱신 · 프리미팅은/);
 });
 
 test('idempotent manual sync recovers once after lost Apps Script redirect; never retries unsafe writes',async()=>{
