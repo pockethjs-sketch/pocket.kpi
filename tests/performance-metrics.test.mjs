@@ -1,7 +1,68 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { contractRoasByType, dailyLeadCounts, dailyStageActivity } from '../src/data/performanceMetrics.js';
+import { contractRoasByType, dailyLeadCounts, dailyStageActivity, dailyComparisonWindow, relativeMetricChange, previousDatedSpend } from '../src/data/performanceMetrics.js';
+
+test('daily comparison keeps month start and compares cumulative totals without future dates', () => {
+  assert.deepEqual(dailyComparisonWindow(['2026-09-01', '2026-09-30'], '2026-09-18'), {
+    current: ['2026-09-01', '2026-09-18'], previous: ['2026-09-01', '2026-09-17'], end: '2026-09-18', before: '2026-09-17',
+  });
+  assert.equal(dailyComparisonWindow(['2026-10-01', '2026-10-31'], '2026-09-18'), null);
+  assert.equal(dailyComparisonWindow(['2026-08-01', '2026-08-31'], '2026-09-18').end, '2026-08-31');
+  assert.deepEqual(dailyComparisonWindow(['2026-09-01', '2026-09-01'], '2026-09-18', true).previous, ['2026-08-31', '2026-08-31']);
+  assert.deepEqual(dailyComparisonWindow(['2026-09-01', '2026-09-30'], '2026-09-01').previous, ['2026-09-01', '2026-08-31']);
+});
+
+test('relative change handles zero, missing, decline and unrounded ratio values honestly', () => {
+  assert.equal(relativeMetricChange(106, 100).text, '▲ 6%');
+  assert.equal(relativeMetricChange(94, 100).text, '▼ 6%');
+  assert.equal(relativeMetricChange(0, 0).text, '— 0%');
+  assert.equal(relativeMetricChange(3, 0).text, '신규 발생');
+  assert.equal(relativeMetricChange(0, 3).text, '▼ 100%');
+  assert.equal(relativeMetricChange(100, null).text, '비교 불가');
+  assert.equal(relativeMetricChange(Infinity, 1).text, '비교 불가');
+  assert.equal(relativeMetricChange(500, 400).text, '▲ 25%', 'ROAS change is relative, not 100 percentage points');
+  assert.equal(relativeMetricChange(100.001, 100).text, '▲ <0.1%');
+});
+
+test('daily spend reconciles with displayed total and accepts once-daily D-1 collection', () => {
+  const window = dailyComparisonWindow(['2026-09-01', '2026-09-30'], '2026-09-18');
+  const data = Object.fromEntries(['META', 'NAVER', 'GOOGLE'].map(key => [key, [{ date: '2026-09-17', spend: 100 }]]));
+  assert.equal(previousDatedSpend(data, window, 300), 300);
+  data.META.push({ date: '2026-09-18', spend: 50 });
+  assert.equal(previousDatedSpend(data, window, 350), 300);
+  assert.equal(previousDatedSpend(data, window, 999), null, 'cannot fabricate daily values from a monthly aggregate');
+  assert.equal(previousDatedSpend({}, window, 0), null);
+  delete data.GOOGLE;
+  assert.equal(previousDatedSpend(data, window, 250), null, 'missing provider is not zero spend');
+});
+
+test('stale daily spend cannot produce a reassuring zero-percent change', () => {
+  const window = dailyComparisonWindow(['2026-09-01', '2026-09-30'], '2026-09-18');
+  const data = Object.fromEntries(['META', 'NAVER', 'GOOGLE'].map(key => [key, [{ date: '2026-09-16', spend: 100 }]]));
+  assert.equal(previousDatedSpend(data, window, 300), null);
+});
+
+test('integrated comparison uses the customer filter and refuses future-inclusive totals', () => {
+  const source = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
+  const block = source.slice(source.indexOf('  const comparisonWindow = dailyComparisonWindow'), source.indexOf('  const DailyDelta ='));
+  const calculate = new Function('db', 'r', 'todayISO', 'period', 'matchesCustomerType', 'inR', 'isPremeetingCompanyInRange', 'contractRoasByType', 'dailyComparisonWindow', 'previousDatedSpend', 'roasSpend', 'contractAmountTotal', block + '\nreturn { comparisonCurrent, comparisonPrevious, countBefore, amountBefore, previousSpend, comparisonLabel, divide };');
+  const range = ['2026-09-01', '2026-09-30'];
+  const inR = (date, r) => !!date && date >= r[0] && date <= r[1];
+  const leads = [
+    { createdAt: '2026-09-17', ctype: '신규', status: '계약 완료', contractAt: '2026-09-17', contractAmount: 500, premeetingAt: '2026-09-17' },
+    { createdAt: '2026-09-18', ctype: '신규', status: '계약 완료', contractAt: '2026-09-18', contractAmount: 100, premeetingAt: '2026-09-18' },
+    { createdAt: '2026-09-18', ctype: '기존', status: '계약 완료', contractAt: '2026-09-18', contractAmount: 900 },
+  ];
+  const adDaily = Object.fromEntries(['META', 'NAVER', 'GOOGLE'].map(key => [key, [{ date: '2026-09-17', spend: 100 }]]));
+  const result = calculate({ leads, adDaily }, range, () => '2026-09-18', { mode: 'month' }, l => l.ctype === '신규', inR, (l, r) => inR(l.premeetingAt, r), contractRoasByType, dailyComparisonWindow, previousDatedSpend, 300, 600);
+  assert.deepEqual(result.comparisonCurrent, { marketing: 2, pre: 2, contract: 2, amount: 600 });
+  assert.deepEqual(result.comparisonPrevious, { marketing: 1, pre: 1, contract: 1, amount: 500 });
+  assert.equal(result.countBefore('pre', 2), 1);
+  assert.equal(result.countBefore('pre', 3), null, 'monthly total includes a future appointment: do not compare it to yesterday');
+  assert.equal(result.previousSpend, 300);
+  assert.equal(relativeMetricChange(result.divide(600, 300, 100), result.divide(result.amountBefore, result.previousSpend, 100)).text, '▲ 20%');
+});
 
 test('contract ROAS uses contract month and amount for new and existing companies', () => {
   const leads = [

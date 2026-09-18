@@ -1,5 +1,43 @@
 const inRange = (date, range) => !range || (!!date && date >= range[0] && date <= range[1]);
 
+// Reconstruct dated totals from current records; these are not historical snapshots.
+export function dailyComparisonWindow(range, today, dayMode = false) {
+  const end = range && range[1] < today ? range[1] : today;
+  const start = range?.[0] || '0001-01-01';
+  if (start > end) return null;
+  const previous = new Date(end + 'T00:00:00Z');
+  previous.setUTCDate(previous.getUTCDate() - 1);
+  const before = previous.toISOString().slice(0, 10);
+  return { current: [start, end], previous: dayMode ? [before, before] : [start, before], end, before };
+}
+
+export function relativeMetricChange(current, previous) {
+  if (current == null || previous == null || !Number.isFinite(current) || !Number.isFinite(previous)) return { text: '비교 불가', direction: 0 };
+  if (current === previous) return { text: '— 0%', direction: 0 };
+  if (previous === 0) return { text: '신규 발생', direction: 1 };
+  const percent = (current - previous) / Math.abs(previous) * 100;
+  const magnitude = Math.abs(percent);
+  return { text: `${percent > 0 ? '▲' : '▼'} ${magnitude < 0.1 ? '<0.1' : Number(magnitude.toFixed(1)).toLocaleString('ko-KR')}%`, direction: Math.sign(percent) };
+}
+
+// Only compare money when dated rows reconcile with the displayed monthly total.
+// Never estimate daily spend by dividing a monthly budget by days.
+export function previousDatedSpend(adDaily, window, displayedSpend) {
+  if (!window || displayedSpend == null) return null;
+  const rows = ['META', 'NAVER', 'GOOGLE'].flatMap(key => adDaily?.[key] || []);
+  const current = rows.filter(row => inRange(row.date, window.current) && row.spend != null && Number.isFinite(Number(row.spend)));
+  if (!current.length) return null;
+  const total = current.reduce((sum, row) => sum + Number(row.spend), 0);
+  if (Math.abs(total - displayedSpend) > 1) return null;
+  // A once-daily collector normally ends at D-1. Older data is not a valid daily comparison.
+  if (['META', 'NAVER', 'GOOGLE'].some(key => {
+    const dates = (adDaily?.[key] || []).filter(row => row.spend != null && Number.isFinite(Number(row.spend)) && row.date <= window.end).map(row => row.date).sort();
+    return !dates.length || dates[dates.length - 1] < window.before;
+  })) return null;
+  if (window.previous[0] > window.previous[1]) return 0;
+  return rows.filter(row => inRange(row.date, window.previous)).reduce((sum, row) => sum + (Number(row.spend) || 0), 0);
+}
+
 export function contractRoasByType(leads, range, spend) {
   const amounts = { 신규: 0, 기존: 0 };
   for (const lead of leads || []) {
