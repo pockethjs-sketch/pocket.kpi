@@ -5,7 +5,7 @@ import RecentSyncActivity from "./RecentSyncActivity.jsx";
 import DailyActivityChart from "./DailyActivityChart.jsx";
 import { shadowStatusFromSheetsResult } from "./data/repositoryAdapter.js";
 import { reconcileMarketingDailyInquiries } from "./data/marketingInquiry.js";
-import { contractRoasByType, dailyStageActivity, dailyComparisonWindow, relativeMetricChange, previousDatedSpend, weekdayActivity } from "./data/performanceMetrics.js";
+import { contractRoasByType, dailyStageActivity, dailyComparisonWindow, relativeMetricChange, previousDatedSpend, weekdayActivity, absoluteCountChange, previousMonthCostWindow, completeDatedSpend } from "./data/performanceMetrics.js";
 
 /* ===== 운영 데이터 연동 설정 =====
      Supabase 화면별 API가 읽기·쓰기를 담당합니다.
@@ -6402,13 +6402,21 @@ function IntegratedPerformanceView() {
   const divide = (a, b, multiplier = 1) => a != null && b > 0 ? a / b * multiplier : null;
   const amountBefore = comparisonCurrent?.amount === contractAmountTotal ? comparisonPrevious.amount : null;
   const comparisonLabel = comparisonWindow ? `${comparisonWindow.end.slice(5).replace('-', '/')} ${period.mode === "day" ? "당일" : "누적"} vs ${comparisonWindow.before.slice(5).replace('-', '/')} ${period.mode === "day" ? "당일" : "누적"}` : "미래 기간 · 비교 불가";
-  const DailyDelta = ({ current, previous, unit = "", lowerIsBetter = false }) => {
-    const change = relativeMetricChange(current, previous);
+  const DailyDelta = ({ current, previous, unit = "", lowerIsBetter = false, absolute = false, comparisonName = comparisonLabel, prefix = "" }) => {
+    const change = absolute ? absoluteCountChange(current, previous) : relativeMetricChange(current, previous);
     const positive = lowerIsBetter ? change.direction < 0 : change.direction > 0;
     const format = value => value == null ? "없음" : Number(value.toFixed(2)).toLocaleString() + unit;
-    const description = `${comparisonLabel} · ${format(previous)} → ${format(current)}. 증감률=(현재−비교값)÷비교값×100. 날짜 기준 재계산이며 어제 화면의 저장본은 아닙니다.${unit === "%" ? " %p 차이가 아닌 상대 증감률입니다." : ""}${previous == null ? " 미래 일정 포함 또는 비교용 날짜/광고비 근거 부족." : ""}`;
-    return <span tabIndex={0} title={description} aria-label={description} className={"inline-block rounded px-1 py-0.5 text-[10px] font-extrabold tabular-nums whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-indigo-300 " + (change.direction === 0 ? "text-slate-400" : positive ? "text-emerald-600" : "text-rose-600")}>{change.text}</span>;
+    const description = `${comparisonName} · ${format(previous)} → ${format(current)}. ${absolute ? "증감 건수=현재−비교값." : "증감률=(현재−비교값)÷비교값×100."} 날짜 기준 재계산이며 과거 화면의 저장본은 아닙니다.${unit === "%" ? " %p 차이가 아닌 상대 증감률입니다." : ""}${previous == null ? " 미래 일정 포함 또는 비교용 날짜/광고비 근거 부족." : ""}`;
+    return <span tabIndex={0} title={description} aria-label={description} className={"inline-block rounded px-1 py-0.5 text-[10px] font-extrabold tabular-nums whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-indigo-300 " + (change.direction === 0 ? "text-slate-400" : positive ? "text-emerald-600" : "text-rose-600")}>{prefix}{change.text}</span>;
   };
+  const monthCostWindow = previousMonthCostWindow(period, todayISO());
+  const monthCostRows = monthCostWindow ? comparisonRows(monthCostWindow.previous) : null;
+  const monthCostCurrentRows = monthCostWindow ? comparisonRows(monthCostWindow.current) : null;
+  const monthCostSpend = !monthCostWindow || customerType === "기존" ? null : monthCostWindow.fullMonth
+    ? marketingSpendForMonth(db, monthCostWindow.previousMonth)
+    : completeDatedSpend(db.adDaily, monthCostWindow.previous);
+  const monthCostLabel = monthCostWindow ? `전월 ${monthCostWindow.fullMonth ? "전체" : "동일 일자까지"} 비교 · ${monthCostWindow.current.join('~')} vs ${monthCostWindow.previous.join('~')}` : "월 선택 시 전월 비교";
+  const costBefore = (stageId, count) => monthCostCurrentRows?.[stageId] === count ? divide(monthCostSpend, monthCostRows[stageId]) : null;
   const costText = (n) => n == null ? "아직 데이터가 없다" : Math.round(n / 10000).toLocaleString() + "만원";
   const metricState = (actual, target, lowerIsBetter) => actual == null || target == null ? "na" : (lowerIsBetter ? actual <= target : actual >= target) ? "ok" : "bad";
   const stageDefs = [
@@ -6429,7 +6437,7 @@ function IntegratedPerformanceView() {
       {state === "ok" ? "목표 충족" : state === "bad" ? "목표 미달" : "판단 불가"}
     </span>
   );
-  const Criterion = ({ title, label, value, target, state, onClick, formula, delta }) => {
+  const Criterion = ({ title, label, value, valueSuffix, target, state, onClick, formula, delta }) => {
     const dot = state === "ok" ? "bg-emerald-500" : state === "bad" ? "bg-rose-500" : "bg-slate-300";
     const valueTone = state === "ok" ? "text-emerald-700" : state === "bad" ? "text-rose-700" : "text-slate-600";
     const stateLabel = state === "ok" ? "충족" : state === "bad" ? "미달" : "대기";
@@ -6444,8 +6452,11 @@ function IntegratedPerformanceView() {
             </div>
           </div>
           <span className="flex items-center justify-end gap-1 flex-wrap">
-            <span className={"text-lg font-black tabular-nums text-right " + valueTone}>{value}</span>
-            {delta && <DailyDelta {...delta} />}
+            <span className="inline-flex items-center gap-1 whitespace-nowrap">
+              <span className={"text-lg font-black tabular-nums text-right " + valueTone}>{value}</span>
+              {delta && <DailyDelta {...delta} />}
+            </span>
+            {valueSuffix && <span className="text-sm font-bold tabular-nums text-slate-400">{valueSuffix}</span>}
             <ChevronRight size={14} className="text-slate-300 transition-transform group-hover:translate-x-0.5 group-hover:text-indigo-400" />
           </span>
         </div>
@@ -6653,7 +6664,7 @@ function IntegratedPerformanceView() {
     <div className="space-y-5">
       <SecTitle icon={Target} title="통합 성과 체크" sub={pLabel(period) + " 유입 DB 코호트가 마케팅 → 프리미팅 → 계약의 목표 전환과 비용 기준을 지키는지 확인합니다."} />
       <div className="flex flex-wrap items-center justify-between gap-2 -mt-2">
-        <p className="text-[11px] text-slate-500" title="현재 데이터의 유입일·미팅일·계약일로 재계산합니다. 과거 수정/삭제 전의 화면을 복원한 값은 아닙니다. 광고비는 하루 1회 갱신되며 최신 수집분을 사용합니다.">전일 대비 · {comparisonLabel} <span className="text-slate-400">· 날짜 기준 · 광고비 일 1회 갱신</span></p>
+        <div className="text-[11px] text-slate-500" title="현재 데이터의 유입일·미팅일·계약일로 재계산합니다. 과거 수정/삭제 전의 화면을 복원한 값은 아닙니다. 광고비는 하루 1회 갱신되며 최신 수집분을 사용합니다."><p>건수 증감·전환율·ROAS: 전일 대비 · {comparisonLabel}</p><p className="mt-1 text-slate-400">건당 비용: {monthCostLabel} · 광고비 일 1회 갱신</p></div>
         <div className="inline-flex items-center rounded-md border border-slate-200 bg-white p-0.5 shadow-sm" aria-label="고객 유형 필터">
           {["전체", "신규", "기존"].map((type) => (
             <button key={type} type="button" onClick={() => { setCustomerType(type); setMetricOpen(null); }}
@@ -6683,9 +6694,9 @@ function IntegratedPerformanceView() {
                 <StateBadge state={s.state} />
               </div>
               <div className="space-y-2 mt-4">
-                <Criterion title="절대값" label={s.countLabel} value={s.countTarget == null ? s.count + "건" : s.count + " / " + s.countTarget} delta={{ current: s.count, previous: countBefore(s.id, s.count), unit: "건" }} target={customerType === "기존" ? "기존 고객 목표 미설정" : s.countTarget == null ? "월·연·일 기준에서 목표 산출" : "목표 " + s.countTarget + "건 이상"} state={s.absState} formula={formulaFor(s.id, "abs")} onClick={() => setMetricOpen({ stageId: s.id, type: "abs" })} />
+                <Criterion title="절대값" label={s.countLabel} value={s.count + "건"} valueSuffix={s.countTarget == null ? null : "/ " + s.countTarget} delta={{ current: s.count, previous: countBefore(s.id, s.count), unit: "건", absolute: true }} target={customerType === "기존" ? "기존 고객 목표 미설정" : s.countTarget == null ? "월·연·일 기준에서 목표 산출" : "목표 " + s.countTarget + "건 이상"} state={s.absState} formula={formulaFor(s.id, "abs")} onClick={() => setMetricOpen({ stageId: s.id, type: "abs" })} />
                 <Criterion title="상대값" label={s.rateLabel} value={s.rate == null ? "-" : s.rate + "%"} delta={s.id === "marketing" ? null : { current: divide(s.count, s.id === "pre" ? cohort.length : pre.length, 100), previous: divide(countBefore(s.id, s.count), s.id === "pre" ? countBefore("marketing", cohort.length) : countBefore("pre", pre.length), 100), unit: "%" }} target={s.id === "marketing" ? "퍼널 시작 단계 · 이전 단계 없음" : customerType === "기존" ? "기존 고객 목표 미설정" : "목표 전환율 30% 이상"} state={s.convState} formula={formulaFor(s.id, "conv")} onClick={() => setMetricOpen({ stageId: s.id, type: "conv" })} />
-                <Criterion title="목표비용" label={s.costLabel} value={costText(s.cost)} delta={{ current: divide(spend, s.count), previous: customerType === "기존" ? null : divide(previousSpend, countBefore(s.id, s.count)), unit: "원", lowerIsBetter: true }} target={customerType === "기존" ? "광고비 귀속 대상 아님" : "목표 " + costText(s.costTarget) + " 이하"} state={s.costState} formula={formulaFor(s.id, "cost")} onClick={() => setMetricOpen({ stageId: s.id, type: "cost" })} />
+                <Criterion title="목표비용" label={s.costLabel} value={costText(s.cost)} delta={{ current: divide(spend, s.count), previous: costBefore(s.id, s.count), unit: "원", lowerIsBetter: true, comparisonName: monthCostLabel, prefix: "전월 " }} target={customerType === "기존" ? "광고비 귀속 대상 아님" : "목표 " + costText(s.costTarget) + " 이하"} state={s.costState} formula={formulaFor(s.id, "cost")} onClick={() => setMetricOpen({ stageId: s.id, type: "cost" })} />
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2 px-1">
                 {s.id === "marketing" && <p className="text-[11px] font-bold text-slate-500">총 마케팅비 <span className="ml-1 text-sm font-black tabular-nums text-sky-700">{fmtK(roasSpend)}원</span> <DailyDelta current={roasSpend} previous={previousSpend} unit="원" lowerIsBetter /></p>}

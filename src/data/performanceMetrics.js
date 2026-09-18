@@ -20,6 +20,48 @@ export function relativeMetricChange(current, previous) {
   return { text: `${percent > 0 ? '▲' : '▼'} ${magnitude < 0.1 ? '<0.1' : Number(magnitude.toFixed(1)).toLocaleString('ko-KR')}%`, direction: Math.sign(percent) };
 }
 
+export function absoluteCountChange(current, previous) {
+  if (current == null || previous == null || !Number.isFinite(current) || !Number.isFinite(previous)) return { text: '비교 불가', direction: 0 };
+  const difference = current - previous;
+  return { text: (difference > 0 ? '+' : difference < 0 ? '−' : '') + Math.abs(difference).toLocaleString('ko-KR') + '건', direction: Math.sign(difference) };
+}
+
+export function previousMonthCostWindow(period, today) {
+  if (period.mode !== 'month') return null;
+  const month = `${period.y}-${String(period.m).padStart(2, '0')}`;
+  if (month > today.slice(0, 7)) return null;
+  const last = new Date(Date.UTC(period.y, period.m, 0)).getUTCDate();
+  const day = month === today.slice(0, 7) ? Number(today.slice(8, 10)) : last;
+  const prevLast = new Date(Date.UTC(period.y, period.m - 1, 0));
+  const previousMonth = prevLast.toISOString().slice(0, 7);
+  const fullMonth = day === last;
+  const previousDay = fullMonth ? prevLast.getUTCDate() : Math.min(day, prevLast.getUTCDate());
+  return {
+    current: [month + '-01', month + '-' + String(day).padStart(2, '0')],
+    previous: [previousMonth + '-01', previousMonth + '-' + String(previousDay).padStart(2, '0')],
+    previousMonth, fullMonth,
+  };
+}
+
+export function completeDatedSpend(adDaily, range) {
+  if (!range || range[0] > range[1]) return null;
+  let total = 0;
+  for (const key of ['META', 'NAVER', 'GOOGLE']) {
+    const rows = new Map();
+    for (const row of adDaily?.[key] || []) {
+      if (!inRange(row.date, range)) continue;
+      if (rows.has(row.date) || row.spend == null || !Number.isFinite(Number(row.spend)) || Number(row.spend) < 0) return null;
+      rows.set(row.date, Number(row.spend));
+    }
+    for (let day = new Date(range[0] + 'T00:00:00Z'); day.toISOString().slice(0, 10) <= range[1]; day.setUTCDate(day.getUTCDate() + 1)) {
+      const value = rows.get(day.toISOString().slice(0, 10));
+      if (value == null) return null;
+      total += value;
+    }
+  }
+  return total;
+}
+
 // Only compare money when dated rows reconcile with the displayed monthly total.
 // Never estimate daily spend by dividing a monthly budget by days.
 export function previousDatedSpend(adDaily, window, displayedSpend) {

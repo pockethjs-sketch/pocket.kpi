@@ -1,7 +1,51 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { contractRoasByType, dailyLeadCounts, dailyStageActivity, dailyComparisonWindow, relativeMetricChange, previousDatedSpend } from '../src/data/performanceMetrics.js';
+import { contractRoasByType, dailyLeadCounts, dailyStageActivity, dailyComparisonWindow, relativeMetricChange, previousDatedSpend, absoluteCountChange, previousMonthCostWindow, completeDatedSpend } from '../src/data/performanceMetrics.js';
+
+test('count deltas are signed counts, including growth from zero, not percentages', () => {
+  assert.deepEqual(absoluteCountChange(106, 100), { text: '+6건', direction: 1 });
+  assert.deepEqual(absoluteCountChange(94, 100), { text: '−6건', direction: -1 });
+  assert.equal(absoluteCountChange(3, 0).text, '+3건');
+  assert.equal(absoluteCountChange(0, 0).text, '0건');
+  assert.equal(absoluteCountChange(1, null).text, '비교 불가');
+});
+
+test('cost comparison matches prior-month dates and handles month ends and years', () => {
+  const current = previousMonthCostWindow({ mode: 'month', y: 2026, m: 9 }, '2026-09-18');
+  assert.deepEqual(current.previous, ['2026-08-01', '2026-08-18']);
+  assert.equal(current.fullMonth, false);
+  assert.deepEqual(previousMonthCostWindow({ mode: 'month', y: 2026, m: 8 }, '2026-09-18').previous, ['2026-07-01', '2026-07-31']);
+  assert.deepEqual(previousMonthCostWindow({ mode: 'month', y: 2026, m: 2 }, '2026-02-28').previous, ['2026-01-01', '2026-01-31']);
+  assert.deepEqual(previousMonthCostWindow({ mode: 'month', y: 2026, m: 1 }, '2026-01-18').previous, ['2025-12-01', '2025-12-18']);
+  assert.deepEqual(previousMonthCostWindow({ mode: 'month', y: 2024, m: 3 }, '2024-03-30').previous, ['2024-02-01', '2024-02-29']);
+  assert.equal(previousMonthCostWindow({ mode: 'year', y: 2026 }, '2026-09-18'), null);
+  assert.equal(previousMonthCostWindow({ mode: 'month', y: 2026, m: 10 }, '2026-09-18'), null);
+});
+
+test('prior partial-month costs require every provider/date and preserve valid zero spend', () => {
+  const data = Object.fromEntries(['META', 'NAVER', 'GOOGLE'].map(key => [key, [{ date: '2026-08-01', spend: 100 }, { date: '2026-08-02', spend: 0 }]]));
+  const range = ['2026-08-01', '2026-08-02'];
+  assert.equal(completeDatedSpend(data, range), 300);
+  data.META.push({ date: '2026-09-01', spend: 999 });
+  assert.equal(completeDatedSpend(data, range), 300);
+  data.NAVER.pop();
+  assert.equal(completeDatedSpend(data, range), null);
+  assert.equal(completeDatedSpend({}, range), null);
+  data.NAVER.push({ date: '2026-08-01', spend: 100 });
+  assert.equal(completeDatedSpend(data, range), null, 'duplicate dates are not silently summed');
+});
+
+test('unit costs use prior-month spend and matching filtered counts, never yesterday spend', () => {
+  const source = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
+  const block = source.slice(source.indexOf('  const monthCostWindow ='), source.indexOf('  const costText =', source.indexOf('  const monthCostWindow =')));
+  const run = new Function('period', 'todayISO', 'comparisonRows', 'db', 'customerType', 'previousMonthCostWindow', 'marketingSpendForMonth', 'completeDatedSpend', 'divide', block + '\nreturn { costBefore, monthCostLabel };');
+  const data = Object.fromEntries(['META', 'NAVER', 'GOOGLE'].map(key => [key, [{ date: '2026-08-01', spend: 100000 }]]));
+  const result = run({ mode: 'month', y: 2026, m: 9 }, () => '2026-09-01', r => ({ marketing: r[0].startsWith('2026-08') ? 6 : 2, pre: 1, contract: 1 }), { adDaily: data }, '신규', previousMonthCostWindow, () => 9999999, completeDatedSpend, (a, b) => a != null && b > 0 ? a / b : null);
+  assert.equal(result.costBefore('marketing', 2), 50000);
+  assert.equal(result.costBefore('marketing', 3), null, 'future-inclusive counts cannot change denominator silently');
+  assert.match(result.monthCostLabel, /2026-08-01~2026-08-01/);
+});
 
 test('daily comparison keeps month start and compares cumulative totals without future dates', () => {
   assert.deepEqual(dailyComparisonWindow(['2026-09-01', '2026-09-30'], '2026-09-18'), {
