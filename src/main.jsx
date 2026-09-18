@@ -6878,7 +6878,8 @@ function IntegratedPerformanceView() {
                     <StateBadge state={metricStage.costState} />
                   </div>
                 </div>
-                <PopupLeadList title={metricStage.costLabel + " 계산 대상 기업"} rows={metricRows} tone={metricStage.costState === "ok" ? "text-emerald-600" : "text-red-600"} />
+                {metricStage.id === "contract" && <p className="text-[11px] text-slate-500">{pLabel(period)} 계약일 기준 · {customerType} · 계산에 포함된 계약 전체입니다. 신규·기존을 함께 보려면 상단에서 전체를 선택하세요.</p>}
+                <PopupLeadList title={metricStage.costLabel + " 계산 대상 기업"} rows={metricRows} detail={metricStage.id === "contract" ? "contract" : undefined} tone={metricStage.costState === "ok" ? "text-emerald-600" : "text-red-600"} />
               </>
             )}
             <div className="flex justify-end gap-2"><Btn onClick={() => setMetricOpen(null)}>닫기</Btn><Btn kind="primary" onClick={() => { const v = metricStage.go; setMetricOpen(null); go(v); }}>단계 전체 화면</Btn></div>
