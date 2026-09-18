@@ -1,6 +1,7 @@
 import "./styles.css";
 import ContractOwnerSheet, { ContractCustomerTypeLabel } from "./ContractOwnerSheet.jsx";
 import ContractMonthlyPerformance from "./ContractMonthlyPerformance.jsx";
+import ContractBasisView from "./ContractBasisView.jsx";
 import RecentSyncActivity from "./RecentSyncActivity.jsx";
 import DailyActivityChart from "./DailyActivityChart.jsx";
 import { shadowStatusFromSheetsResult } from "./data/repositoryAdapter.js";
@@ -7310,6 +7311,22 @@ function PremeetingHubView() {
 }
 
 function ContractHubView() {
+  const { db, period, go, openLead } = useApp();
+  const [basis, setBasis] = useState('meeting');
+  const [legacy, setLegacy] = useState(false);
+  return <div className="space-y-4">
+    <SecTitle icon={Handshake} title="계약 총괄" sub={pLabel(period) + ' · 귀속 시점별 성과'} right={<Btn size="xs" kind="primary" onClick={() => go('ltvExpansion')}>잔금 관리</Btn>} />
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div role="group" aria-label="계약 성과 날짜 기준" className="inline-flex gap-1 rounded-lg border border-slate-200 bg-white p-1">
+        {[['meeting', '미팅 일자 기준'], ['payment', '입금 시점 기준']].map(([key, label]) => <button key={key} type="button" aria-pressed={!legacy && basis === key} onClick={() => { setBasis(key); setLegacy(false); }} className={'rounded-md px-4 py-2 text-xs font-extrabold ' + (!legacy && basis === key ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-100')}>{label}</button>)}
+      </div>
+      <button type="button" aria-pressed={legacy} onClick={() => setLegacy(!legacy)} className="text-[11px] font-bold text-slate-500 underline">{legacy ? '새 기준으로 돌아가기' : '기존 계약일·과거 시트 실적'}</button>
+    </div>
+    {legacy ? <ContractDateHubView /> : <ContractBasisView leads={db.leads} basis={basis} range={pRange(period)} periodLabel={pLabel(period)} openLead={openLead} channelOf={channelGroupName} />}
+  </div>;
+}
+
+function ContractDateHubView() {
   const { db, period, go, openLead } = useApp();
   const [metricOpen, setMetricOpen] = useState(null);
   const [buildupOpen, setBuildupOpen] = useState(null);
