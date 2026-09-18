@@ -34,3 +34,46 @@ export function dailyLeadCounts(leads, month, today) {
     return { date, count: counts.get(date) || 0 };
   });
 }
+
+// Count dated activity, not the date on which a user later checked attendance.
+export function dailyStageActivity(leads, stage, month, today, range = null) {
+  const days = dailyLeadCounts([], month, today).map(day => ({ ...day, completed: 0, unconfirmed: 0, entries: [] }));
+  const byDate = new Map(days.map(day => [day.date, day]));
+  for (const lead of leads || []) {
+    const events = new Map();
+    if (stage === 'marketing') {
+      events.set(String(lead.createdAt || '').slice(0, 10), true);
+    } else if (stage === 'contract') {
+      if (lead.status !== '계약 완료') continue;
+      events.set(String(lead.contractAt || '').slice(0, 10), true);
+    } else if (stage === 'pre') {
+      const meetings = Array.isArray(lead.crmMeetings) && lead.crmMeetings.length
+        ? lead.crmMeetings : lead.crmMeeting ? [lead.crmMeeting] : [];
+      for (const meeting of meetings) {
+        if (Number(meeting?.type) !== 1 || !meeting.startAt) continue;
+        const raw = String(meeting.startAt);
+        const parsed = new Date(/[T ]/.test(raw) && !/(Z|[+-]\d{2}:?\d{2})$/i.test(raw) ? raw.replace(' ', 'T') + '+09:00' : raw);
+        const date = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw
+          : Number.isNaN(parsed.getTime()) ? '' : new Date(parsed.getTime() + 9 * 3600000).toISOString().slice(0, 10);
+        if (!date) continue;
+        // Multiple calendar entries for one company on one day count as one visit.
+        events.set(date, events.get(date) === true || Number(meeting.checked) === 1);
+      }
+      if (!events.size) {
+        const doneDate = String(lead.premeetingDoneAt || '').slice(0, 10);
+        const meetingDate = String(lead.premeetingAt || lead.bookedAt || '').slice(0, 10);
+        const completed = !!doneDate || ['프리미팅 완료', '견적·제안 발송', '계약 완료'].includes(lead.status);
+        if (doneDate || meetingDate) events.set(doneDate || meetingDate, completed);
+      }
+    }
+    for (const [date, completed] of events) {
+      const day = byDate.get(date);
+      if (!day || !inRange(date, range)) continue;
+      day.entries.push({ lead, completed });
+      day.count += 1;
+      if (completed) day.completed += 1;
+      else day.unconfirmed += 1;
+    }
+  }
+  return days;
+}
