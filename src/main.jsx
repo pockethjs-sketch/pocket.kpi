@@ -4,6 +4,7 @@ import ContractMonthlyPerformance from "./ContractMonthlyPerformance.jsx";
 import ContractBasisView from "./ContractBasisView.jsx";
 import RecentSyncActivity from "./RecentSyncActivity.jsx";
 import DailyActivityChart from "./DailyActivityChart.jsx";
+import LeadRevenueQuality from "./LeadRevenueQuality.jsx";
 import { shadowStatusFromSheetsResult } from "./data/repositoryAdapter.js";
 import { reconcileMarketingDailyInquiries } from "./data/marketingInquiry.js";
 import { contractRoasByType, dailyStageActivity, dailyComparisonWindow, relativeMetricChange, previousDatedSpend, weekdayActivity, absoluteCountChange, previousMonthCostWindow, completeDatedSpend } from "./data/performanceMetrics.js";
@@ -6833,6 +6834,7 @@ function IntegratedPerformanceView() {
                     {period.mode === "range" && <p className="mt-2 text-[11px] text-amber-700">선택 기간 밖의 날짜는 0건으로 표시됩니다.</p>}
                     {metricStage.id === "pre" && <div className="mt-3 flex flex-wrap gap-3 text-[11px]"><span className="font-bold text-indigo-600">━ 방문 완료</span><span className="text-slate-500">┄ 방문 미확인</span><span className="text-slate-400">같은 업체도 다른 날 방문하면 날짜별로 집계 · 같은 날은 1건</span></div>}
                     <DailyActivityChart days={weekdayCounts} stage={metricStage.id} label={selectedDailyMonth + " " + dailyMetricLabel} selectedDate={selectedActivityDay?.date} onSelect={setDailyChartDate} />
+                    {metricStage.id === "marketing" && <LeadRevenueQuality leads={dailyCounts.flatMap(day => day.entries.map(entry => entry.lead))} label={selectedDailyMonth + (period.mode === "range" ? " 선택 범위" : " 월 전체") + " · " + customerType} dayLeads={selectedActivityDay?.entries.map(entry => entry.lead) || []} dayLabel={selectedActivityDay?.date} />}
                     <p className="mt-2 text-[10px] text-slate-400">점이나 날짜를 누르면 해당 일자를 확인합니다. 현재 월은 오늘까지, 토·일은 제외합니다. 주말 실적은 삭제하지 않으며 월간 합계·전일 대비에는 포함됩니다.{metricStage.id === "pre" && " 월간 카드는 프리미팅 기업 수, 이 그래프는 날짜별 방문·일정 건수입니다. 방문 후 드랍된 업체의 방문 이력도 포함합니다."}</p>
                     {selectedActivityDay && <div className="mt-4 border-t border-slate-100 pt-3">
                       {metricStage.id === "contract" ? <PopupLeadList title={selectedActivityDay.date + " 계약 기업"} rows={selectedActivityDay.entries.map((entry) => entry.lead)} detail="contract" tone="text-emerald-600" />
