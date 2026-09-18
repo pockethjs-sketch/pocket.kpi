@@ -2,9 +2,10 @@ import "./styles.css";
 import ContractOwnerSheet, { ContractCustomerTypeLabel } from "./ContractOwnerSheet.jsx";
 import ContractMonthlyPerformance from "./ContractMonthlyPerformance.jsx";
 import RecentSyncActivity from "./RecentSyncActivity.jsx";
+import DailyActivityChart from "./DailyActivityChart.jsx";
 import { shadowStatusFromSheetsResult } from "./data/repositoryAdapter.js";
 import { reconcileMarketingDailyInquiries } from "./data/marketingInquiry.js";
-import { contractRoasByType, dailyStageActivity, dailyComparisonWindow, relativeMetricChange, previousDatedSpend } from "./data/performanceMetrics.js";
+import { contractRoasByType, dailyStageActivity, dailyComparisonWindow, relativeMetricChange, previousDatedSpend, weekdayActivity } from "./data/performanceMetrics.js";
 
 /* ===== 운영 데이터 연동 설정 =====
      Supabase 화면별 API가 읽기·쓰기를 담당합니다.
@@ -6514,10 +6515,10 @@ function IntegratedPerformanceView() {
         : (cohort.map((lead) => String(lead.createdAt || "").slice(0, 7)).sort().slice(-1)[0] || todayISO().slice(0, 7));
   const selectedDailyMonth = period.mode === "month" || period.mode === "day" ? defaultDailyMonth : dailyChartMonth || defaultDailyMonth;
   const dailyCounts = dailyStageActivity(db.leads.filter(matchesCustomerType), metricStage?.id || "marketing", selectedDailyMonth, todayISO(), period.mode === "day" ? null : r);
-  const dailyMax = Math.max(1, ...dailyCounts.map((day) => day.count));
-  const selectedActivityDay = dailyCounts.find((day) => day.date === dailyChartDate) || [...dailyCounts].reverse().find((day) => day.count > 0) || dailyCounts[dailyCounts.length - 1];
+  const weekdayCounts = weekdayActivity(dailyCounts);
+  const selectedActivityDay = weekdayCounts.find((day) => day.date === dailyChartDate) || [...weekdayCounts].reverse().find((day) => day.count > 0) || weekdayCounts[weekdayCounts.length - 1];
   const dailyMetricLabel = metricStage?.id === "pre" ? "프리미팅" : metricStage?.id === "contract" ? "계약" : "유입 DB";
-  const dailyMetricTotal = dailyCounts.reduce((sum, day) => sum + day.count, 0);
+  const dailyMetricTotal = weekdayCounts.reduce((sum, day) => sum + day.count, 0);
   const contractAmountOf = (lead) => Number(lead && lead.contractAmount) || paySum(lead) || 0;
   const buildupLabelsOf = (lead) => [...new Set([
     lead && lead.buildup,
@@ -6812,26 +6813,15 @@ function IntegratedPerformanceView() {
                     <div className="flex items-center justify-between gap-3 flex-wrap">
                       <div>
                         <p className="text-sm font-extrabold text-slate-800">{selectedDailyMonth} 일별 {dailyMetricLabel}</p>
-                        <p className="mt-1 text-[11px] text-slate-500">{metricStage.id === "pre" ? "미팅일" : metricStage.id === "contract" ? "계약일" : "유입일"} 기준 · {customerType} · {metricStage.id === "pre" ? "방문 완료 " + dailyCounts.reduce((sum, day) => sum + day.completed, 0) + "건 · 방문 미확인 " + dailyCounts.reduce((sum, day) => sum + day.unconfirmed, 0) + "건" : "합계 " + dailyMetricTotal + "건"}</p>
+                        <p className="mt-1 text-[11px] text-slate-500">{metricStage.id === "pre" ? "미팅일" : metricStage.id === "contract" ? "계약일" : "유입일"} 기준 · {customerType} · 평일 합계 · {metricStage.id === "pre" ? "방문 완료 " + weekdayCounts.reduce((sum, day) => sum + day.completed, 0) + "건 · 방문 미확인 " + weekdayCounts.reduce((sum, day) => sum + day.unconfirmed, 0) + "건" : dailyMetricTotal + "건"}</p>
                       </div>
                       {!['month', 'day'].includes(period.mode) && <Inp type="month" min={r?.[0]?.slice(0, 7)} max={r?.[1]?.slice(0, 7)} value={selectedDailyMonth} onChange={(event) => setDailyChartMonth(event.target.value)} aria-label="일별 실적 조회 월" className="w-36" />}
                     </div>
                     {period.mode === "day" && <p className="mt-2 text-[11px] text-amber-700">상단 목표 판정은 선택한 하루 기준이고, 아래 그래프는 해당 월 전체 일별 실적입니다.</p>}
                     {period.mode === "range" && <p className="mt-2 text-[11px] text-amber-700">선택 기간 밖의 날짜는 0건으로 표시됩니다.</p>}
-                    {metricStage.id === "pre" && <div className="mt-3 flex flex-wrap gap-3 text-[11px]"><span className="font-bold text-indigo-600">■ 방문 완료</span><span className="text-slate-500">■ 방문 미확인</span><span className="text-slate-400">같은 업체도 다른 날 방문하면 날짜별로 집계 · 같은 날은 1건</span></div>}
-                    <div className="mt-4 overflow-x-auto pb-1" aria-label={selectedDailyMonth + " 날짜별 " + dailyMetricLabel + " 건수 그래프"}>
-                      <div className="flex h-44 min-w-[760px] items-end gap-1 border-b border-slate-200 pb-1">
-                        {dailyCounts.map((day) => <button type="button" key={day.date} onClick={() => setDailyChartDate(day.date)} aria-pressed={selectedActivityDay?.date === day.date} className={"flex min-w-0 flex-1 flex-col items-center justify-end gap-1 rounded-sm text-center hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 " + (selectedActivityDay?.date === day.date ? "bg-indigo-50" : "")} title={day.date + " · " + (metricStage.id === "pre" ? "방문 완료 " + day.completed + "건 / 미확인 " + day.unconfirmed + "건" : day.count + "건")}>
-                          <span className="text-[9px] font-bold tabular-nums text-slate-600">{metricStage.id === "pre" ? (day.count ? day.completed + (day.unconfirmed ? "+" + day.unconfirmed : "") : "") : day.count || ""}</span>
-                          <div className="flex h-32 w-full items-end justify-center"><div className="flex w-full max-w-5 flex-col overflow-hidden rounded-t-sm" style={{ height: day.count ? Math.max(5, day.count / dailyMax * 100) + "%" : "2px" }}>
-                            {metricStage.id === "pre" && day.unconfirmed > 0 && <div className="bg-slate-300" style={{ flex: day.unconfirmed }} />}
-                            <div className={day.count ? (metricStage.id === "pre" ? "bg-indigo-500" : metricStage.id === "contract" ? "bg-emerald-500" : "bg-sky-500") : "bg-slate-100"} style={{ flex: metricStage.id === "pre" ? day.completed || (day.count ? 0 : 1) : 1 }} />
-                          </div></div>
-                          <span className="text-[9px] tabular-nums text-slate-500">{Number(day.date.slice(8))}</span>
-                        </button>)}
-                      </div>
-                    </div>
-                    <p className="mt-2 text-[10px] text-slate-400">날짜를 누르면 해당 일자를 확인합니다. 현재 월은 오늘까지 표시합니다.{metricStage.id === "pre" && " 월간 카드는 프리미팅 기업 수, 이 그래프는 날짜별 방문·일정 건수입니다. 방문 후 드랍된 업체의 방문 이력도 포함합니다."}</p>
+                    {metricStage.id === "pre" && <div className="mt-3 flex flex-wrap gap-3 text-[11px]"><span className="font-bold text-indigo-600">━ 방문 완료</span><span className="text-slate-500">┄ 방문 미확인</span><span className="text-slate-400">같은 업체도 다른 날 방문하면 날짜별로 집계 · 같은 날은 1건</span></div>}
+                    <DailyActivityChart days={weekdayCounts} stage={metricStage.id} label={selectedDailyMonth + " " + dailyMetricLabel} selectedDate={selectedActivityDay?.date} onSelect={setDailyChartDate} />
+                    <p className="mt-2 text-[10px] text-slate-400">점이나 날짜를 누르면 해당 일자를 확인합니다. 현재 월은 오늘까지, 토·일은 제외합니다. 주말 실적은 삭제하지 않으며 월간 합계·전일 대비에는 포함됩니다.{metricStage.id === "pre" && " 월간 카드는 프리미팅 기업 수, 이 그래프는 날짜별 방문·일정 건수입니다. 방문 후 드랍된 업체의 방문 이력도 포함합니다."}</p>
                     {selectedActivityDay && <div className="mt-4 border-t border-slate-100 pt-3">
                       {metricStage.id === "contract" ? <PopupLeadList title={selectedActivityDay.date + " 계약 기업"} rows={selectedActivityDay.entries.map((entry) => entry.lead)} detail="contract" tone="text-emerald-600" />
                         : metricStage.id === "pre" ? <div><p className="text-xs font-bold text-slate-700">{selectedActivityDay.date} · 방문 완료 {selectedActivityDay.completed}건 · 방문 미확인 {selectedActivityDay.unconfirmed}건</p><div className="mt-2 max-h-64 divide-y divide-slate-100 overflow-y-auto rounded-md border border-slate-200">

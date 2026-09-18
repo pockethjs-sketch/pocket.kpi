@@ -57,6 +57,14 @@ export function contractRoasByType(leads, range, spend) {
   };
 }
 
+// Display-only filter: keep underlying activity and monthly KPI totals intact.
+export function weekdayActivity(days) {
+  return (days || []).filter(day => {
+    const weekday = new Date(day.date + 'T00:00:00Z').getUTCDay();
+    return weekday >= 1 && weekday <= 5;
+  });
+}
+
 export function dailyLeadCounts(leads, month, today) {
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month || '')) return [];
   const [year, monthNumber] = month.split('-').map(Number);
