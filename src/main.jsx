@@ -4,6 +4,7 @@ import ContractMonthlyPerformance from "./ContractMonthlyPerformance.jsx";
 import RecentSyncActivity from "./RecentSyncActivity.jsx";
 import { shadowStatusFromSheetsResult } from "./data/repositoryAdapter.js";
 import { reconcileMarketingDailyInquiries } from "./data/marketingInquiry.js";
+import { contractRoasByType, dailyLeadCounts } from "./data/performanceMetrics.js";
 
 /* ===== 운영 데이터 연동 설정 =====
      Supabase 화면별 API가 읽기·쓰기를 담당합니다.
@@ -6354,7 +6355,9 @@ function SettingsView() {
 function IntegratedPerformanceView() {
   const { db, period, go, openLead, up, users, toast } = useApp();
   const [metricOpen, setMetricOpen] = useState(null);
+  const [dailyChartMonth, setDailyChartMonth] = useState("");
   const [customerType, setCustomerType] = useState("전체");
+  useEffect(() => { setDailyChartMonth(""); }, [period.mode, period.y, period.m, period.d, period.start, period.end]);
   const [marketingLogDraft, setMarketingLogDraft] = useState({ kind: "action", date: todayISO(), channel: "", owner: "", action: "", note: "" });
   const r = pRange(period);
   const TARGET = { conv: 30, leadMonth: 500, preMonth: 150, contractMonth: 45, leadCost: 50000, preCost: 150000, contractCost: 450000 };
@@ -6364,10 +6367,11 @@ function IntegratedPerformanceView() {
      참석 완료뿐 아니라 선택 기간에 잡힌 프리미팅 확정 일정도 포함합니다. */
   const pre = db.leads.filter((l) => isPremeetingCompanyInRange(l, r) && matchesCustomerType(l));
   const contract = db.leads.filter((l) => l.status === "계약 완료" && inR(l.contractAt, r) && matchesCustomerType(l));
-  const contractAmountTotal = contract.reduce((sum, lead) => sum + (Number(lead.contractAmount) || paySum(lead) || 0), 0);
   const roasSpend = marketingSpendForPeriod(db, period);
+  const contractPerformance = contractRoasByType(db.leads, r, roasSpend);
+  const contractAmountTotal = customerType === "신규" ? contractPerformance.newAmount : customerType === "기존" ? contractPerformance.existingAmount : contractPerformance.amount;
   const spend = customerType === "기존" ? null : roasSpend;
-  const contractRoas = roasSpend > 0 ? Math.round(contractAmountTotal / roasSpend * 100) : null;
+  const contractRoas = customerType === "신규" ? contractPerformance.newRoas : customerType === "기존" ? contractPerformance.existingRoas : contractPerformance.totalRoas;
   const targetFactor = period.mode === "month" ? 1 : period.mode === "year" ? 12 : period.mode === "day" ? 1 / 30 : null;
   const effectiveTargetFactor = customerType === "기존" ? null : targetFactor;
   const conversionTarget = customerType === "기존" ? null : TARGET.conv;
@@ -6475,6 +6479,16 @@ function IntegratedPerformanceView() {
   const metricReachedIds = new Set(metricReachedRows.map((l) => l.id));
   const metricMissedRows = metricStage && metricStage.id === "pre" ? [] : metricBaseRows.filter((l) => !metricReachedIds.has(l.id));
   const metricTitle = !metricStage ? "" : metricOpen.type === "abs" ? metricStage.title + " · 절대값" : metricOpen.type === "conv" ? metricStage.title + " · 상대값" : metricStage.title + " · 목표비용";
+  const defaultDailyMonth = period.mode === "month" || period.mode === "day"
+    ? period.y + "-" + pad(period.m)
+    : period.mode === "year"
+      ? String(period.y) + "-" + pad(period.y === new Date().getFullYear() ? new Date().getMonth() + 1 : 12)
+      : period.mode === "range"
+        ? String(period.end || todayISO()).slice(0, 7)
+        : (cohort.map((lead) => String(lead.createdAt || "").slice(0, 7)).sort().slice(-1)[0] || todayISO().slice(0, 7));
+  const selectedDailyMonth = period.mode === "month" || period.mode === "day" ? defaultDailyMonth : dailyChartMonth || defaultDailyMonth;
+  const dailyCounts = dailyLeadCounts(period.mode === "day" ? db.leads.filter(matchesCustomerType) : cohort, selectedDailyMonth, todayISO());
+  const dailyMax = Math.max(1, ...dailyCounts.map((day) => day.count));
   const contractAmountOf = (lead) => Number(lead && lead.contractAmount) || paySum(lead) || 0;
   const buildupLabelsOf = (lead) => [...new Set([
     lead && lead.buildup,
@@ -6764,7 +6778,29 @@ function IntegratedPerformanceView() {
                   </div>
                   <p className="text-xs text-slate-500 mt-2">{metricStage.countTarget == null ? "현재 기간에서는 절대 목표를 산출하지 않습니다." : metricStage.count >= metricStage.countTarget ? "목표보다 " + (metricStage.count - metricStage.countTarget) + "건 많습니다." : "목표까지 " + (metricStage.countTarget - metricStage.count) + "건 부족합니다."}</p>
                 </div>
-                <PopupLeadList title={metricStage.countLabel + " 구성 기업"} rows={metricRows} tone={metricStage.absState === "ok" ? "text-emerald-600" : "text-red-600"} detail={metricStage.id === "contract" ? "contract" : ""} />
+                {metricStage.id === "marketing" ? (
+                  <div className="rounded-xl border border-slate-200 bg-white p-4">
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <div>
+                        <p className="text-sm font-extrabold text-slate-800">{selectedDailyMonth} 일별 유입 DB</p>
+                        <p className="mt-1 text-[11px] text-slate-500">유입일 기준 · {customerType} · 합계 {dailyCounts.reduce((sum, day) => sum + day.count, 0)}건</p>
+                      </div>
+                      {!['month', 'day'].includes(period.mode) && <Inp type="month" value={selectedDailyMonth} onChange={(event) => setDailyChartMonth(event.target.value)} aria-label="일별 유입 조회 월" className="w-36" />}
+                    </div>
+                    {period.mode === "day" && <p className="mt-2 text-[11px] text-amber-700">상단 목표 판정은 선택한 하루 기준이고, 아래 그래프는 해당 월 전체 일별 유입입니다.</p>}
+                    {period.mode === "range" && <p className="mt-2 text-[11px] text-amber-700">선택 기간 밖의 날짜는 0건으로 표시됩니다.</p>}
+                    <div className="mt-4 overflow-x-auto pb-1" role="img" aria-label={selectedDailyMonth + " 날짜별 CRM 유입 DB 건수 그래프"}>
+                      <div className="flex h-44 min-w-[760px] items-end gap-1 border-b border-slate-200 pb-1">
+                        {dailyCounts.map((day) => <div key={day.date} className="flex min-w-0 flex-1 flex-col items-center justify-end gap-1 text-center" title={day.date + " · " + day.count + "건"}>
+                          <span className="text-[9px] font-bold tabular-nums text-slate-600">{day.count || ""}</span>
+                          <div className="flex h-32 w-full items-end justify-center"><div className={"w-full max-w-5 rounded-t-sm " + (day.count ? "bg-sky-500" : "bg-slate-100")} style={{ height: day.count ? Math.max(5, day.count / dailyMax * 100) + "%" : "2px" }} /></div>
+                          <span className="text-[9px] tabular-nums text-slate-500">{Number(day.date.slice(8))}</span>
+                        </div>)}
+                      </div>
+                    </div>
+                    <p className="mt-2 text-[10px] text-slate-400">막대에 마우스를 올리면 날짜와 건수를 볼 수 있습니다. 현재 월은 오늘까지 표시합니다.</p>
+                  </div>
+                ) : <PopupLeadList title={metricStage.countLabel + " 구성 기업"} rows={metricRows} tone={metricStage.absState === "ok" ? "text-emerald-600" : "text-red-600"} detail={metricStage.id === "contract" ? "contract" : ""} />}
               </>
             )}
             {metricOpen.type === "conv" && (
@@ -6818,28 +6854,28 @@ function MarketingHubView() {
   const r = pRange(period);
   const leads = db.leads.filter((l) => inR(l.createdAt, r));
   const met = leads.filter(hasCompletedMeeting);
-  const periodMeetings = db.leads.filter((l) => inR(meetingDoneDate(l), r));
+  const periodMeetings = db.leads.filter((l) => isPremeetingCompanyInRange(l, r));
   const paid = leads.filter((l) => actualPaid(l) > 0);
-  const revenue = paid.reduce((s, l) => s + actualPaid(l), 0);
   const spend = marketingSpendForPeriod(db, period);
-  const hubChannelNames = [...new Set([...db.channels.map((c) => c.name), ...leads.map((l) => l.channel).filter(Boolean)].map(channelGroupName))];
+  const contractPerformance = contractRoasByType(db.leads, r, spend);
+  const hubChannelNames = [...new Set([...db.channels.map((c) => c.name), ...db.leads.filter((l) => inR(l.createdAt, r) || (l.status === "계약 완료" && inR(l.contractAt, r))).map((l) => l.channel).filter(Boolean)].map(channelGroupName))];
   const hubRawRows = hubChannelNames.map((name) => {
     const rows = leads.filter((l) => channelGroupName(l.channel) === name);
     const meetings = rows.filter(hasCompletedMeeting);
     const paidCompanies = rows.filter((l) => actualPaid(l) > 0);
-    const rev = rows.reduce((s, l) => s + actualPaid(l), 0);
     const chSpend = marketingSpendForPeriod(db, period, name);
+    const contracts = contractRoasByType(db.leads.filter((lead) => channelGroupName(lead.channel) === name), r, chSpend);
     return {
-      name, rows, meetings, paidCompanies, rev, spend: chSpend,
+      name, rows, meetings, paidCompanies, rev: contracts.amount, spend: chSpend,
       cpl: chSpend != null && rows.length ? Math.round(chSpend / rows.length) : null,
       cac: chSpend != null && paidCompanies.length ? Math.round(chSpend / paidCompanies.length) : null,
-      roas: chSpend ? Math.round(rev / chSpend * 100) : null,
+      roas: contracts.totalRoas,
     };
-  }).filter((x) => x.rows.length || (x.spend || 0) > 0).sort((a, b) => b.rows.length - a.rows.length || b.rev - a.rev);
+  }).filter((x) => x.rows.length || (x.spend || 0) > 0 || x.rev > 0).sort((a, b) => b.rows.length - a.rows.length || b.rev - a.rev);
   const channelRows = hubRawRows;
   const totalCpl = spend != null && leads.length ? Math.round(spend / leads.length) : null;
   const totalCac = spend != null && paid.length ? Math.round(spend / paid.length) : null;
-  const totalRoas = spend ? Math.round(revenue / spend * 100) : null;
+  const totalRoas = contractPerformance.totalRoas;
   const monthKey = (y, m) => y + "-" + pad(m);
   const shiftMonthKey = (key, offset) => {
     const [y, m] = key.split("-").map(Number);
@@ -6861,19 +6897,24 @@ function MarketingHubView() {
       : Array.from({ length: 6 }, (_, i) => shiftMonthKey(selectedMonth, i - 5));
   const trendData = trendMonths.map((month) => {
     const inflowRows = db.leads.filter((l) => (l.createdAt || "").startsWith(month));
-    const meetingRows = inflowRows.filter(hasCompletedMeeting);
-    const attributedRevenue = inflowRows.reduce((s, l) => s + actualPaid(l), 0);
+    const [year, monthNumber] = month.split("-").map(Number);
+    const monthRange = pRange({ mode: "month", y: year, m: monthNumber });
+    const meetingRows = db.leads.filter((l) => isPremeetingCompanyInRange(l, monthRange));
     const rawMonthSpend = marketingSpendForMonth(db, month);
     const monthSpend = rawMonthSpend != null && rawMonthSpend > 50000 ? rawMonthSpend : null;
+    const contracts = contractRoasByType(db.leads, monthRange, monthSpend);
     return {
       month,
       label: Number(month.slice(5)) + "월",
       leads: inflowRows.length,
       meetings: meetingRows.length,
-      meetingRate: inflowRows.length ? Math.round(meetingRows.length / inflowRows.length * 100) : 0,
       cpl: monthSpend > 0 && inflowRows.length ? Math.round(monthSpend / inflowRows.length) : null,
-      roas: monthSpend > 0 ? Math.round(attributedRevenue / monthSpend * 100) : null,
-      revenue: attributedRevenue,
+      roas: contracts.totalRoas,
+      newRoas: contracts.newRoas,
+      existingRoas: contracts.existingRoas,
+      revenue: contracts.amount,
+      newContractAmount: contracts.newAmount,
+      existingContractAmount: contracts.existingAmount,
       spend: monthSpend,
     };
   });
@@ -6883,11 +6924,42 @@ function MarketingHubView() {
   const monthlyRoasGoal = marketingKpi.roasTarget || 500;
   const trendMetrics = [
     { key: "leads", label: "유입 DB", suffix: "건", goal: monthlyLeadGoal, color: "#0ea5e9", soft: "bg-sky-50", text: "text-sky-700", desc: "해당 월에 유입된 DB" },
-    { key: "meetings", label: "DB→프리 전환", suffix: "건", goal: monthlyMeetingGoal, color: "#6366f1", soft: "bg-indigo-50", text: "text-indigo-700", desc: "해당 월 유입 DB 중 이후 프리미팅을 완료한 기업" },
-    { key: "roas", label: "ROAS", suffix: "%", goal: monthlyRoasGoal, color: "#f43f5e", soft: "bg-rose-50", text: "text-rose-700", desc: "유입월 귀속 매출 ÷ 광고비" },
+    { key: "meetings", label: "프리미팅", suffix: "건", goal: monthlyMeetingGoal, color: "#6366f1", soft: "bg-indigo-50", text: "text-indigo-700", desc: "해당 월 프리미팅 기업 수 · 통합 성과와 동일 기준" },
+    { key: "roas", label: "ROAS", suffix: "%", goal: monthlyRoasGoal, color: "#f43f5e", soft: "bg-rose-50", text: "text-rose-700", desc: "계약일 기준 신규·기존 계약액 ÷ 해당 월 전체 광고비" },
   ];
   const MiniTrend = ({ metric }) => {
     const W = 360, H = 158, L = 18, R = 342, T = 24, B = 118;
+    if (metric.key === "roas") {
+      const series = [
+        { key: "newRoas", label: "신규", color: "#f43f5e" },
+        { key: "existingRoas", label: "기존", color: "#8b5cf6" },
+      ];
+      const maxRoas = Math.max(1, metric.goal, ...trendData.flatMap((row) => series.map((item) => row[item.key] || 0)));
+      const xAt = (index) => trendData.length <= 1 ? (L + R) / 2 : L + (R - L) * index / (trendData.length - 1);
+      const yAt = (value) => B - value / maxRoas * (B - T);
+      const current = trendData[trendData.length - 1] || {};
+      return <div className="rounded-2xl border border-slate-100 bg-white p-3.5 shadow-sm">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <p className="text-[11px] font-bold text-slate-400">ROAS · 계약액 기준</p>
+            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+              {series.map((item) => <span key={item.key} className="text-[11px] font-extrabold tabular-nums" style={{ color: item.color }}>{item.label} <b className="text-lg">{current[item.key] == null ? "-" : current[item.key].toLocaleString() + "%"}</b></span>)}
+            </div>
+          </div>
+          <span className="px-2 py-1 rounded-full bg-slate-100 text-[10px] font-extrabold text-slate-500">목표 {metric.goal}%</span>
+        </div>
+        <svg viewBox={"0 0 " + W + " " + H} className="mt-1 h-[158px] w-full" role="img" aria-label="신규 및 기존 계약액 ROAS 월별 추이">
+          {[0, 1, 2].map((index) => <line key={index} x1={L} y1={T + (B - T) * index / 2} x2={R} y2={T + (B - T) * index / 2} stroke="#e2e8f0" strokeDasharray={index === 2 ? "0" : "4 5"} />)}
+          <line x1={L} y1={yAt(metric.goal)} x2={R} y2={yAt(metric.goal)} stroke="#f43f5e" strokeOpacity=".35" strokeDasharray="6 5" />
+          {series.map((item) => <React.Fragment key={item.key}>
+            <path d={trendData.map((row, index) => row[item.key] == null ? "" : (index && trendData[index - 1][item.key] != null ? "L" : "M") + xAt(index).toFixed(1) + "," + yAt(row[item.key]).toFixed(1)).filter(Boolean).join(" ")} fill="none" stroke={item.color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+            {trendData.map((row, index) => row[item.key] == null ? null : <circle key={row.month} cx={xAt(index)} cy={yAt(row[item.key])} r="3.5" fill="white" stroke={item.color} strokeWidth="2.5"><title>{row.month + " " + item.label + " ROAS " + row[item.key] + "% · 계약액 " + fmtWon(item.key === "newRoas" ? row.newContractAmount : row.existingContractAmount) + " ÷ 광고비 " + fmtWon(row.spend)}</title></circle>)}
+          </React.Fragment>)}
+          {trendData.map((row, index) => (trendData.length <= 6 || index === trendData.length - 1 || index % 2 === 0) && <text key={row.month} x={xAt(index)} y={B + 19} textAnchor="middle" fontSize="9" fontWeight="700" fill="#64748b">{row.label}</text>)}
+        </svg>
+        <p className="text-[10px] text-slate-400">{metric.desc}</p>
+      </div>;
+    }
     const values = trendData.map((x) => x[metric.key]);
     const usable = values.map((v) => v == null ? 0 : v);
     const maxV = Math.max(1, metric.goal || 0, ...usable);
@@ -6942,21 +7014,24 @@ function MarketingHubView() {
         right={<div className="flex gap-2"><Btn size="xs" onClick={() => go("leads")}>유입 DB</Btn><Btn size="xs" kind="primary" onClick={() => go("marketing")}>채널 상세</Btn></div>} />
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
         <button className="text-left" onClick={() => go("leads")}><StatBig label="유입 DB" value={leads.length} unit="건" accent="border-sky-500" sub={totalCpl == null ? "아직 데이터가 없다" : "CPL " + fmtK(totalCpl) + "원"} /></button>
-        <button className="text-left" onClick={() => go("premeetingHub")}><StatBig label="프리미팅" value={periodMeetings.length} unit="건" accent="border-indigo-500" sub={"선택 기간 실시 · 유입 코호트 전환 " + met.length + "건"} /></button>
+        <button className="text-left" onClick={() => go("premeetingHub")}><StatBig label="프리미팅" value={periodMeetings.length} unit="건" accent="border-indigo-500" sub="선택 기간 기업 수 · 통합 성과와 동일 기준" /></button>
         <StatBig label="결제 기업" value={paid.length} unit="개사" accent="border-emerald-500" sub={"유입 대비 " + pct(paid.length, leads.length) + "%"} />
-        <StatBig label="ROAS" value={totalRoas == null ? "-" : totalRoas} unit={totalRoas == null ? "" : "%"} accent="border-rose-500" sub={spend == null ? "아직 데이터가 없다" : "귀속 매출 " + fmtK(revenue) + "원 · 광고비 " + fmtK(spend) + "원"} />
-      </div>
-      <div className="flex items-center gap-2 rounded-xl border border-indigo-100 bg-indigo-50/60 px-3 py-2 text-[10px] text-indigo-700">
-        <Info size={12} className="shrink-0" />
-        <span><b>DB→프리 전환 {met.length}건</b>은 선택 기간 유입 DB의 후속 전환이고, <b>기간 실시 {periodMeetings.length}건</b>은 선택 기간에 실제 진행된 프리미팅입니다.</span>
+        <Card cls="border-l-4 border-rose-500 p-4">
+          <p className="text-xs font-semibold text-slate-400">ROAS · 계약액 기준</p>
+          <div className="mt-2 space-y-1.5">
+            <p className="flex items-baseline justify-between gap-2 text-sm font-bold text-slate-600">신규 <span className="text-xl font-black tabular-nums text-rose-600">{contractPerformance.newRoas == null ? "-" : contractPerformance.newRoas.toLocaleString() + "%"}</span></p>
+            <p className="flex items-baseline justify-between gap-2 text-sm font-bold text-slate-600">기존 <span className="text-xl font-black tabular-nums text-violet-600">{contractPerformance.existingRoas == null ? "-" : contractPerformance.existingRoas.toLocaleString() + "%"}</span></p>
+          </div>
+          <p className="mt-1.5 text-[10px] text-slate-400">계약일 기준 각 계약액 ÷ {spend == null ? "광고비 없음" : "광고비 " + fmtK(spend) + "원"}</p>
+        </Card>
       </div>
       <Card>
         <div className="flex items-start justify-between gap-3 px-4 pt-4 pb-3 flex-wrap">
           <div>
             <p className="text-sm font-extrabold text-slate-900">마케팅 성과 추이</p>
-            <p className="text-[10px] text-slate-400 mt-1">서로 다른 단위를 겹치지 않고 월별 유입 코호트 기준으로 분리했습니다. 최신 월은 아직 전환·입금이 덜 반영될 수 있습니다.</p>
+            <p className="text-[10px] text-slate-400 mt-1">유입 DB는 유입월, 프리미팅은 일정월, ROAS는 계약월 기준입니다. 최신 월은 아직 계약이 덜 반영될 수 있습니다.</p>
           </div>
-          <span className="px-2.5 py-1 rounded-full bg-slate-100 text-[10px] font-bold text-slate-500">월별 · 유입월 귀속</span>
+          <span className="px-2.5 py-1 rounded-full bg-slate-100 text-[10px] font-bold text-slate-500">월별 · 지표별 실제 날짜</span>
         </div>
         <div className="grid lg:grid-cols-3 gap-3 px-3 pb-3">
           {trendMetrics.map((metric) => <MiniTrend key={metric.key} metric={metric} />)}
@@ -6964,7 +7039,7 @@ function MarketingHubView() {
         <div className="overflow-x-auto border-t border-slate-100">
           <table className="w-full min-w-[760px] text-xs">
             <thead><tr className="bg-slate-50 text-[10px] text-slate-400">
-              <th className="px-4 py-2 text-left">유입월</th><th className="px-3 py-2 text-right">유입 DB</th><th className="px-3 py-2 text-right">프리 전환</th><th className="px-3 py-2 text-right">DB→프리</th><th className="px-3 py-2 text-right">CPL</th><th className="px-4 py-2 text-right">ROAS</th>
+              <th className="px-4 py-2 text-left">월</th><th className="px-3 py-2 text-right">유입 DB</th><th className="px-3 py-2 text-right">프리미팅</th><th className="px-3 py-2 text-right">CPL</th><th className="px-4 py-2 text-right">신규 ROAS</th><th className="px-4 py-2 text-right">기존 ROAS</th>
             </tr></thead>
             <tbody>
               {[...trendData].reverse().slice(0, 6).map((x, i) => (
@@ -6972,9 +7047,9 @@ function MarketingHubView() {
                   <td className="px-4 py-2.5 font-bold text-slate-700">{x.month}{i === 0 && <span className="ml-2 text-[9px] text-indigo-600">최신</span>}</td>
                   <td className={"px-3 py-2.5 text-right font-extrabold tabular-nums " + (x.leads >= monthlyLeadGoal ? "text-emerald-700" : "text-rose-600")}>{x.leads.toLocaleString()}건</td>
                   <td className={"px-3 py-2.5 text-right font-extrabold tabular-nums " + (x.meetings >= monthlyMeetingGoal ? "text-emerald-700" : "text-rose-600")}>{x.meetings.toLocaleString()}건</td>
-                  <td className={"px-3 py-2.5 text-right font-bold tabular-nums " + (x.meetingRate >= Math.round((marketingKpi.conv || 0.3) * 100) ? "text-emerald-700" : "text-rose-600")}>{x.meetingRate}%</td>
                   <td className={"px-3 py-2.5 text-right font-bold tabular-nums " + (x.cpl != null && x.cpl <= 50000 ? "text-emerald-700" : "text-rose-600")}>{x.cpl == null ? "-" : fmtK(x.cpl) + "원"}</td>
-                  <td className={"px-4 py-2.5 text-right font-extrabold tabular-nums " + (x.roas != null && x.roas >= monthlyRoasGoal ? "text-emerald-700" : "text-rose-600")}>{x.roas == null ? "-" : x.roas.toLocaleString() + "%"}</td>
+                  <td className={"px-4 py-2.5 text-right font-extrabold tabular-nums " + (x.newRoas != null && x.newRoas >= monthlyRoasGoal ? "text-emerald-700" : "text-rose-600")}>{x.newRoas == null ? "-" : x.newRoas.toLocaleString() + "%"}</td>
+                  <td className="px-4 py-2.5 text-right font-extrabold tabular-nums text-violet-700">{x.existingRoas == null ? "-" : x.existingRoas.toLocaleString() + "%"}</td>
                 </tr>
               ))}
             </tbody>
@@ -6985,7 +7060,7 @@ function MarketingHubView() {
         <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-3 flex-wrap">
           <div>
             <p className="text-sm font-extrabold text-slate-900">성과 흐름</p>
-            <p className="text-[10px] text-slate-400 mt-1">광고비 → 유입 DB → 프리미팅 → 결제 → 귀속 매출 흐름을 채널별로 비교합니다.</p>
+            <p className="text-[10px] text-slate-400 mt-1">유입·입금 업체는 유입일, 계약액·ROAS는 계약일 기준입니다. ROAS는 통합 성과와 같은 계약액 ÷ 광고비입니다.</p>
           </div>
           <Btn size="xs" kind="ghost" onClick={() => go("marketing")}>전체 분석 <ExternalLink size={11} /></Btn>
         </div>
@@ -7002,7 +7077,7 @@ function MarketingHubView() {
                 <th className="px-3 py-2.5 text-right font-semibold">결제 기업</th>
                 <th className="px-3 py-2.5 text-right font-semibold">DB→결제</th>
                 <th className="px-3 py-2.5 text-right font-semibold">CAC</th>
-                <th className="px-3 py-2.5 text-right font-semibold">귀속 매출</th>
+                <th className="px-3 py-2.5 text-right font-semibold">계약액</th>
                 <th className="px-4 py-2.5 text-right font-semibold">ROAS</th>
               </tr>
             </thead>
@@ -7036,7 +7111,7 @@ function MarketingHubView() {
                   <td className="px-3 py-3 text-right text-sm font-black text-emerald-300 tabular-nums">{paid.length}</td>
                   <td className="px-3 py-3 text-right text-xs font-bold text-emerald-300 tabular-nums">{pct(paid.length, leads.length)}%</td>
                   <td className="px-3 py-3 text-right text-xs font-bold tabular-nums">{totalCac == null ? "-" : fmtK(totalCac) + "원"}</td>
-                  <td className="px-3 py-3 text-right text-sm font-black text-teal-300 tabular-nums">{fmtK(revenue)}원</td>
+                  <td className="px-3 py-3 text-right text-sm font-black text-teal-300 tabular-nums">{fmtK(contractPerformance.amount)}원</td>
                   <td className="px-4 py-3 text-right text-sm font-black text-rose-300 tabular-nums">{totalRoas == null ? "-" : totalRoas + "%"}</td>
                 </tr>
               </tfoot>
