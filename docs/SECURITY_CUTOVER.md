@@ -35,7 +35,11 @@ The helper is now wired to the domain handler. Auth.getUser verifies sessions an
 - Domain and marketing handlers deployed; old public token + anon credential returns HTTP401 for negative session/mutation/collector tests. No customer payload was retrieved for these tests.
 - Apps Script version60 applied to nine versioned deployments, including old URLs and the owner-only executor; HEAD uses the same source. Three principal HTTP URLs verified to return `employee_gateway_required` before reading any data.
 - 149 local tests pass, including actual domain-handler authorization/patch contract and Apps Script HMAC tests. Frontend build passes.
-- Remaining release checks: published frontend, real administrator email verification/login, authenticated runtime read/save and signed sheet bridge. Do not describe these as verified until completed.
+- Frontend commit `81e94c9`, Actions `35354669324` succeeded. Live entry `index-Bu3X848I.js`. Isolated production browser: login visible; CRM module not imported; zero business API requests before login; sentinel legacy cache hidden; original journal preserved; zero page errors; mobile no horizontal overflow.
+- A real service-role transaction test exposed missing SELECT on auth.users in the initial claim RPC. Corrected with `employee_claim_verified_identity`: the server passes Auth.getUser's confirmed email, no privileges on auth.users were added. Synthetic claim and revoke/reclaim tests passed, all test records rolled back. Domain v10 includes this correction.
+- `KPI_PUBLIC_APP_TOKEN` secret removed from this project; server-only Cron/HMAC/backup credentials preserved.
+- Integrity check: revision `20260918091132386-0rcrbhkx`, 847 active leads, 484 active deals, 456 active marketing rows unchanged. No synthetic users/invitations remained.
+- Remaining release checks: real administrator email verification/login, authenticated runtime read/save and signed sheet bridge. Do not describe these as verified until completed.
 - Historical access-log audit and the operator-managed Nginx proxy are not yet verified. Removing the browser's proxy fallback does not secure a separately operated server.
 - RLS advisor: server-only tables intentionally have no client policies; existing `pg_net` extension placement warning is unrelated and left unchanged. See https://supabase.com/docs/guides/database/database-linter?lint=0014_extension_in_public.
 

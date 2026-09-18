@@ -21,7 +21,7 @@ export async function authorizeEmployee({ request, organizationId, verifyUser, f
   let membership;
   try {
     // Adapter must read the current membership on every request, no stale JWT role claims.
-    const result = await findMembership(organizationId, user.id);
+    const result = await findMembership(organizationId, user.id, user.email);
     if (result.error) return denied(503, 'membership_unavailable');
     membership = result.data;
   } catch {

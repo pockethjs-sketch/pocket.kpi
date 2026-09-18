@@ -106,8 +106,8 @@ Deno.serve(async (req) => {
   });
   const access = await authorizeEmployee({ request: req, organizationId,
     verifyUser: (jwt: string) => supabase.auth.getUser(jwt),
-    findMembership: async (org: string, userId: string) => {
-      const claim = await supabase.rpc("kpi_claim_employee_invitation", { p_organization_id: org, p_user_id: userId });
+    findMembership: async (org: string, userId: string, verifiedEmail: string) => {
+      const claim = await supabase.rpc("kpi_claim_employee_invitation", { p_organization_id: org, p_user_id: userId, p_verified_email: verifiedEmail });
       if (claim.error) return { error: claim.error };
       return supabase.from("organization_memberships").select("organization_id,user_id,role,state,archived_at")
         .eq("organization_id", org).eq("user_id", userId).maybeSingle();
