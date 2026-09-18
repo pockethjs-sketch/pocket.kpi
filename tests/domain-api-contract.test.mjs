@@ -19,19 +19,21 @@ test("frontend reads domain endpoints and writes mutations without a whole state
   assert.doesNotMatch(domain, /stateSnapshot/);
 });
 
-test("domain edge keeps service role server-side and checks the public app boundary", () => {
+test("domain edge keeps service role server-side and verifies employee sessions", () => {
   assert.match(domain, /SUPABASE_SERVICE_ROLE_KEY/);
-  assert.match(domain, /KPI_PUBLIC_APP_TOKEN/);
+  assert.doesNotMatch(domain, /KPI_PUBLIC_APP_TOKEN/);
+  assert.match(domain, /authorizeEmployee/);
+  assert.match(domain, /supabase.auth.getUser/);
   assert.doesNotMatch(frontend, /SUPABASE_SERVICE_ROLE_KEY/);
   assert.match(config, /\[functions\.kpi-domain-api\][\s\S]*verify_jwt = true/);
-  assert.match(frontend, /Authorization.*Bearer.*KPI_SUPABASE_ANON_KEY/);
+  assert.match(frontend, /await window.kpiEmployeeHeaders\(\)/);
 });
 
-test("CRM refresh uses the domain API first and keeps Apps Script only as fallback", () => {
+test("CRM refresh exclusively uses the employee-authenticated domain API", () => {
   const refreshStart = frontend.indexOf("window.crmFetchRefreshPayload");
   const direct = frontend.indexOf("crmFetchDomainAction('crm_refresh'", refreshStart);
   const sheet = frontend.indexOf("CRM_SHEET_URL.replace", direct);
-  assert.ok(refreshStart >= 0 && direct > refreshStart && sheet > direct);
+  assert.ok(refreshStart >= 0 && direct > refreshStart && sheet < 0);
   assert.match(domain, /action === "crm_refresh"/);
   assert.match(domain, /functions\/v1\/kpi-crm-sync/);
   assert.match(domain, /Bearer \$\{serviceRole\}/);

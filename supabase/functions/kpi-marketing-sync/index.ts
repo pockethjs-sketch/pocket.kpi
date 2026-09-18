@@ -210,10 +210,10 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
   const raw = await req.text();
   let body: any; try { body = JSON.parse(raw || "{}"); } catch { return json({ error: "bad_json" }, 400); }
-  const appAuthorized = req.headers.get("x-kpi-app-token") === (Deno.env.get("KPI_PUBLIC_APP_TOKEN") || "__missing__");
-  const cronAuthorized = req.headers.get("x-kpi-cron-secret") === (Deno.env.get("KPI_MARKETING_CRON_SECRET") || "__missing__");
+  const cronSecret = Deno.env.get("KPI_MARKETING_CRON_SECRET") || "";
+  const cronAuthorized = Boolean(cronSecret) && req.headers.get("x-kpi-cron-secret") === cronSecret;
   const hmacAuthorized = await verifyHmac(req, raw);
-  if (!appAuthorized && !cronAuthorized && !hmacAuthorized) return json({ error: "unauthorized" }, 401);
+  if (!cronAuthorized && !hmacAuthorized) return json({ error: "unauthorized" }, 401);
   const client = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
   const organizationId = Deno.env.get("KPI_ORGANIZATION_ID") || "";
   if (!organizationId) return json({ error: "organization_not_configured" }, 503);

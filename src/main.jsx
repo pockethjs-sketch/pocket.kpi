@@ -1,10 +1,14 @@
 import "./styles.css";
+// This module is imported only after server-verified employee authorization.
+if (!window.kpiEmployeeAccess?.userId) throw new Error('employee_login_required');
+const localStorage = window.kpiEmployeeStorage;
 import ContractOwnerSheet, { ContractCustomerTypeLabel } from "./ContractOwnerSheet.jsx";
 import ContractMonthlyPerformance from "./ContractMonthlyPerformance.jsx";
 import ContractBasisView from "./ContractBasisView.jsx";
 import RecentSyncActivity from "./RecentSyncActivity.jsx";
 import DailyActivityChart from "./DailyActivityChart.jsx";
 import LeadRevenueQuality from "./LeadRevenueQuality.jsx";
+import EmployeeAdministration from "./EmployeeAdministration.jsx";
 import { shadowStatusFromSheetsResult } from "./data/repositoryAdapter.js";
 import { reconcileMarketingDailyInquiries } from "./data/marketingInquiry.js";
 import { contractRoasByType, dailyStageActivity, dailyComparisonWindow, relativeMetricChange, previousDatedSpend, weekdayActivity, absoluteCountChange, previousMonthCostWindow, completeDatedSpend } from "./data/performanceMetrics.js";
@@ -13,12 +17,12 @@ import { contractRoasByType, dailyStageActivity, dailyComparisonWindow, relative
      Supabase 화면별 API가 읽기·쓰기를 담당합니다.
      Apps Script URL은 CRM/외부 계약 연동과 재해복구용 Sheets 읽기 폴백에만 사용합니다. */
   var CRM_SHEET_URL = 'https://script.google.com/macros/s/AKfycbwscZiacAZFqxAsW0cA6X75OxTkkqLReVoHatUyePPV8ihsWad4GxzmnKaLphJo7sQ/exec';   // ← 구글시트 연동 ON (월별 광고비 포함)
-  var CRM_TOKEN = 'pocket-crm-9f3k7x';           // ← crm-apps-script.gs 의 TOKEN 과 동일 (이미 맞춰둠)
+  var CRM_TOKEN = ''; // Retired. No shared browser credential is accepted by any KPI endpoint.
   var KPI_DOMAIN_API_URL = 'https://ilnklntqkdbbtzzbhqrl.supabase.co/functions/v1/kpi-domain-api';
   var KPI_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlsbmtsbnRxa2RiYnR6emJocXJsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg3Mjk3NDQsImV4cCI6MjEwNDMwNTc0NH0.QoQ6jIFNo75LUtWU7YOvsO9cwWIsWZvlhFeuBgBvNac';
   /* 사내 Nginx 배포에서는 같은 Origin 프록시를 우선 사용합니다.
      그 외 환경은 Supabase Edge를 사용하고 Apps Script는 장애 폴백으로만 남깁니다. */
-  var CRM_SERVER_PROXY_BASE = location.hostname === 'view.xn--9i1b674cwc38r6pa.com' ? '/kpi-api' : '';
+  var CRM_SERVER_PROXY_BASE = ''; // All hosts use the employee-authenticated domain API.
   window.crmRemoteLoaded = false;
   window.crmRemoteError = '';
   window.crmRemoteApplied = false;
@@ -75,34 +79,18 @@ import { contractRoasByType, dailyStageActivity, dailyComparisonWindow, relative
     throw new Error('remote_save_timeout');
   };
 
-  function crmFetchSheetAction(action, timeoutMs, attempt) {
-    attempt = Number(attempt || 0);
-    var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    var timeout = controller ? setTimeout(function () { controller.abort(); }, timeoutMs) : null;
-    var url = CRM_SHEET_URL + '?token=' + encodeURIComponent(CRM_TOKEN) + '&action=' + encodeURIComponent(action) + '&t=' + Date.now();
-    return fetch(url, { cache: 'no-store', signal: controller ? controller.signal : undefined })
-      .then(function (res) {
-        if (!res.ok) throw new Error('sheet_' + res.status);
-        return res.json();
-      })
-      .catch(function (error) {
-        var timedOut = !!(error && error.name === 'AbortError');
-        var canRetry = timedOut ? (action === 'meta' && attempt < 1) : attempt < 2;
-        if (!canRetry) throw error;
-        return crmDelay(attempt === 0 ? 500 : 1500).then(function () {
-          return crmFetchSheetAction(action, timeoutMs, attempt + 1);
-        });
-      })
-      .finally(function () { if (timeout) clearTimeout(timeout); });
+  function crmFetchSheetAction(action, timeoutMs) {
+    return crmFetchDomainAction('sheet_bridge', { method: 'POST', timeoutMs: timeoutMs || 45000, body: { sheetAction: action } });
   }
 
-  function crmFetchDomainAction(action, options) {
+  async function crmFetchDomainAction(action, options) {
     options = options || {};
+    var employeeHeaders = await window.kpiEmployeeHeaders();
     var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     var timeout = controller ? setTimeout(function () { controller.abort(); }, Number(options.timeoutMs || 25000)) : null;
     var request = {
       method: options.method || 'GET', cache: 'no-store',
-      headers: { 'x-kpi-app-token': CRM_TOKEN, 'Authorization': 'Bearer ' + KPI_SUPABASE_ANON_KEY, 'apikey': KPI_SUPABASE_ANON_KEY }, signal: controller ? controller.signal : undefined
+      headers: employeeHeaders, signal: controller ? controller.signal : undefined
     };
     var url = KPI_DOMAIN_API_URL + '?action=' + encodeURIComponent(action) + '&t=' + Date.now();
     if (request.method === 'POST') {
@@ -129,32 +117,15 @@ import { contractRoasByType, dailyStageActivity, dailyComparisonWindow, relative
     return { logs: payload.documents.contractStatusLogs || [], revision: payload.revision };
   };
 
-  function crmPostSheetAction(action, payload, timeoutMs, attempt = 0) {
-    var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    var timeout = controller ? setTimeout(function () { controller.abort(); }, timeoutMs || 30000) : null;
-    return fetch(CRM_SHEET_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(Object.assign({ token: CRM_TOKEN, action: action }, payload || {})),
-      cache: 'no-store',
-      signal: controller ? controller.signal : undefined
-    }).then(function (res) {
-      if (!res.ok) {
-        const error = new Error('sheet_' + res.status);
-        error.retryable = res.status === 404 || res.status >= 500;
-        throw error;
-      }
-      return res.json().catch(() => { const error = new Error('sheet_invalid_response'); error.retryable = true; throw error; });
-    }).then(function (body) {
-      if (!body || body.error) throw new Error((body && body.error) || 'sheet_empty');
-      return body;
-    }).catch(function (error) {
-      // These actions replan against the current DB and are safe after a lost redirect response.
-      const safeAction = ['premeeting_sync', 'contract_auto_sync', 'daily_sync_status'].includes(action);
-      if (!safeAction || attempt >= 1 || !(error.retryable || error.name === 'TypeError' || error.name === 'AbortError')) throw error;
-      if (timeout) clearTimeout(timeout);
-      return crmDelay(1000).then(() => crmPostSheetAction(action, payload, timeoutMs, attempt + 1));
-    }).finally(function () { if (timeout) clearTimeout(timeout); });
+  async function crmPostSheetAction(action, payload, timeoutMs, attempt = 0) {
+    try {
+      return await crmFetchDomainAction('sheet_bridge', { method: 'POST', timeoutMs: timeoutMs || 65000, body: { sheetAction: action, payload: payload || {} } });
+    } catch (error) {
+      const safe = ['premeeting_sync', 'contract_auto_sync', 'daily_sync_status'].includes(action);
+      if (!safe || attempt >= 1 || !(error.status >= 500 || error.name === 'TypeError' || error.name === 'AbortError')) throw error;
+      await crmDelay(1000);
+      return crmPostSheetAction(action, payload, timeoutMs, attempt + 1);
+    }
   }
 
   window.crmFetchContractSheetChanges = async function () {
@@ -330,82 +301,17 @@ import { contractRoasByType, dailyStageActivity, dailyComparisonWindow, relative
     catch (domainError) {
       window.crmRemoteError = String(domainError && domainError.message || domainError);
       /* 운영 DB 장애 때만 30일 호환 스냅샷/Sheets 백업으로 복구합니다. */
-      return crmFetchLegacySheetState();
+      window.crmRemoteLoaded = false;
+      return null; // Never bypass failed employee authentication through the old Sheets endpoint.
     }
   };
 
   /* CRM 갱신은 사내 서버에서는 동일 Origin Nginx 프록시를 우선 사용하고,
      그 외 환경에서는 Supabase Edge를 사용합니다. Apps Script는 장애 fallback입니다. */
   window.crmFetchRefreshPayload = async function (startDay, endDay) {
-    if (CRM_SERVER_PROXY_BASE) {
-      var crmStart = String(startDay || '');
-      var crmEnd = String(endDay || '');
-      var leadParams = new URLSearchParams({
-        keyword: '',
-        start_dt: crmStart + 'T00:00:00+09:00',
-        end_dt: crmEnd + 'T23:59:59+09:00',
-        is_inquiry: 'true',
-        t: String(Date.now())
-      });
-      var meetingParams = new URLSearchParams({
-        offset: '0', limit: '1000', state: '1', page: 'schedule',
-        start_dt: crmStart + 'T00:00:00+09:00',
-        end_dt: crmEnd + 'T23:59:59+09:00',
-        t: String(Date.now())
-      });
-      var serverResponses = await Promise.all([
-        fetch(CRM_SERVER_PROXY_BASE + '/newarrivals?' + leadParams.toString(), { cache: 'no-store' }),
-        fetch(CRM_SERVER_PROXY_BASE + '/mr-schedules?' + meetingParams.toString(), { cache: 'no-store' })
-      ]);
-      if (!serverResponses[0].ok) throw new Error('crm_server_leads_' + serverResponses[0].status);
-      if (!serverResponses[1].ok) throw new Error('crm_server_meetings_' + serverResponses[1].status);
-      var serverBodies = await Promise.all(serverResponses.map(function (response) { return response.json(); }));
-      var leadRows = Array.isArray(serverBodies[0]) ? serverBodies[0] : (serverBodies[0].query || serverBodies[0].data || serverBodies[0].results || serverBodies[0].rows || []);
-      var meetingRows = Array.isArray(serverBodies[1]) ? serverBodies[1] : (serverBodies[1].query || serverBodies[1].data || serverBodies[1].results || serverBodies[1].rows || []);
-      leadRows = (leadRows || []).filter(function (row) {
-        var day = String((row && row.reg_dt) || '').slice(0, 10);
-        return day && day >= crmStart && day <= crmEnd;
-      });
-      meetingRows = (meetingRows || []).filter(function (row) {
-        return Number(row && row.mr_type) === 1;
-      });
-      return { ok: true, start: crmStart, end: crmEnd, leads: leadRows, meetings: meetingRows, proxyVersion: 'nginx-calendar-all-v2' };
-    }
-    try {
-      var directPayload = await crmFetchDomainAction('crm_refresh', {
-        method: 'POST', timeoutMs: 60000,
-        body: { start: String(startDay || ''), end: String(endDay || '') }
-      });
-      if (!Array.isArray(directPayload.leads) || !Array.isArray(directPayload.meetings)) throw new Error('direct_proxy_invalid');
-      return directPayload;
-    } catch (directError) {
-      window.crmDirectRefreshError = String(directError && directError.message || directError);
-    }
-    if (!CRM_SHEET_URL) throw new Error(window.crmDirectRefreshError || 'sheet_url_missing');
-    var params = new URLSearchParams({
-      token: CRM_TOKEN,
-      action: 'crm_refresh',
-      start: String(startDay || ''),
-      end: String(endDay || ''),
-      t: String(Date.now())
-    });
-    var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    var timeout = controller ? setTimeout(function () { controller.abort(); }, 60000) : null;
-    try {
-      /* Apps Script 웹앱은 /exec 뒤에 임의 경로를 붙이면 Google의 404 HTML로
-         응답해 브라우저에서 CORS 오류처럼 보입니다. action은 쿼리로 전달합니다. */
-      var proxyUrl = CRM_SHEET_URL.replace(/\/$/, '');
-      var response = await fetch(proxyUrl + '?' + params.toString(), {
-        cache: 'no-store', signal: controller ? controller.signal : undefined
-      });
-      if (!response.ok) throw new Error('sheet_' + response.status);
-      var payload = await response.json();
-      if (!payload || payload.error) throw new Error((payload && payload.error) || 'proxy_empty');
-      if (!Array.isArray(payload.leads) || !Array.isArray(payload.meetings)) throw new Error('proxy_not_deployed');
-      return payload;
-    } finally {
-      if (timeout) clearTimeout(timeout);
-    }
+    const payload = await crmFetchDomainAction('crm_refresh', { method: 'POST', timeoutMs: 60000, body: { start: String(startDay || ''), end: String(endDay || '') } });
+    if (!Array.isArray(payload.leads) || !Array.isArray(payload.meetings)) throw new Error('direct_proxy_invalid');
+    return payload;
   };
 
   /* ===== Google Sheet 행 단위 저장 V2 =====
@@ -456,6 +362,7 @@ import { contractRoasByType, dailyStageActivity, dailyComparisonWindow, relative
     Object.keys(before).forEach(function (key) { keys[key] = true; });
     Object.keys(after).forEach(function (key) { keys[key] = true; });
     Object.keys(keys).forEach(function (key) {
+      if (key === 'auth') return; // Retired local account model is never persisted by employee sessions.
       var nextPath = path.concat([key]);
       if (!Object.prototype.hasOwnProperty.call(after, key)) {
         ops.push({ op: 'delete', path: nextPath });
@@ -2492,7 +2399,7 @@ function useDB() {
         } else if (remote && remote.value) {
           const cachedBeforeRemote = data;
           const remoteParsed = JSON.parse(remote.value);
-          const needsAuthMigration = !remoteParsed.auth || !Array.isArray(remoteParsed.auth.accounts);
+          const needsAuthMigration = !window.kpiEmployeeAccess && (!remoteParsed.auth || !Array.isArray(remoteParsed.auth.accounts));
           const needsRevenueMigration = Number(remoteParsed.crmRevenueRuleRev || 0) < CRM_REVENUE_RULE_REV;
           const needsTmMigration = Number(remoteParsed.crmTmRuleRev || 0) < CRM_TM_RULE_REV;
           let fresh = migrateV1(remoteParsed);
@@ -9654,7 +9561,8 @@ export default function App() {
   const meUser = users.find((u) => u.id === me);
   const auth = db && db.auth ? db.auth : { enabled: true, accounts: [] };
   const accounts = Array.isArray(auth.accounts) ? auth.accounts : [];
-  const currentAccount = accounts.find((account) => account.id === sessionAccountId && account.active !== false) || null;
+  const employee = window.kpiEmployeeAccess;
+  const currentAccount = employee ? { id: employee.userId, username: '직원', role: ['OWNER', 'ADMIN'].includes(employee.role) ? 'MASTER' : 'USER', allowedPages: NAV_SECTIONS.flatMap((section) => [section.home, ...section.items.map((item) => item.id)]) } : null;
   const isMaster = !!(currentAccount && currentAccount.role === "MASTER");
   const allowedPageSet = new Set(currentAccount && Array.isArray(currentAccount.allowedPages) ? currentAccount.allowedPages : []);
   const canAccess = (pageId) => !!currentAccount && (isMaster || (!MASTER_ONLY_PAGES.includes(pageId) && allowedPageSet.has(pageId)));
@@ -9738,7 +9646,7 @@ export default function App() {
   const ctx = { db, setDb, up, reset, saveState, toast, go, leadId, openLead: setLeadId, projId, openProject: setProjId, me, setMe, users, currentAccount, isMaster, canAccess, period, setPeriod, globalQ, setGlobalQ };
   const VIEWS = { performanceCheck: IntegratedPerformanceView, marketingHub: MarketingHubView, marketingMeta: MarketingMetaView, marketingSearch: MarketingSearchView, premeetingHub: PremeetingHubView, tmManagement: TmManagementView, contractHub: ContractHubView, supportManagement: SupportContractView, ltvExpansion: LtvExpansionView, balance: BalanceManagementView, otherHub: OtherHubView, revisions: RevisionNotesView, leads: LeadsView, deals: DealsView, templates: TemplatesView, marketing: MarketingView, projects: ProjectsView, pocketbiz: PocketBizView, perf: PerfView, org: OrgKpiView, prompts: PromptsView, products: ProductsView, schema: SchemaView, accessControl: AccessControlView, settings: SettingsView };
   const effectiveView = canAccess(view) ? view : firstAllowedPage;
-  const Cur = VIEWS[effectiveView] || IntegratedPerformanceView;
+  const Cur = effectiveView === 'accessControl' ? EmployeeAdministration : (VIEWS[effectiveView] || IntegratedPerformanceView);
   const activeSection = permittedSections.find((section) => section.home === effectiveView || section.items.some((item) => item.id === effectiveView)) || permittedSections[0];
   return (
     <Ctx.Provider value={ctx}>
@@ -9795,7 +9703,7 @@ export default function App() {
                 <span className="text-xs font-extrabold text-slate-700">{currentAccount.displayName || currentAccount.username}</span>
                 <Chip cls={isMaster ? "bg-indigo-50 text-indigo-700 border-indigo-200" : "bg-slate-50 text-slate-600 border-slate-200"}>{currentAccount.role}</Chip>
                 {isMaster && <button title="권한 관리" onClick={() => setView("accessControl")} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><Settings size={13} /></button>}
-                <button title="로그아웃" onClick={() => { try { sessionStorage.removeItem("pocketcrm:auth"); } catch (e) {} setSessionAccountId(""); setLoginId(""); setLoginPw(""); }} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X size={13} /></button>
+                <button title="로그아웃" onClick={() => window.kpiSignOut()} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X size={13} /></button>
               </div>
               <div className="h-5 w-px bg-slate-200 hidden md:block" />
               <div className="relative">
@@ -9841,6 +9749,4 @@ export default function App() {
 /* ==================== 원본 remixed-7962a458.tsx 끝 ==================== */
 
 /* ---- 마운트 (원본은 Claude 아티팩트라 렌더 코드가 없어 여기서 붙임) ---- */
-import { createRoot } from "react-dom/client";
-var _boot = document.getElementById("boot"); if (_boot) _boot.remove();
-createRoot(document.getElementById("root")).render(<App />);
+// EmployeeEntry owns the React root and the login boundary.

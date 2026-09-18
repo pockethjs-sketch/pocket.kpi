@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
+import { authorizeEmployee, canEmployeeAct, mutationPermission } from "../_shared/employee-access.mjs";
 
 const ALLOWED_ORIGINS = new Set([
   "https://pockethjs-sketch.github.io",
@@ -98,17 +99,62 @@ function buildMarketing(rows: any[], syncRows: any[]) {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors(req) });
-  const token = Deno.env.get("KPI_PUBLIC_APP_TOKEN") || "";
-  if (!token || req.headers.get("x-kpi-app-token") !== token) return reply(req, { error: "unauthorized" }, 401);
   const organizationId = Deno.env.get("KPI_ORGANIZATION_ID") || "";
   if (!organizationId) return reply(req, { error: "organization_not_configured" }, 503);
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+  const access = await authorizeEmployee({ request: req, organizationId,
+    verifyUser: (jwt: string) => supabase.auth.getUser(jwt),
+    findMembership: async (org: string, userId: string) => {
+      const claim = await supabase.rpc("kpi_claim_employee_invitation", { p_organization_id: org, p_user_id: userId });
+      if (claim.error) return { error: claim.error };
+      return supabase.from("organization_memberships").select("organization_id,user_id,role,state,archived_at")
+        .eq("organization_id", org).eq("user_id", userId).maybeSingle();
+    },
+  });
+  if (!access.ok) return reply(req, { error: access.error }, access.status);
   const url = new URL(req.url);
   let body: any = {};
   if (req.method === "POST") try { body = await req.json(); } catch { return reply(req, { error: "bad_json" }, 400); }
   const action = String(body.action || url.searchParams.get("action") || "meta");
+  const readActions = new Set(["session", "meta", "bootstrap", "crm", "marketing", "contract_history"]);
+  const permission = action === "employees" ? "admin" : action === "mutation" ? mutationPermission(body.mutation)
+    : readActions.has(action) || (action === "sheet_bridge" && ["contract_changes", "daily_sync_status", "health", "marketing_status"].includes(body.sheetAction)) ? "read" : "write";
+  if (!canEmployeeAct(access, permission)) return reply(req, { error: "permission_denied" }, 403);
+  if (action === "session") return reply(req, { ok: true, userId: access.userId, organizationId, role: access.role });
+  if (action === "employees") {
+    if (req.method === "POST") {
+      const email = String(body.email || "").trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !["EDITOR", "VIEWER", "ADMIN"].includes(body.role)) return reply(req, { error: "invalid_employee" }, 400);
+      const { error } = await supabase.from("employee_invitations").insert({ organization_id: organizationId, email, role: body.role, approved_by: access.userId });
+      if (error) return reply(req, { error: error.code === "23505" ? "employee_already_approved" : "employee_approval_failed" }, 400);
+      return reply(req, { ok: true });
+    }
+    const { data, error } = await supabase.from("employee_invitations").select("email,role,claimed_user_id,created_at").eq("organization_id", organizationId);
+    return error ? reply(req, { error: "employees_read_failed" }, 500) : reply(req, { ok: true, employees: data });
+  }
+  if (action === "sheet_bridge") {
+    if (req.method !== "POST") return reply(req, { error: "method_not_allowed" }, 405);
+    const sheetAction = String(body.sheetAction || "");
+    if (!["contract_changes", "contract_change_status", "contract_auto_sync", "premeeting_sync", "daily_sync_status", "health", "marketing_status"].includes(sheetAction)) return reply(req, { error: "sheet_action_forbidden" }, 403);
+    const secret = Deno.env.get("KPI_SHADOW_HMAC_SECRET") || "";
+    if (!secret) return reply(req, { error: "sheet_bridge_not_configured" }, 503);
+    const payload = JSON.stringify({ ...(body.payload || {}), action: sheetAction, actor: access.userId });
+    const timestamp = String(Date.now());
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+    const signature = Array.from(new Uint8Array(await crypto.subtle.sign("HMAC", key, encoder.encode(`kpi-sheet-v1.${timestamp}.${payload}`))))
+      .map((v) => v.toString(16).padStart(2, "0")).join("");
+    try {
+      const response = await fetch("https://script.google.com/macros/s/AKfycbwscZiacAZFqxAsW0cA6X75OxTkkqLReVoHatUyePPV8ihsWad4GxzmnKaLphJo7sQ/exec", {
+        method: "POST", headers: { "content-type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ payload, timestamp, signature }), signal: AbortSignal.timeout(65_000),
+      });
+      const result = await response.json();
+      return reply(req, result, response.ok && !result.error ? 200 : 502);
+    } catch { return reply(req, { error: "sheet_bridge_unavailable" }, 502); }
+  }
 
   if (action === "meta") {
     const [{ data: current, error: currentError }, { data: projection, error: projectionError }, { data: sync, error: syncError }] = await Promise.all([
@@ -117,7 +163,7 @@ Deno.serve(async (req) => {
       supabase.from("provider_sync_state").select("provider,status,last_success_at,latest_source_date,error_code").eq("organization_id", organizationId),
     ]);
     if (currentError || projectionError || syncError) return reply(req, { error: "meta_read_failed" }, 500);
-    return reply(req, { ok: true, storageVersion: 2, mutationVersion: 3, backendVersion: "2026-09-10-domain-v2",
+    return reply(req, { ok: true, storageVersion: 2, mutationVersion: 3, backendVersion: "2026-09-18-employee-auth-v1",
       revision: current?.primary_revision || "", updatedAt: current?.updated_at, projection, providerSync: sync || [] });
   }
 
@@ -126,7 +172,13 @@ Deno.serve(async (req) => {
       .eq("organization_id", organizationId);
     if (error) return reply(req, { error: "bootstrap_read_failed", code: error.code }, 500);
     const documents: Record<string, unknown> = {};
-    for (const row of data || []) documents[row.document_key] = row.document_value;
+    for (const row of data || []) {
+      if (row.document_key === "auth") continue; // Legacy browser password hashes are never needed by employees.
+      if (row.document_key === "settings") {
+        const { apiKey, ...safe } = row.document_value || {};
+        documents[row.document_key] = safe;
+      } else documents[row.document_key] = row.document_value;
+    }
     return reply(req, { ok: true, documents, revision: data?.[0]?.projected_revision || "" });
   }
 
@@ -204,6 +256,14 @@ Deno.serve(async (req) => {
     if (req.method !== "POST") return reply(req, { error: "method_not_allowed" }, 405);
     const required = ["mutationId", "baseRevision", "nextRevision", "mutation"];
     if (required.some((key) => !body[key])) return reply(req, { error: "missing_mutation_fields" }, 400);
+    // Never replace legacy auth records or erase a server-only API key while saving a filtered bootstrap.
+    if (body.mutation.documents?.auth || (body.mutation.deleteDocuments || []).includes("auth") || body.mutation.collections?.auth) return reply(req, { error: "legacy_auth_read_only" }, 403);
+    if (body.mutation.documents?.settings) {
+      const { data: previous, error: previousError } = await supabase.from("app_documents").select("document_value")
+        .eq("organization_id", organizationId).eq("document_key", "settings").maybeSingle();
+      if (previousError) return reply(req, { error: "settings_read_failed" }, 503);
+      body.mutation.documents.settings = { ...body.mutation.documents.settings, apiKey: previous?.document_value?.apiKey || "" };
+    }
     const requestHash = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(body.mutation)))))
       .map((value) => value.toString(16).padStart(2, "0")).join("");
     const { data, error } = await supabase.rpc("commit_primary_mutation", {

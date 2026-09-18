@@ -44,7 +44,7 @@ test('legacy date-only logs have no invented exact timestamp; unknown time is av
 });
 test('new tab loads stored logs via read-only bootstrap and never triggers source synchronization',()=>{
  const source=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8'),component=readFileSync(new URL('../src/RecentSyncActivity.jsx',import.meta.url),'utf8');
- const loader=source.slice(source.indexOf('window.crmFetchSyncActivity ='),source.indexOf('  function crmPostSheetAction'));
+ const loader=source.slice(source.indexOf('window.crmFetchSyncActivity ='),source.indexOf('  async function crmPostSheetAction'));
  assert.match(loader,/crmFetchDomainAction\('bootstrap'\)/);assert.doesNotMatch(loader,/method: 'POST'|crmSync|setDb/);
  assert.doesNotMatch(component,/crmPostSheetAction|crmSyncRecentPremeetings|crmSyncNewContracts|setDb|localStorage/);
  assert.match(source,/aria-controls=\{'deals-panel-'/);

@@ -80,14 +80,14 @@ test('premeeting view keeps manual sync actions without the verbose schedule box
  assert.doesNotMatch(source,/매일 오전 9시 이후 1회 자동 갱신 · 프리미팅은/);
 });
 
-test('idempotent manual sync recovers once after lost Apps Script redirect; never retries unsafe writes',async()=>{
+test('idempotent manual sync retries the authenticated bridge once, never authentication failures or unsafe writes',async()=>{
  const source=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
- const fn=source.slice(source.indexOf('  function crmPostSheetAction('),source.indexOf('  window.crmFetchContractSheetChanges'));
+ const fn=source.slice(source.indexOf('  async function crmPostSheetAction('),source.indexOf('  window.crmFetchContractSheetChanges'));
  let calls=0;
- const s={CRM_SHEET_URL:'https://example.invalid',CRM_TOKEN:'test',fetch:async()=>++calls===1?{ok:false,status:404}:{ok:true,json:async()=>({ok:true})},setTimeout,clearTimeout,crmDelay:async()=>{}};
+ const s={crmFetchDomainAction:async()=>{if(++calls===1)throw Object.assign(new Error('sheet_bridge_unavailable'),{status:502});return {ok:true};},crmDelay:async()=>{}};
  vm.createContext(s);vm.runInContext(fn,s);
  assert.equal((await s.crmPostSheetAction('premeeting_sync',{})).ok,true);assert.equal(calls,2);
- calls=0;await assert.rejects(s.crmPostSheetAction('save_mutation_v2',{}),/sheet_404/);assert.equal(calls,1);
- calls=0;s.fetch=async()=>{calls++;return {ok:true,json:async()=>({error:'permission_denied'})}};
+ calls=0;await assert.rejects(s.crmPostSheetAction('save_mutation_v2',{}),/sheet_bridge_unavailable/);assert.equal(calls,1);
+ calls=0;s.crmFetchDomainAction=async()=>{calls++;throw Object.assign(new Error('permission_denied'),{status:403})};
  await assert.rejects(s.crmPostSheetAction('contract_auto_sync',{}),/permission_denied/);assert.equal(calls,1);
 });

@@ -32,11 +32,18 @@ const requiredContracts = [
   "crmFetchSheetAction('state'",
   "function DealsView",
   "function LtvExpansionView",
-  "createRoot(document.getElementById(\"root\"))",
+  "window.kpiEmployeeAccess",
 ];
 
 for (const marker of requiredContracts) {
   if (!source.includes(marker)) throw new Error(`Required compatibility contract missing: ${marker}`);
+}
+
+const entry = fs.readFileSync(path.join(root, "src", "EmployeeEntry.jsx"), "utf8");
+if (!entry.includes("await employeeRequest('session')") || !entry.includes("await import('./main.jsx')")) throw new Error("Employee authentication entry missing");
+for (const name of jsFiles) {
+  const js = fs.readFileSync(path.join(dist, 'assets', name), 'utf8');
+  if (js.includes('pocket-crm-9f3k7x')) throw new Error('Retired shared token in public bundle');
 }
 
 console.log(JSON.stringify({ ok: true, jsFiles, cssFiles }, null, 2));
