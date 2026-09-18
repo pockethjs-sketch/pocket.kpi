@@ -7022,7 +7022,7 @@ function MarketingHubView() {
             <p className="flex items-baseline justify-between gap-2 text-sm font-bold text-slate-600">신규 <span className="text-xl font-black tabular-nums text-rose-600">{contractPerformance.newRoas == null ? "-" : contractPerformance.newRoas.toLocaleString() + "%"}</span></p>
             <p className="flex items-baseline justify-between gap-2 text-sm font-bold text-slate-600">기존 <span className="text-xl font-black tabular-nums text-violet-600">{contractPerformance.existingRoas == null ? "-" : contractPerformance.existingRoas.toLocaleString() + "%"}</span></p>
           </div>
-          <p className="mt-1.5 text-[10px] text-slate-400">계약일 기준 각 계약액 ÷ {spend == null ? "광고비 없음" : "광고비 " + fmtK(spend) + "원"}</p>
+          <p className="mt-1.5 text-[10px] text-slate-400">전체 {totalRoas == null ? "-" : totalRoas.toLocaleString() + "%"} · 계약일 기준 각 계약액 ÷ {spend == null ? "광고비 없음" : "광고비 " + fmtK(spend) + "원"} · 반올림으로 합계 1%p 차이 가능</p>
         </Card>
       </div>
       <Card>
