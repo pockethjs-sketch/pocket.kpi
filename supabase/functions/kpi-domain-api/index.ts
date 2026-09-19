@@ -13,7 +13,7 @@ function cors(req: Request) {
   const origin = req.headers.get("origin") || "";
   return {
     "access-control-allow-origin": ALLOWED_ORIGINS.has(origin) ? origin : "https://pockethjs-sketch.github.io",
-    "access-control-allow-headers": "authorization,apikey,content-type,x-kpi-app-token",
+    "access-control-allow-headers": "authorization,apikey,content-type",
     "access-control-allow-methods": "GET,POST,OPTIONS",
     vary: "origin",
   };
@@ -118,7 +118,7 @@ Deno.serve(async (req) => {
   let body: any = {};
   if (req.method === "POST") try { body = await req.json(); } catch { return reply(req, { error: "bad_json" }, 400); }
   const action = String(body.action || url.searchParams.get("action") || "meta");
-  const readActions = new Set(["session", "meta", "bootstrap", "crm", "marketing", "contract_history"]);
+  const readActions = new Set(["session", "meta", "bootstrap", "crm", "marketing", "contract_history", "support_board"]);
   const permission = action === "employees" ? "admin" : action === "mutation" ? mutationPermission(body.mutation)
     : readActions.has(action) || (action === "sheet_bridge" && ["contract_changes", "daily_sync_status", "health", "marketing_status"].includes(body.sheetAction)) ? "read" : "write";
   if (!canEmployeeAct(access, permission)) return reply(req, { error: "permission_denied" }, 403);
@@ -180,6 +180,13 @@ Deno.serve(async (req) => {
       } else documents[row.document_key] = row.document_value;
     }
     return reply(req, { ok: true, documents, revision: data?.[0]?.projected_revision || "" });
+  }
+
+  if (action === "support_board") {
+    const { data, error } = await supabase.from("app_documents").select("document_value,projected_revision")
+      .eq("organization_id", organizationId).eq("document_key", "supportBoard").maybeSingle();
+    if (error) return reply(req, { error: "support_board_read_failed", code: error.code }, 500);
+    return reply(req, { ok: true, supportBoard: data?.document_value || null, revision: data?.projected_revision || "" });
   }
 
   if (action === "crm") {

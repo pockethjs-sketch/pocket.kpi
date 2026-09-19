@@ -1,16 +1,16 @@
 import { createClient } from '@supabase/supabase-js';
 
 export const SUPABASE_URL = 'https://ilnklntqkdbbtzzbhqrl.supabase.co';
-// Publishable client identity only. Authorization always requires an employee session.
-export const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlsbmtsbnRxa2RiYnR6emJocXJsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg3Mjk3NDQsImV4cCI6MjEwNDMwNTc0NH0.QoQ6jIFNo75LUtWU7YOvsO9cwWIsWZvlhFeuBgBvNac';
-export const employeeAuth = createClient(SUPABASE_URL, ANON_KEY, {
+// This key is intentionally public. Every business request still requires a verified employee session.
+export const PUBLISHABLE_KEY = 'sb_publishable_5ZOv7q88mKDVjefos5I3FA_ZxKGM3d7';
+export const employeeAuth = createClient(SUPABASE_URL, PUBLISHABLE_KEY, {
   auth: { storage: window.sessionStorage, storageKey: 'pocket-kpi-employee-session', persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
 });
 
 export async function employeeHeaders() {
   const { data, error } = await employeeAuth.auth.getSession();
   if (error || !data.session?.access_token) throw new Error('login_required');
-  return { Authorization: `Bearer ${data.session.access_token}`, apikey: ANON_KEY };
+  return { Authorization: `Bearer ${data.session.access_token}`, apikey: PUBLISHABLE_KEY };
 }
 
 export async function employeeRequest(action, body) {

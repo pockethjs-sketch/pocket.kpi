@@ -5,3 +5,6 @@ dist/
 *.log
 artifacts/
 supabase/.temp/
+.env
+.env.*
+!.env.example

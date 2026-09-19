@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const frontend = await readFile(new URL("../src/main.jsx", import.meta.url), "utf8");
+const employeeSession = await readFile(new URL("../src/employeeSession.js", import.meta.url), "utf8");
+const boundaryProbe = await readFile(new URL("../scripts/verify-employee-boundary.mjs", import.meta.url), "utf8");
 const domain = await readFile(new URL("../supabase/functions/kpi-domain-api/index.ts", import.meta.url), "utf8");
 const marketing = await readFile(new URL("../supabase/functions/kpi-marketing-sync/index.ts", import.meta.url), "utf8");
 const crmSync = await readFile(new URL("../supabase/functions/kpi-crm-sync/index.ts", import.meta.url), "utf8");
@@ -27,6 +29,21 @@ test("domain edge keeps service role server-side and verifies employee sessions"
   assert.doesNotMatch(frontend, /SUPABASE_SERVICE_ROLE_KEY/);
   assert.match(config, /\[functions\.kpi-domain-api\][\s\S]*verify_jwt = true/);
   assert.match(frontend, /await window.kpiEmployeeHeaders\(\)/);
+});
+
+test("browser identity is publishable-only and boundary tests never recover historical credentials", () => {
+  assert.match(employeeSession, /sb_publishable_/);
+  assert.doesNotMatch(employeeSession, /['"]eyJ[A-Za-z0-9_-]{20,}\./);
+  assert.doesNotMatch(frontend, /['"]eyJ[A-Za-z0-9_-]{20,}\./);
+  assert.doesNotMatch(domain, /x-kpi-app-token/i);
+  assert.doesNotMatch(boundaryProbe, /git\s+show|execFileSync|node:child_process|x-kpi-app-token/i);
+});
+
+test("support board reads the authenticated KPI snapshot without a browser key", () => {
+  assert.match(frontend, /crmFetchDomainAction\('support_board'\)/);
+  assert.doesNotMatch(frontend, /SUPPORT_BOARD_(?:ANON_KEY|URL)/);
+  assert.match(domain, /action === "support_board"/);
+  assert.match(domain, /document_key", "supportBoard"/);
 });
 
 test("CRM refresh exclusively uses the employee-authenticated domain API", () => {

@@ -19,7 +19,6 @@ import { contractRoasByType, dailyStageActivity, dailyComparisonWindow, relative
   var CRM_SHEET_URL = 'https://script.google.com/macros/s/AKfycbwscZiacAZFqxAsW0cA6X75OxTkkqLReVoHatUyePPV8ihsWad4GxzmnKaLphJo7sQ/exec';   // ← 구글시트 연동 ON (월별 광고비 포함)
   var CRM_TOKEN = ''; // Retired. No shared browser credential is accepted by any KPI endpoint.
   var KPI_DOMAIN_API_URL = 'https://ilnklntqkdbbtzzbhqrl.supabase.co/functions/v1/kpi-domain-api';
-  var KPI_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlsbmtsbnRxa2RiYnR6emJocXJsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg3Mjk3NDQsImV4cCI6MjEwNDMwNTc0NH0.QoQ6jIFNo75LUtWU7YOvsO9cwWIsWZvlhFeuBgBvNac';
   /* 사내 Nginx 배포에서는 같은 Origin 프록시를 우선 사용합니다.
      그 외 환경은 Supabase Edge를 사용하고 Apps Script는 장애 폴백으로만 남깁니다. */
   var CRM_SERVER_PROXY_BASE = ''; // All hosts use the employee-authenticated domain API.
@@ -654,25 +653,14 @@ import { contractRoasByType, dailyStageActivity, dailyComparisonWindow, relative
     delete: async function (k) { try { localStorage.removeItem(k); } catch (e) {} }
   };
 
-  /* ===== 지원사업 보드 Supabase 마이그레이션 (읽기 전용) =====
-     기존 계약 데이터와 섞지 않고 supportBoard에 원본을 정규화해 보관합니다.
-     지원사업 관리 화면은 이 데이터와 기존 CRM 계약 고객을 회사명으로 연결합니다. */
-  var SUPPORT_BOARD_URL = 'https://yoznpullugdnjrszhkon.supabase.co';
-  var SUPPORT_BOARD_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlvem5wdWxsdWdkbmpyc3poa29uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1OTA1ODEsImV4cCI6MjA5NjE2NjU4MX0.PCgNJWU0jihPDeAuU5gS5iwburWuzmTCOmLGdPTookw';
-  var SUPPORT_BOARD_STORAGE_KEY = 'startup-grant-board-notion-v1';
+  /* ===== 지원사업 보드 인증 저장본 (읽기 전용) =====
+     별도 프로젝트의 공개 키를 브라우저에 두지 않고 KPI 직원 API의 저장 스냅샷만 읽습니다. */
   window.fetchSupportBoard = async function () {
-    var url = SUPPORT_BOARD_URL + '/rest/v1/app_state?id=eq.' + encodeURIComponent(SUPPORT_BOARD_STORAGE_KEY) + '&select=data';
-    var res = await fetch(url, {
-      cache: 'no-store',
-      headers: { apikey: SUPPORT_BOARD_ANON_KEY, authorization: 'Bearer ' + SUPPORT_BOARD_ANON_KEY, accept: 'application/json' }
-    });
-    if (!res.ok) throw new Error('지원사업 보드 HTTP ' + res.status);
-    var rows = await res.json();
-    var raw = rows && rows[0] && rows[0].data;
+    var response = await crmFetchDomainAction('support_board');
+    var raw = response && response.supportBoard;
     if (!raw) return null;
     return Object.assign({}, raw, {
-      source: 'supabase',
-      storageKey: SUPPORT_BOARD_STORAGE_KEY,
+      source: 'kpi-domain-cache',
       companies: Array.isArray(raw.companies) ? raw.companies : [],
       grants: Array.isArray(raw.grants) ? raw.grants : [],
       schedules: Array.isArray(raw.schedules) ? raw.schedules : [],
@@ -7626,7 +7614,7 @@ function SupportContractView() {
       const result = await window.fetchSupportBoard();
       if (!result) throw new Error("empty_support_board");
       up((draft) => { draft.supportBoard = { ...result, syncedAt: new Date().toISOString() }; });
-      toast("Supabase 지원사업 원본을 최신화했습니다");
+      toast("직원 인증 서버의 지원사업 저장본을 불러왔습니다");
     } catch (error) {
       toast("지원사업 원본 최신화에 실패했습니다");
     } finally {

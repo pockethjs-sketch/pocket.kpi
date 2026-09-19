@@ -4,6 +4,16 @@
 User subsequently requested the scheduled security cutover to run immediately.
 Initial administrator email was supplied privately in the task; do not publish it here.
 
+## 2026-09-19 follow-up hardening
+
+- Replaced the browser's legacy JWT-shaped anon credential with the project's current `sb_publishable_` key. This remains a public project identifier; authorization still requires a verified employee session and active organization membership.
+- Removed the boundary script's Git-history lookup and retired-token replay. Production denial probes now use an obviously invalid synthetic session and never recover old credentials.
+- Removed the retired `x-kpi-app-token` CORS allowance from `kpi-domain-api`.
+- Removed the separate support-board project's browser credential and direct REST read. The support page now reads the existing `supportBoard` document through the employee-authenticated KPI domain endpoint. The stored snapshot exists; automatic refresh from the separate project is paused until a server-to-server integration is configured.
+- Added repository `AGENTS.md` secure-work rules and `npm run security:check`. CI now rejects committed environment files, private keys, secret-key literals, legacy JWT literals, customer-payload console dumps, and boundary tests that recover credentials from Git history.
+- Domain function v12 is active. Invalid session probes return HTTP401, and principal Apps Script URLs still return `employee_gateway_required` before any Sheet read.
+- Local verification: 151 tests passed, production build contract passed, dependency audit reported zero vulnerabilities. Real administrator login/read/write remains a separate release gate.
+
 ## Confirmed from local source
 
 - Browser sends a static app token plus an anon key to kpi-domain-api.
@@ -41,6 +51,7 @@ The helper is now wired to the domain handler. Auth.getUser verifies sessions an
 - Integrity check: revision `20260918091132386-0rcrbhkx`, 847 active leads, 484 active deals, 456 active marketing rows unchanged. No synthetic users/invitations remained.
 - Remaining release checks: real administrator email verification/login, authenticated runtime read/save and signed sheet bridge. Do not describe these as verified until completed.
 - Historical access-log audit and the operator-managed Nginx proxy are not yet verified. Removing the browser's proxy fallback does not secure a separately operated server.
+- The separate support-board project itself is outside this project's administrative access. Pocket KPI no longer exposes or uses its browser key, but that project's own Data API/RLS posture must be audited by its owner.
 - RLS advisor: server-only tables intentionally have no client policies; existing `pg_net` extension placement warning is unrelated and left unchanged. See https://supabase.com/docs/guides/database/database-linter?lint=0014_extension_in_public.
 
 ## Release checklist (historical plan; check runtime evidence above)
