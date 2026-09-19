@@ -24,6 +24,19 @@ export async function employeeRequest(action, body) {
   return result;
 }
 
+export async function masterAliasRequest(action, password, bootstrapToken = '') {
+  const response = await fetch(`${SUPABASE_URL}/functions/v1/kpi-master-auth`, {
+    method: 'POST', cache: 'no-store',
+    headers: { apikey: PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, password, ...(bootstrapToken ? { bootstrapToken } : {}) }),
+  });
+  const result = await response.json();
+  if (!response.ok || result.error || !result.session) throw new Error(result.error || `http_${response.status}`);
+  const { error } = await employeeAuth.auth.setSession(result.session);
+  if (error) throw error;
+  return result;
+}
+
 export function scopedEmployeeStorage(storage, userId) {
   if (!userId) throw new Error('login_required');
   const prefix = `kpi:employee:${userId}:`;

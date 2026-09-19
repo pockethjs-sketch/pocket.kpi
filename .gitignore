@@ -2,6 +2,7 @@ node_modules/
 dist/
 .vite/
 .npm-cache/
+.npm-cache-master/
 *.log
 artifacts/
 supabase/.temp/

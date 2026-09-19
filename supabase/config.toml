@@ -20,3 +20,6 @@ verify_jwt = true
 
 [functions.kpi-crm-sync]
 verify_jwt = false
+
+[functions.kpi-master-auth]
+verify_jwt = false

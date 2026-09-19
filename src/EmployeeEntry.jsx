@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { employeeAuth, employeeHeaders, employeeRequest, scopedEmployeeStorage } from './employeeSession.js';
-import { isMasterLoginAlias, isPlausibleEmail, resolveEmployeeLoginEmail } from './data/masterLoginAlias.js';
+import { employeeAuth, employeeHeaders, employeeRequest, masterAliasRequest, scopedEmployeeStorage } from './employeeSession.js';
+import { consumeMasterSetupToken, isMasterLoginAlias, isPlausibleEmail } from './data/masterLoginAlias.js';
 import './styles.css';
 
-const MASTER_EMAIL_STORAGE_KEY = 'pocket-kpi:master-login-email:v1';
+const MASTER_SETUP_STORAGE_KEY = 'pocket-kpi:master-setup-token:v1';
 
 function EmployeeEntry() {
   const [loginId, setLoginId] = useState('');
-  const [masterEmail, setMasterEmail] = useState(() => window.localStorage.getItem(MASTER_EMAIL_STORAGE_KEY) || '');
+  const [masterSetupToken, setMasterSetupToken] = useState(() => consumeMasterSetupToken(window.location, window.history, window.sessionStorage));
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('직원 로그인 확인 중…');
   const [busy, setBusy] = useState(false);
@@ -53,11 +53,25 @@ function EmployeeEntry() {
 
   async function submit(signup) {
     const masterAlias = isMasterLoginAlias(loginId);
-    const email = resolveEmployeeLoginEmail(loginId, masterEmail);
-    if (!isPlausibleEmail(email)) {
-      setMessage(masterAlias ? 'MASTER 최초 1회는 아래에 승인된 관리자 이메일을 연결해야 합니다.' : '올바른 이메일 또는 MASTER를 입력하세요.');
+    if (masterAlias) {
+      if (password.length < 12) { setMessage('MASTER 비밀번호는 12자 이상이어야 합니다.'); return; }
+      setBusy(true);
+      try {
+        await masterAliasRequest(masterSetupToken ? 'bootstrap' : 'login', password, masterSetupToken);
+        if (masterSetupToken) {
+          window.sessionStorage.removeItem(MASTER_SETUP_STORAGE_KEY);
+          setMasterSetupToken('');
+        }
+        setPassword('');
+        setMessage('MASTER 권한 확인 중…');
+      } catch (error) {
+        const messages = { invalid_credentials: 'MASTER 계정 또는 비밀번호를 확인하세요.', invalid_setup_link: 'MASTER 최초 설정 링크가 만료되었거나 올바르지 않습니다.', choose_new_password: '예전 MASTER 비밀번호는 노출 이력이 있어 재사용할 수 없습니다. 새 비밀번호를 정하세요.', master_already_configured: 'MASTER 최초 설정이 이미 끝났습니다. 일반 로그인으로 다시 접속하세요.' };
+        setMessage(messages[error.message] || `MASTER 로그인 실패: ${error.message}`);
+      } finally { setBusy(false); }
       return;
     }
+    const email = String(loginId || '').trim().toLowerCase();
+    if (!isPlausibleEmail(email)) { setMessage('올바른 직원 이메일 또는 MASTER를 입력하세요.'); return; }
     if (signup && password.length < 12) {
       setMessage('처음 설정하는 비밀번호는 12자 이상이어야 합니다.');
       return;
@@ -67,21 +81,20 @@ function EmployeeEntry() {
       const credentials = { email, password };
       const result = signup ? await employeeAuth.auth.signUp({ ...credentials, options: { emailRedirectTo: location.origin + import.meta.env.BASE_URL } }) : await employeeAuth.auth.signInWithPassword(credentials);
       if (result.error) throw result.error;
-      if (masterAlias) window.localStorage.setItem(MASTER_EMAIL_STORAGE_KEY, email);
       setPassword('');
-      setMessage(signup ? '관리자 이메일의 인증 링크를 누르세요. 인증이 끝나면 이 브라우저에서 MASTER로 로그인할 수 있습니다.' : '권한 확인 중…');
+      setMessage(signup ? '직원 이메일의 인증 링크를 누르세요. 가입만으로 접근 권한이 생기지는 않습니다.' : '권한 확인 중…');
     } catch (error) { setMessage(error.message); }
     finally { setBusy(false); }
   }
   if (LoadedApp) return <LoadedApp />;
   return <div className="min-h-screen bg-slate-900 flex items-center justify-center p-5"><form className="bg-white rounded-md p-7 max-w-md w-full space-y-4" onSubmit={(e) => { e.preventDefault(); submit(false); }}>
     <h1 className="text-xl font-bold">포켓 KPI · MASTER / 직원 로그인</h1>
-    <p className="text-sm text-slate-600">관리자는 계정명 MASTER 또는 승인된 이메일로 접속합니다.</p>
+    <p className="text-sm text-slate-600">MASTER는 이메일 인증 없이 계정명과 비밀번호로 접속합니다. 일반 직원만 승인된 이메일을 사용합니다.</p>
     <label className="block text-sm">계정명 또는 이메일<input className="block w-full border rounded p-2 mt-1" type="text" autoCapitalize="none" autoComplete="username" required value={loginId} onChange={(e) => setLoginId(e.target.value)} /></label>
-    {isMasterLoginAlias(loginId) && <label className="block text-sm">MASTER 연결 이메일 · 최초 1회<input className="block w-full border rounded p-2 mt-1" type="email" autoComplete="email" placeholder="승인된 관리자 이메일" value={masterEmail} onChange={(e) => setMasterEmail(e.target.value)} /><span className="block mt-1 text-xs text-slate-500">공개 코드가 아니라 이 브라우저에만 저장됩니다.</span></label>}
     <label className="block text-sm">비밀번호<input className="block w-full border rounded p-2 mt-1" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} /></label>
-    <button disabled={busy} className="bg-blue-600 text-white rounded p-2 w-full">{busy ? '확인 중…' : '로그인'}</button>
-    <button type="button" disabled={busy || !isPlausibleEmail(resolveEmployeeLoginEmail(loginId, masterEmail)) || password.length < 12} className="border rounded p-2 w-full disabled:opacity-40" onClick={() => submit(true)}>{isMasterLoginAlias(loginId) ? 'MASTER 처음 연결 · 이메일 인증' : '처음 사용 · 이메일 인증'} (비밀번호 12자 이상)</button>
+    <button disabled={busy} className="bg-blue-600 text-white rounded p-2 w-full">{busy ? '확인 중…' : (isMasterLoginAlias(loginId) && masterSetupToken ? 'MASTER 최초 설정' : '로그인')}</button>
+    {!isMasterLoginAlias(loginId) && <button type="button" disabled={busy || !isPlausibleEmail(loginId) || password.length < 12} className="border rounded p-2 w-full disabled:opacity-40" onClick={() => submit(true)}>처음 사용 · 이메일 인증 (비밀번호 12자 이상)</button>}
+    {isMasterLoginAlias(loginId) && masterSetupToken && <p className="text-xs text-amber-700">일회용 최초 설정 링크입니다. 새 비밀번호를 정하면 이 링크는 다시 사용할 수 없습니다.</p>}
     <p className="text-xs text-slate-600" role="status">{message}</p>
     <button type="button" className="text-xs underline" onClick={() => employeeAuth.auth.signOut({ scope: 'local' })}>현재 로그인 해제</button>
   </form></div>;
