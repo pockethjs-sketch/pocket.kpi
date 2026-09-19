@@ -14,6 +14,13 @@ Initial administrator email was supplied privately in the task; do not publish i
 - Domain function v12 is active. Invalid session probes return HTTP401, and principal Apps Script URLs still return `employee_gateway_required` before any Sheet read.
 - Local verification: 151 tests passed, production build contract passed, dependency audit reported zero vulnerabilities. Real administrator login/read/write remains a separate release gate.
 
+## 2026-09-19 MASTER presentation restore
+
+- Restored the familiar `MASTER` presentation for server-approved `OWNER` and `ADMIN` employees. The header, role badge, and activity-log actor now use `MASTER`; `EDITOR` and `VIEWER` use `USER`.
+- This is a presentation and permission-compatibility change only. It does not restore the retired shared MASTER password, static browser token, anonymous fallback, or direct public data route.
+- The server remains authoritative: only a verified employee session with an active current membership can be mapped to MASTER. Unknown or missing roles never become MASTER.
+- No database, Sheet, Apps Script, collection, backup, or stored business data was changed. 154 tests, the security lint, production build verification, and dependency audit passed.
+
 ## Confirmed from local source
 
 - Browser sends a static app token plus an anon key to kpi-domain-api.

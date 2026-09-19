@@ -12,6 +12,7 @@ import EmployeeAdministration from "./EmployeeAdministration.jsx";
 import { shadowStatusFromSheetsResult } from "./data/repositoryAdapter.js";
 import { reconcileMarketingDailyInquiries } from "./data/marketingInquiry.js";
 import { contractRoasByType, dailyStageActivity, dailyComparisonWindow, relativeMetricChange, previousDatedSpend, weekdayActivity, absoluteCountChange, previousMonthCostWindow, completeDatedSpend } from "./data/performanceMetrics.js";
+import { accountFromEmployeeAccess } from "./data/employeeAccount.js";
 
 /* ===== 운영 데이터 연동 설정 =====
      Supabase 화면별 API가 읽기·쓰기를 담당합니다.
@@ -9550,7 +9551,10 @@ export default function App() {
   const auth = db && db.auth ? db.auth : { enabled: true, accounts: [] };
   const accounts = Array.isArray(auth.accounts) ? auth.accounts : [];
   const employee = window.kpiEmployeeAccess;
-  const currentAccount = employee ? { id: employee.userId, username: '직원', role: ['OWNER', 'ADMIN'].includes(employee.role) ? 'MASTER' : 'USER', allowedPages: NAV_SECTIONS.flatMap((section) => [section.home, ...section.items.map((item) => item.id)]) } : null;
+  const currentAccount = accountFromEmployeeAccess(
+    employee,
+    NAV_SECTIONS.flatMap((section) => [section.home, ...section.items.map((item) => item.id)]),
+  );
   const isMaster = !!(currentAccount && currentAccount.role === "MASTER");
   const allowedPageSet = new Set(currentAccount && Array.isArray(currentAccount.allowedPages) ? currentAccount.allowedPages : []);
   const canAccess = (pageId) => !!currentAccount && (isMaster || (!MASTER_ONLY_PAGES.includes(pageId) && allowedPageSet.has(pageId)));

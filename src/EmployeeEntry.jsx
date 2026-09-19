@@ -60,8 +60,8 @@ function EmployeeEntry() {
   }
   if (LoadedApp) return <LoadedApp />;
   return <div className="min-h-screen bg-slate-900 flex items-center justify-center p-5"><form className="bg-white rounded-md p-7 max-w-md w-full space-y-4" onSubmit={(e) => { e.preventDefault(); submit(false); }}>
-    <h1 className="text-xl font-bold">포켓 KPI · 직원 로그인</h1>
-    <p className="text-sm text-slate-600">기존 공용 계정 대신 이메일 인증과 관리자 승인을 사용합니다.</p>
+    <h1 className="text-xl font-bold">포켓 KPI · MASTER / 직원 로그인</h1>
+    <p className="text-sm text-slate-600">승인된 관리자 이메일은 기존 MASTER 화면과 전체 권한으로 접속합니다.</p>
     <label className="block text-sm">이메일<input className="block w-full border rounded p-2 mt-1" type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} /></label>
     <label className="block text-sm">비밀번호<input className="block w-full border rounded p-2 mt-1" type="password" autoComplete="current-password" minLength={12} required value={password} onChange={(e) => setPassword(e.target.value)} /></label>
     <button disabled={busy} className="bg-blue-600 text-white rounded p-2 w-full">{busy ? '확인 중…' : '로그인'}</button>
