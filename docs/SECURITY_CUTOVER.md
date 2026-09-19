@@ -20,6 +20,7 @@ Initial administrator email was supplied privately in the task; do not publish i
 - This is a presentation and permission-compatibility change only. It does not restore the retired shared MASTER password, static browser token, anonymous fallback, or direct public data route.
 - The server remains authoritative: only a verified employee session with an active current membership can be mapped to MASTER. Unknown or missing roles never become MASTER.
 - No database, Sheet, Apps Script, collection, backup, or stored business data was changed. 154 tests, the security lint, production build verification, and dependency audit passed.
+- Follow-up: the login identifier now accepts the `MASTER` alias as well as employee email. Supabase password authentication itself accepts only email/phone, so MASTER is resolved to an administrator email linked locally in that browser. The address is never embedded in the public bundle. On the first use, the administrator supplies the approved email and completes the standard confirmation link; subsequent logins on that browser can use MASTER. The server membership remains the sole source of MASTER authority.
 
 ## Confirmed from local source
 
