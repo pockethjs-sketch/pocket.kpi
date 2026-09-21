@@ -13,6 +13,7 @@ import { shadowStatusFromSheetsResult } from "./data/repositoryAdapter.js";
 import { reconcileMarketingDailyInquiries } from "./data/marketingInquiry.js";
 import { contractRoasByType, dailyStageActivity, dailyComparisonWindow, relativeMetricChange, previousDatedSpend, weekdayActivity, absoluteCountChange, previousMonthCostWindow, completeDatedSpend } from "./data/performanceMetrics.js";
 import { accountFromEmployeeAccess } from "./data/employeeAccount.js";
+import { paymentRows, paymentScheduleSum, paymentTotalAmount, syncPaymentScheduleTotal } from "./data/paymentSchedule.js";
 
 /* ===== 운영 데이터 연동 설정 =====
      Supabase 화면별 API가 읽기·쓰기를 담당합니다.
@@ -2193,9 +2194,9 @@ function migrateV1(o) {
       if (!opp.createdAt) opp.createdAt = todayISO();
       if (!Array.isArray(opp.history)) opp.history = [];
     });
-    seedPayments(l); syncPaid(l);
+    seedPayments(l); syncPaymentScheduleTotal(l); syncPaid(l);
     if (!l.lineItems) l.lineItems = EARLY_STAGES.includes(l.status) ? [] : (l.expected ? [{ buildup: l.buildup, name: "기본 구성", price: l.expected }] : []);
-    if (EARLY_STAGES.includes(l.status)) l.expected = 0;
+    if (EARLY_STAGES.includes(l.status) && !payRows(l).length) l.expected = 0;
   });
   (o.leads || []).forEach((l) => { if (!l.tmOwner) l.tmOwner = ["홍지수", "김정연"].includes(l.assignee) ? l.assignee : "홍지수"; if (l.salesOwner == null) l.salesOwner = later.includes(l.status) ? "장혁" : ""; });
   (o.projects || []).forEach((p) => { if (p.leadId === undefined) p.leadId = null; });
@@ -2776,8 +2777,8 @@ const PAY_PRESETS = [
   { name: "선금 30% · 중도금 40% · 잔금 30%", parts: [{ label: "선금", r: 0.3 }, { label: "중도금", r: 0.4 }, { label: "잔금", r: 0.3 }] },
   { name: "3분할 33.3%", parts: [{ label: "1회차", r: 1 / 3 }, { label: "2회차", r: 1 / 3 }, { label: "3회차", r: 1 / 3 }] },
 ];
-const payRows = (l) => (l && l.payments) || [];
-const paySum = (l) => payRows(l).reduce((s, p) => s + (p.amount || 0), 0);
+const payRows = paymentRows;
+const paySum = paymentScheduleSum;
 const isPayDone = (p) => !!(p && (p.paidAt || p.paidConfirmed));
 const payPaidSum = (l) => payRows(l).reduce((s, p) => s + (p && p.crmManaged ? (Number(p.depositAmount) || 0) : (isPayDone(p) ? (Number(p.amount) || 0) : 0)), 0);
 const actualPaid = (l) => payRows(l).length ? payPaidSum(l) : (l.paid || 0);
@@ -4029,6 +4030,7 @@ function DealsView() {
     const x = d.leads.find((y) => y.id === id); if (!x) return;
     x.payments = x.payments || []; fn(x);
     x.payments.forEach((p, i) => { p.no = i + 1; });
+    syncPaymentScheduleTotal(x);
     syncPaid(x);
   });
   const applyPreset = (l, pre) => upPay(l.id, (x) => {
@@ -4753,8 +4755,7 @@ function PayModal({ id, onClose, upPay, applyPreset }) {
   const rows = payRows(l);
   const total = paySum(l);
   const got = payPaidSum(l);
-  const amt = l.contractAmount || l.expected || 0;
-  const diff = total - amt;
+  const amt = paymentTotalAmount(l);
   const setTotalAmount = (value) => upPay(l.id, (x) => {
     const v = num(value);
     if (x.status === "계약 완료") x.contractAmount = v;
@@ -4773,7 +4774,6 @@ function PayModal({ id, onClose, upPay, applyPreset }) {
     t.paidConfirmed = false;
     x.history.push({ date: todayISO(), type: "결제", note: (!wasDone ? "입금 확인" : "입금 취소") + " · " + (t.label || t.no + "회차") + " " + fmtK(t.amount || 0) + "원" + (t.paidAt ? " (" + fmtDate(t.paidAt) + ")" : "") });
   });
-  const fitAmount = () => upPay(l.id, (x) => { if (x.status === "계약 완료") x.contractAmount = paySum(x); else x.expected = paySum(x); toast("총 결제금액을 스케줄 합계로 맞췄습니다"); });
   return (
     <Modal open={!!id} onClose={onClose} wide title={"결제 금액 · 스케줄 — " + l.company}>
       <div className="space-y-3">
@@ -4781,13 +4781,13 @@ function PayModal({ id, onClose, upPay, applyPreset }) {
           <div className="flex items-end gap-3 flex-wrap">
             <Fld label="총 결제받아야 할 금액">
               <div className="relative">
-                <Inp value={amt || ""} onChange={(e) => setTotalAmount(e.target.value)} placeholder="예: 30000000" className="w-64 pr-9 text-right text-lg font-extrabold bg-white" />
+                <Inp value={amt || ""} onChange={(e) => setTotalAmount(e.target.value)} readOnly={rows.length > 0} placeholder="예: 30000000" className={"w-64 pr-9 text-right text-lg font-extrabold " + (rows.length ? "bg-slate-100 text-slate-700" : "bg-white")} />
                 <span className="absolute right-3 top-2.5 text-sm font-bold text-slate-400">원</span>
               </div>
             </Fld>
             <div className="pb-1">
-              <p className="text-xs text-indigo-700 font-bold">{amt > 0 ? fmtWon(amt) : "총 금액을 먼저 입력하세요"}</p>
-              <p className="text-[11px] text-indigo-500 mt-0.5">이 금액을 기준으로 아래 회차를 분할합니다.</p>
+              <p className="text-xs text-indigo-700 font-bold">{rows.length ? "회차 합계가 총액으로 자동 반영됩니다" : (amt > 0 ? fmtWon(amt) : "총 금액을 먼저 입력하세요")}</p>
+              <p className="text-[11px] text-indigo-500 mt-0.5">{rows.length ? "금액을 바꾸려면 아래 회차 금액을 수정하세요." : "이 금액을 기준으로 아래 회차를 분할합니다."}</p>
             </div>
           </div>
         </div>
@@ -4853,12 +4853,7 @@ function PayModal({ id, onClose, upPay, applyPreset }) {
         </div>
         <div className="flex items-center justify-between flex-wrap gap-2">
           <Btn size="xs" onClick={addRow}><Plus size={11} />회차 추가</Btn>
-          {diff !== 0 && rows.length > 0 && (
-            <div className="flex items-center gap-2 text-xs font-bold text-amber-600">
-              <AlertCircle size={13} />계약금액 {fmtK(amt)} · 스케줄 {fmtK(total)} ({diff > 0 ? "+" : ""}{fmtK(diff)})
-              <Btn size="xs" onClick={fitAmount}>총 금액을 합계로 맞추기</Btn>
-            </div>
-          )}
+          <div className="text-xs font-bold text-slate-500">{rows.length ? "총액 " + fmtK(total) + "원 · 회차 합계 자동 일치" : "회차를 추가하면 합계가 총액으로 자동 반영됩니다"}</div>
         </div>
         <p className="text-xs text-slate-400">입금일이 찍힌 회차만 <b>수금(캐시인)</b>으로 잡힙니다. 예정일이 지난 미입금 회차는 <b className="text-red-500">연체</b>로 표시되고 오늘의 액션에 올라옵니다. 계약일(수주) 기준 매출은 그대로 유지됩니다.</p>
         <div className="flex justify-end"><Btn kind="primary" onClick={onClose}>닫기</Btn></div>
