@@ -14,7 +14,7 @@ import { reconcileMarketingDailyInquiries } from "./data/marketingInquiry.js";
 import { contractRoasByType, dailyStageActivity, dailyComparisonWindow, relativeMetricChange, previousDatedSpend, weekdayActivity, absoluteCountChange, previousMonthCostWindow, completeDatedSpend } from "./data/performanceMetrics.js";
 import { accountFromEmployeeAccess } from "./data/employeeAccount.js";
 import { paymentRows, paymentScheduleSum, paymentTotalAmount, syncPaymentScheduleTotal } from "./data/paymentSchedule.js";
-import { buildDailyMeetingRecord, dailyMeetingRecords } from "./data/dailyMeetingLog.js";
+import { buildDailyMeetingRecord, dailyMeetingContent, dailyMeetingRecords } from "./data/dailyMeetingLog.js";
 
 /* ===== 운영 데이터 연동 설정 =====
      Supabase 화면별 API가 읽기·쓰기를 담당합니다.
@@ -6248,13 +6248,13 @@ function SettingsView() {
    대분류 총괄 대시보드
    ============================================================ */
 function IntegratedPerformanceView() {
-  const { db, period, go, openLead, up, toast, currentAccount } = useApp();
+  const { db, period, go, openLead, up, toast } = useApp();
   const [metricOpen, setMetricOpen] = useState(null);
   const [dailyChartMonth, setDailyChartMonth] = useState("");
   const [dailyChartDate, setDailyChartDate] = useState("");
   const [customerType, setCustomerType] = useState("전체");
   useEffect(() => { setDailyChartMonth(""); }, [period.mode, period.y, period.m, period.d, period.start, period.end]);
-  const [meetingDraft, setMeetingDraft] = useState(() => ({ date: todayISO(), time: new Date().toTimeString().slice(0, 5), participants: "", agenda: "", decision: "", followUp: "" }));
+  const [meetingDraft, setMeetingDraft] = useState(() => ({ date: todayISO(), content: "" }));
   const meetingFeedRef = useRef(null);
   const r = pRange(period);
   const TARGET = { conv: 30, leadMonth: 500, preMonth: 150, contractMonth: 45, leadCost: 50000, preCost: 150000, contractCost: 450000 };
@@ -6537,18 +6537,17 @@ function IntegratedPerformanceView() {
     try {
       record = buildDailyMeetingRecord(meetingDraft, {
         id: uid(),
-        author: currentAccount?.displayName || currentAccount?.username || "",
         createdAt: new Date().toISOString(),
       });
     } catch (error) {
-      toast(error.message === "meeting_agenda_required" ? "회의 안건을 입력하세요" : "결정사항 또는 후속 액션을 입력하세요");
+      toast("회의내용을 입력하세요");
       return;
     }
     up((draftDb) => {
       draftDb.marketingLogs = draftDb.marketingLogs || [];
       draftDb.marketingLogs.push(record);
     });
-    setMeetingDraft({ date: todayISO(), time: new Date().toTimeString().slice(0, 5), participants: "", agenda: "", decision: "", followUp: "" });
+    setMeetingDraft({ date: todayISO(), content: "" });
     toast("데일리 회의 기록을 저장했습니다");
   };
   const removeDailyMeeting = (id) => up((draftDb) => {
@@ -6632,7 +6631,7 @@ function IntegratedPerformanceView() {
             <span className="flex h-9 w-9 items-center justify-center rounded-[7px] bg-indigo-50 text-indigo-600"><MessageSquareText size={17} /></span>
             <div>
               <p className="text-sm font-extrabold text-slate-900">데일리 회의 기록</p>
-              <p className="mt-0.5 text-[10px] text-slate-400">과거 기록은 위에, 새 기록은 아래에 쌓입니다. 결정사항과 후속 액션을 함께 남깁니다.</p>
+              <p className="mt-0.5 text-[10px] text-slate-400">날짜와 회의내용만 기록합니다. 과거 기록은 위에, 새 기록은 아래에 쌓입니다.</p>
             </div>
           </div>
           <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-[10px] font-extrabold text-indigo-700">{meetingLogs.length}건</span>
@@ -6643,25 +6642,11 @@ function IntegratedPerformanceView() {
             {meetingLogs.map((log) => (
               <article key={log.id} className="rounded-[7px] border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold text-slate-400">
-                      <span className="inline-flex items-center gap-1"><CalendarDays size={11} />{fmtDate(log.date)}{log.time ? ` ${log.time}` : ""}</span>
-                      {log.participants && <span className="inline-flex items-center gap-1"><Users size={11} />{log.participants}</span>}
-                      {log.author && <span>기록 {log.author}</span>}
-                    </div>
-                    <h3 className="mt-2 text-sm font-extrabold text-slate-900">{log.agenda || log.action}</h3>
+                  <div className="grid min-w-0 flex-1 gap-2 sm:grid-cols-[90px_1fr] sm:gap-4">
+                    <span className="inline-flex items-start gap-1 pt-0.5 text-[10px] font-bold text-slate-400"><CalendarDays size={11} className="mt-0.5 shrink-0" />{fmtDate(log.date)}</span>
+                    <p className="whitespace-pre-wrap text-xs leading-5 text-slate-700">{dailyMeetingContent(log)}</p>
                   </div>
                   <DangerBtn size="xs" onConfirm={() => removeDailyMeeting(log.id)}><Trash2 size={10} /></DangerBtn>
-                </div>
-                <div className="mt-3 grid gap-2 md:grid-cols-2">
-                  <div className="rounded-[6px] border border-slate-100 bg-slate-50 px-3 py-2.5">
-                    <p className="text-[10px] font-extrabold text-slate-400">결정사항</p>
-                    <p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-slate-700">{log.decision || "기록 없음"}</p>
-                  </div>
-                  <div className="rounded-[6px] border border-indigo-100 bg-indigo-50/50 px-3 py-2.5">
-                    <p className="text-[10px] font-extrabold text-indigo-500">후속 액션</p>
-                    <p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-slate-700">{log.followUp || "기록 없음"}</p>
-                  </div>
                 </div>
               </article>
             ))}
@@ -6671,18 +6656,9 @@ function IntegratedPerformanceView() {
 
         <div className="border-t border-slate-200 bg-white p-4">
           <div className="mx-auto max-w-5xl">
-            <div className="grid gap-2 sm:grid-cols-[160px_120px_1fr]">
+            <div className="grid gap-2 sm:grid-cols-[170px_1fr_auto] sm:items-end">
               <Inp aria-label="회의 날짜" type="date" value={meetingDraft.date} onChange={(e) => setMeetingDraft({ ...meetingDraft, date: e.target.value })} />
-              <Inp aria-label="회의 시간" type="time" value={meetingDraft.time} onChange={(e) => setMeetingDraft({ ...meetingDraft, time: e.target.value })} />
-              <Inp aria-label="참석자" value={meetingDraft.participants} onChange={(e) => setMeetingDraft({ ...meetingDraft, participants: e.target.value })} placeholder="참석자 · 예: 마케팅팀, 영업팀" />
-            </div>
-            <Inp aria-label="회의 안건" value={meetingDraft.agenda} onChange={(e) => setMeetingDraft({ ...meetingDraft, agenda: e.target.value })} placeholder="회의 안건 · 예: 전일 성과와 오늘 우선순위" className="mt-2" />
-            <div className="mt-2 grid gap-2 md:grid-cols-2">
-              <Ta aria-label="결정사항" rows={3} value={meetingDraft.decision} onChange={(e) => setMeetingDraft({ ...meetingDraft, decision: e.target.value })} placeholder="결정사항 · 합의한 방향, 변경된 기준" className="min-h-[76px]" />
-              <Ta aria-label="후속 액션" rows={3} value={meetingDraft.followUp} onChange={(e) => setMeetingDraft({ ...meetingDraft, followUp: e.target.value })} placeholder="후속 액션 · 담당자, 완료 기준, 확인 시점" className="min-h-[76px]" />
-            </div>
-            <div className="mt-3 flex items-center justify-between gap-3">
-              <p className="text-[10px] leading-4 text-slate-400">회의 안건과 결정사항 또는 후속 액션 중 하나를 입력해야 저장됩니다.</p>
+              <Ta aria-label="회의내용" rows={3} value={meetingDraft.content} onChange={(e) => setMeetingDraft({ ...meetingDraft, content: e.target.value })} placeholder="회의내용을 입력하세요" className="min-h-[76px]" />
               <Btn kind="primary" onClick={addDailyMeeting} cls="shrink-0"><Plus size={12} />회의 기록 저장</Btn>
             </div>
           </div>
