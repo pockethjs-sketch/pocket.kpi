@@ -14,6 +14,7 @@ import { reconcileMarketingDailyInquiries } from "./data/marketingInquiry.js";
 import { contractRoasByType, dailyStageActivity, dailyComparisonWindow, relativeMetricChange, previousDatedSpend, weekdayActivity, absoluteCountChange, previousMonthCostWindow, completeDatedSpend } from "./data/performanceMetrics.js";
 import { accountFromEmployeeAccess } from "./data/employeeAccount.js";
 import { paymentRows, paymentScheduleSum, paymentTotalAmount, syncPaymentScheduleTotal } from "./data/paymentSchedule.js";
+import { buildDailyMeetingRecord, dailyMeetingRecords } from "./data/dailyMeetingLog.js";
 
 /* ===== 운영 데이터 연동 설정 =====
      Supabase 화면별 API가 읽기·쓰기를 담당합니다.
@@ -6247,13 +6248,14 @@ function SettingsView() {
    대분류 총괄 대시보드
    ============================================================ */
 function IntegratedPerformanceView() {
-  const { db, period, go, openLead, up, users, toast } = useApp();
+  const { db, period, go, openLead, up, toast, currentAccount } = useApp();
   const [metricOpen, setMetricOpen] = useState(null);
   const [dailyChartMonth, setDailyChartMonth] = useState("");
   const [dailyChartDate, setDailyChartDate] = useState("");
   const [customerType, setCustomerType] = useState("전체");
   useEffect(() => { setDailyChartMonth(""); }, [period.mode, period.y, period.m, period.d, period.start, period.end]);
-  const [marketingLogDraft, setMarketingLogDraft] = useState({ kind: "action", date: todayISO(), channel: "", owner: "", action: "", note: "" });
+  const [meetingDraft, setMeetingDraft] = useState(() => ({ date: todayISO(), time: new Date().toTimeString().slice(0, 5), participants: "", agenda: "", decision: "", followUp: "" }));
+  const meetingFeedRef = useRef(null);
   const r = pRange(period);
   const TARGET = { conv: 30, leadMonth: 500, preMonth: 150, contractMonth: 45, leadCost: 50000, preCost: 150000, contractCost: 450000 };
   const matchesCustomerType = (l) => customerType === "전체" || (l.ctype || "신규") === customerType;
@@ -6525,33 +6527,32 @@ function IntegratedPerformanceView() {
       </div>
     </div>;
   };
-  const marketingLogs = [...(db.marketingLogs || [])].sort((a, b) => (b.date || "").localeCompare(a.date || "") || (b.createdAt || "").localeCompare(a.createdAt || ""));
-  const ongoingMarketingActions = marketingLogs.filter((log) => log.kind === "action" && log.status === "진행중").slice(0, 6);
-  const recentMarketingLogs = marketingLogs.filter((log) => log.kind === "log").slice(0, 6);
-  const marketingChannelOptions = [{ value: "", label: "채널 미지정" }, ...[...new Set((db.channels || []).map((channel) => channelGroupName(channel.name)).filter(Boolean))].map((name) => ({ value: name, label: name }))];
-  const marketingOwnerOptions = [{ value: "", label: "담당자 미지정" }, ...users.map((user) => ({ value: user.name, label: user.name }))];
-  const addMarketingLog = () => {
-    if (!marketingLogDraft.action.trim()) { toast(marketingLogDraft.kind === "action" ? "진행할 액션을 입력하세요" : "Log 제목을 입력하세요"); return; }
-    up((draftDb) => {
-      draftDb.marketingLogs = draftDb.marketingLogs || [];
-      draftDb.marketingLogs.unshift({
+  const meetingLogs = dailyMeetingRecords(db.marketingLogs || []);
+  useEffect(() => {
+    const feed = meetingFeedRef.current;
+    if (feed) feed.scrollTop = feed.scrollHeight;
+  }, [meetingLogs.length]);
+  const addDailyMeeting = () => {
+    let record;
+    try {
+      record = buildDailyMeetingRecord(meetingDraft, {
         id: uid(),
-        date: marketingLogDraft.date || todayISO(),
-        kind: marketingLogDraft.kind,
-        channel: marketingLogDraft.channel,
-        owner: marketingLogDraft.owner,
-        status: marketingLogDraft.kind === "action" ? "진행중" : "기록",
-        action: marketingLogDraft.action.trim(),
-        note: marketingLogDraft.note.trim(),
+        author: currentAccount?.displayName || currentAccount?.username || "",
         createdAt: new Date().toISOString(),
       });
+    } catch (error) {
+      toast(error.message === "meeting_agenda_required" ? "회의 안건을 입력하세요" : "결정사항 또는 후속 액션을 입력하세요");
+      return;
+    }
+    up((draftDb) => {
+      draftDb.marketingLogs = draftDb.marketingLogs || [];
+      draftDb.marketingLogs.push(record);
     });
-    setMarketingLogDraft({ kind: marketingLogDraft.kind, date: todayISO(), channel: "", owner: "", action: "", note: "" });
-    toast(marketingLogDraft.kind === "action" ? "진행 중인 마케팅 액션을 등록했습니다" : "마케팅 Log를 저장했습니다");
+    setMeetingDraft({ date: todayISO(), time: new Date().toTimeString().slice(0, 5), participants: "", agenda: "", decision: "", followUp: "" });
+    toast("데일리 회의 기록을 저장했습니다");
   };
-  const updateMarketingLog = (id, key, value) => up((draftDb) => {
-    const log = (draftDb.marketingLogs || []).find((item) => item.id === id);
-    if (log) log[key] = value;
+  const removeDailyMeeting = (id) => up((draftDb) => {
+    draftDb.marketingLogs = (draftDb.marketingLogs || []).filter((item) => item.id !== id);
   });
   return (
     <div className="space-y-5">
@@ -6625,79 +6626,65 @@ function IntegratedPerformanceView() {
         </div>
         {customerType === "기존" && <p className="mt-2 text-[10px] leading-4 text-amber-600">기존 고객은 신규 획득 목표의 판정 대상이 아니므로 기간 실적만 분리해 표시합니다.</p>}
       </Card>
-      <div className="grid xl:grid-cols-2 gap-4">
-        <Card cls="p-4">
-          <div className="flex items-center justify-between gap-2">
-            <div><p className="text-sm font-extrabold text-slate-900">최근 진행 중인 마케팅 액션</p><p className="text-[10px] text-slate-400 mt-1">지금 실행해야 하는 업무와 담당자를 확인합니다.</p></div>
-            <span className="px-2.5 py-1 rounded-full bg-sky-50 text-sky-700 text-[10px] font-extrabold">{ongoingMarketingActions.length}건</span>
+      <Card cls="p-0 overflow-hidden border-slate-200 bg-white">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3.5">
+          <div className="flex items-center gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-[7px] bg-indigo-50 text-indigo-600"><MessageSquareText size={17} /></span>
+            <div>
+              <p className="text-sm font-extrabold text-slate-900">데일리 회의 기록</p>
+              <p className="mt-0.5 text-[10px] text-slate-400">과거 기록은 위에, 새 기록은 아래에 쌓입니다. 결정사항과 후속 액션을 함께 남깁니다.</p>
+            </div>
           </div>
-          <div className="divide-y divide-slate-100 mt-3">
-            {ongoingMarketingActions.map((log) => (
-              <div key={log.id} className="flex items-start gap-3 py-2.5">
-                <span className="mt-0.5 w-12 shrink-0 text-[10px] font-bold text-slate-400 tabular-nums">{fmtDate(log.date)}</span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-xs font-extrabold text-slate-800">{log.action}</span>
-                  <span className="block text-[10px] text-slate-400 mt-0.5">{log.channel || "채널 미지정"} · {log.owner || "담당자 미지정"}</span>
-                  {log.note && <span className="block text-[10px] leading-4 text-slate-500 mt-1">{log.note}</span>}
-                </span>
-                <button type="button" onClick={() => updateMarketingLog(log.id, "status", "완료")} className="mt-0.5 w-7 h-7 rounded-lg border border-slate-200 text-slate-300 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-600 flex items-center justify-center" title="완료 처리"><Check size={12} /></button>
-              </div>
-            ))}
-            {!ongoingMarketingActions.length && <Empty compact text="진행 중인 액션이 없습니다." />}
-          </div>
-        </Card>
-        <Card cls="p-4">
-          <div className="flex items-center justify-between gap-2">
-            <div><p className="text-sm font-extrabold text-slate-900">마케팅 Log</p><p className="text-[10px] text-slate-400 mt-1">테스트 결과, 채널 특이사항과 학습 내용을 남깁니다.</p></div>
-            <span className="px-2.5 py-1 rounded-full bg-violet-50 text-violet-700 text-[10px] font-extrabold">{recentMarketingLogs.length}건</span>
-          </div>
-          <div className="divide-y divide-slate-100 mt-3">
-            {recentMarketingLogs.map((log) => (
-              <div key={log.id} className="flex items-start gap-3 py-2.5">
-                <span className="mt-0.5 w-12 shrink-0 text-[10px] font-bold text-slate-400 tabular-nums">{fmtDate(log.date)}</span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-xs font-extrabold text-slate-800">{log.action}</span>
-                  <span className="block text-[10px] text-slate-400 mt-0.5">{log.channel || "채널 미지정"} · {log.owner || "작성자 미지정"}</span>
-                  {log.note && <span className="block text-[10px] leading-4 text-slate-500 mt-1">{log.note}</span>}
-                </span>
-                <span className="mt-0.5">
-                  <DangerBtn size="xs" onConfirm={() => up((draftDb) => { draftDb.marketingLogs = (draftDb.marketingLogs || []).filter((item) => item.id !== log.id); })}><Trash2 size={10} /></DangerBtn>
-                </span>
-              </div>
-            ))}
-            {!recentMarketingLogs.length && <Empty compact text="등록된 Log가 없습니다." />}
-          </div>
-        </Card>
-      </div>
-      <Card cls="p-4">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <p className="text-sm font-extrabold text-slate-900">마케팅 기록 등록</p>
-            <p className="text-[10px] text-slate-400 mt-1">할 일은 진행중 액션으로, 실행 결과와 특이사항은 마케팅 Log로 구분해 등록합니다.</p>
-          </div>
-          <Seg value={marketingLogDraft.kind} onChange={(kind) => setMarketingLogDraft({ ...marketingLogDraft, kind })} options={[["action", "진행중 액션"], ["log", "마케팅 Log"]]} />
+          <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-[10px] font-extrabold text-indigo-700">{meetingLogs.length}건</span>
         </div>
-        <div className={"mt-3 rounded-xl border p-3 " + (marketingLogDraft.kind === "action" ? "border-sky-100 bg-sky-50/40" : "border-violet-100 bg-violet-50/40")}>
-          <div className="grid sm:grid-cols-3 gap-2">
-            <Inp type="date" value={marketingLogDraft.date} onChange={(e) => setMarketingLogDraft({ ...marketingLogDraft, date: e.target.value })} />
-            <Sel className="w-full" value={marketingLogDraft.channel} onChange={(e) => setMarketingLogDraft({ ...marketingLogDraft, channel: e.target.value })} options={marketingChannelOptions} />
-            <Sel className="w-full" value={marketingLogDraft.owner} onChange={(e) => setMarketingLogDraft({ ...marketingLogDraft, owner: e.target.value })} options={marketingOwnerOptions} />
+
+        <div ref={meetingFeedRef} className="max-h-[520px] min-h-[220px] overflow-y-auto bg-slate-50/70 px-4 py-4">
+          <div className="mx-auto max-w-5xl space-y-3">
+            {meetingLogs.map((log) => (
+              <article key={log.id} className="rounded-[7px] border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold text-slate-400">
+                      <span className="inline-flex items-center gap-1"><CalendarDays size={11} />{fmtDate(log.date)}{log.time ? ` ${log.time}` : ""}</span>
+                      {log.participants && <span className="inline-flex items-center gap-1"><Users size={11} />{log.participants}</span>}
+                      {log.author && <span>기록 {log.author}</span>}
+                    </div>
+                    <h3 className="mt-2 text-sm font-extrabold text-slate-900">{log.agenda || log.action}</h3>
+                  </div>
+                  <DangerBtn size="xs" onConfirm={() => removeDailyMeeting(log.id)}><Trash2 size={10} /></DangerBtn>
+                </div>
+                <div className="mt-3 grid gap-2 md:grid-cols-2">
+                  <div className="rounded-[6px] border border-slate-100 bg-slate-50 px-3 py-2.5">
+                    <p className="text-[10px] font-extrabold text-slate-400">결정사항</p>
+                    <p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-slate-700">{log.decision || "기록 없음"}</p>
+                  </div>
+                  <div className="rounded-[6px] border border-indigo-100 bg-indigo-50/50 px-3 py-2.5">
+                    <p className="text-[10px] font-extrabold text-indigo-500">후속 액션</p>
+                    <p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-slate-700">{log.followUp || "기록 없음"}</p>
+                  </div>
+                </div>
+              </article>
+            ))}
+            {!meetingLogs.length && <div className="flex min-h-[185px] items-center justify-center"><Empty compact text="등록된 데일리 회의 기록이 없습니다." /></div>}
           </div>
-          <Inp
-            value={marketingLogDraft.action}
-            onChange={(e) => setMarketingLogDraft({ ...marketingLogDraft, action: e.target.value })}
-            placeholder={marketingLogDraft.kind === "action" ? "할 일 · 예: eDM 기획 / 이메일 수집" : "기록 제목 · 예: META 투자유치 소재 테스트 결과"}
-            className="mt-2"
-          />
-          <div className="flex gap-2 mt-2 items-end">
-            <Ta
-              rows={2}
-              value={marketingLogDraft.note}
-              onChange={(e) => setMarketingLogDraft({ ...marketingLogDraft, note: e.target.value })}
-              placeholder={marketingLogDraft.kind === "action" ? "진행 목적, 완료 기준, 다음 확인사항" : "테스트 결과, 수치 변화, 채널 특이사항"}
-              className="min-h-[54px]"
-            />
-            <Btn kind="primary" onClick={addMarketingLog} cls="shrink-0 mb-0.5"><Plus size={12} />{marketingLogDraft.kind === "action" ? "액션 등록" : "Log 등록"}</Btn>
+        </div>
+
+        <div className="border-t border-slate-200 bg-white p-4">
+          <div className="mx-auto max-w-5xl">
+            <div className="grid gap-2 sm:grid-cols-[160px_120px_1fr]">
+              <Inp aria-label="회의 날짜" type="date" value={meetingDraft.date} onChange={(e) => setMeetingDraft({ ...meetingDraft, date: e.target.value })} />
+              <Inp aria-label="회의 시간" type="time" value={meetingDraft.time} onChange={(e) => setMeetingDraft({ ...meetingDraft, time: e.target.value })} />
+              <Inp aria-label="참석자" value={meetingDraft.participants} onChange={(e) => setMeetingDraft({ ...meetingDraft, participants: e.target.value })} placeholder="참석자 · 예: 마케팅팀, 영업팀" />
+            </div>
+            <Inp aria-label="회의 안건" value={meetingDraft.agenda} onChange={(e) => setMeetingDraft({ ...meetingDraft, agenda: e.target.value })} placeholder="회의 안건 · 예: 전일 성과와 오늘 우선순위" className="mt-2" />
+            <div className="mt-2 grid gap-2 md:grid-cols-2">
+              <Ta aria-label="결정사항" rows={3} value={meetingDraft.decision} onChange={(e) => setMeetingDraft({ ...meetingDraft, decision: e.target.value })} placeholder="결정사항 · 합의한 방향, 변경된 기준" className="min-h-[76px]" />
+              <Ta aria-label="후속 액션" rows={3} value={meetingDraft.followUp} onChange={(e) => setMeetingDraft({ ...meetingDraft, followUp: e.target.value })} placeholder="후속 액션 · 담당자, 완료 기준, 확인 시점" className="min-h-[76px]" />
+            </div>
+            <div className="mt-3 flex items-center justify-between gap-3">
+              <p className="text-[10px] leading-4 text-slate-400">회의 안건과 결정사항 또는 후속 액션 중 하나를 입력해야 저장됩니다.</p>
+              <Btn kind="primary" onClick={addDailyMeeting} cls="shrink-0"><Plus size={12} />회의 기록 저장</Btn>
+            </div>
           </div>
         </div>
       </Card>

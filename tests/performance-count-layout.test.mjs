@@ -26,7 +26,7 @@ test('contract cost drilldown renders every contract with amount and new/existin
   const source = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
   const costBlock = source.slice(source.indexOf('{metricOpen.type === "cost" &&'), source.indexOf('function MarketingHubView'));
   assert.match(costBlock, /rows=\{metricRows\} detail=\{metricStage\.id === "contract" \? "contract" : undefined\}/);
-  const block = source.slice(source.indexOf('  const PopupLeadList ='), source.indexOf('  const marketingLogs =', source.indexOf('  const PopupLeadList =')));
+  const block = source.slice(source.indexOf('  const PopupLeadList ='), source.indexOf('  const meetingLogs =', source.indexOf('  const PopupLeadList =')));
   const { code } = await transformWithOxc(block, 'PopupLeadList.jsx', { jsx: { runtime: 'classic' } });
   const dependencies = {
     React, contractAmountOf: lead => lead.contractAmount || 0, actualPaid: () => 0,
