@@ -1,5 +1,11 @@
 # Employee authentication cutover — 2026-09-18
 
+## 2026-09-23 Notion receivables read boundary
+
+- The existing `notion_contract_payment_records` import is shown only through `kpi-domain-api?action=notion_receivables`, after the same verified employee-session and active-organization-membership checks as other business reads. The query is organization-scoped, paginated, and selects display columns only; `raw_payload` is never sent to the browser.
+- The table has RLS enabled and no browser-role SELECT policy. A scoped migration revokes all remaining `public`/`anon`/`authenticated` table privileges, including incidental TRUNCATE/REFERENCES/TRIGGER grants; the existing service-role importer keeps its permissions. No broad schema grant or public fallback is added.
+- Imported source rows are read-only reference data, separate from financial mutations and calculations. See `docs/NOTION_RECEIVABLES.md` for reconciliation limits and verification gates.
+
 2026-09-18. User approved moving Pocket KPI to approved-employee authentication.
 User subsequently requested the scheduled security cutover to run immediately.
 Initial administrator email was supplied privately in the task; do not publish it here.

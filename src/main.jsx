@@ -9,6 +9,7 @@ import RecentSyncActivity from "./RecentSyncActivity.jsx";
 import DailyActivityChart from "./DailyActivityChart.jsx";
 import LeadRevenueQuality from "./LeadRevenueQuality.jsx";
 import EmployeeAdministration from "./EmployeeAdministration.jsx";
+import NotionReceivables from "./NotionReceivables.jsx";
 import { shadowStatusFromSheetsResult } from "./data/repositoryAdapter.js";
 import { reconcileMarketingDailyInquiries } from "./data/marketingInquiry.js";
 import { contractRoasByType, dailyStageActivity, dailyComparisonWindow, relativeMetricChange, previousDatedSpend, weekdayActivity, absoluteCountChange, previousMonthCostWindow, completeDatedSpend } from "./data/performanceMetrics.js";
@@ -113,6 +114,7 @@ import { buildDailyMeetingRecord, dailyMeetingContent, dailyMeetingRecords } fro
   }
 
   window.crmFetchContractHistory = () => crmFetchDomainAction('contract_history');
+  window.crmFetchNotionReceivables = () => crmFetchDomainAction('notion_receivables', { timeoutMs: 30000 });
   window.crmFetchSyncActivity = async () => {
     const payload = await crmFetchDomainAction('bootstrap');
     if (!payload.ok || !payload.documents || (payload.documents.contractStatusLogs != null && !Array.isArray(payload.documents.contractStatusLogs))) throw new Error('sync_logs_invalid');
@@ -7853,6 +7855,7 @@ function SupportContractSummaryLegacy() {
 
 function LtvExpansionView() {
   const { db, up, users, openLead, toast, currentAccount } = useApp();
+  const [sourceTab, setSourceTab] = useState("ledger");
   const [ledgerStage, setLedgerStage] = useState("active");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [sortBy, setSortBy] = useState("addedDesc");
@@ -8418,9 +8421,15 @@ function LtvExpansionView() {
     setCategoryFilter("all"); setLedgerQuery(""); setLedgerOwner("all"); setLedgerStatus("all"); setLedgerPaymentState("all");
     setLedgerAddedFrom(""); setLedgerAddedTo(""); setSortBy("addedDesc");
   };
+  const sourceTabs = <div role="tablist" aria-label="잔금 자료 출처" className="inline-flex rounded-md border border-slate-200 bg-white p-1">
+    <button type="button" role="tab" aria-selected={sourceTab === "ledger"} onClick={() => setSourceTab("ledger")} className={"rounded px-3 py-1.5 text-[11px] font-extrabold " + (sourceTab === "ledger" ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-50")}>운영 잔금 원장</button>
+    <button type="button" role="tab" aria-selected={sourceTab === "notion"} onClick={() => setSourceTab("notion")} className={"rounded px-3 py-1.5 text-[11px] font-extrabold " + (sourceTab === "notion" ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-50")}>노션 이관 자료</button>
+  </div>;
+  if (sourceTab === "notion") return <div className="space-y-4"><SecTitle icon={Repeat} title="잔금 관리" right={sourceTabs} /><NotionReceivables /></div>;
   return (
     <div className="space-y-4">
       <SecTitle icon={Repeat} title="잔금 관리" right={<><Btn onClick={() => setManualOpen(!manualOpen)}><Plus size={13} />고객 직접 추가</Btn><Btn kind="primary" onClick={() => setLedgerTab("add")}><Plus size={13} />금액 추가</Btn></>} />
+      {sourceTabs}
       <Card cls="p-2">
         <div role="tablist" aria-label="잔금 처리 상태" className="grid grid-cols-3 gap-2">
           {LEDGER_STAGES.map((stage) => {
@@ -9193,7 +9202,7 @@ function SchemaView() {
     { category: "프리미팅", name: "프리미팅 기업", read: [], write: ["프리미팅_계약현황", "데이터_계약원장", "데이터_입금원장", "데이터_계약현황로그"], external: ["CRM API"], use: "프리미팅 이후 계약·입금과 활동 이력 관리" },
     { category: "계약", name: "계약 총괄 대시보드", read: ["Supabase leads", "contract_history_months", "contract_history_owners", "contract_history_details"], write: [], external: ["광고/KPI 리포트 월별계약·월별성과 (과거 이관 원천)"], use: "현재 계약·입금·미수 집계 + 과거 월별 실적 비교 (동일 월은 시트 우선, 중복 합산 없음)" },
     { category: "계약", name: "지원사업 관리", read: [], write: [], external: ["Supabase", "CRM API"], use: "지원사업 배정·합격·일정" },
-    { category: "계약", name: "잔금 관리", read: [], write: ["계약_잔금관리", "계약_잔금로그", "데이터_입금원장"], external: [], use: "선금·중도금·잔금과 변경 이력" },
+    { category: "계약", name: "잔금 관리", read: ["Supabase notion_contract_payment_records"], write: ["계약_잔금관리", "계약_잔금로그", "데이터_입금원장"], external: ["노션 선잔금 및 미납 (이관 원천)"], use: "운영 결제 원장과 별도 노션 이관 자료 조회 · 합계 자동 병합 없음" },
     { category: "계약", name: "포켓비즈", read: [], write: ["계약_포켓비즈"], external: [], use: "구독사·MRR·입금 상태" },
     { category: "계약", name: "상품 · 가격", read: [], write: ["계약_상품가격"], external: [], use: "상품 가격과 목표 계약수" },
     { category: "기타", name: "기타 총괄", read: [], write: [], external: [], use: "기타 메뉴 바로가기" },
@@ -9380,7 +9389,7 @@ const VIEW_DATA_SOURCES = {
   deals: { sheet: "프리미팅 기업의 단계·금액·담당자 저장 데이터", crm: "프리미팅 일정과 고객사 정보" },
   contractHub: { sheet: "현재 계약: Supabase / 과거 실적: 시트에서 별도 DB 이관", crm: "계약 전 고객사·담당자 정보" },
   supportManagement: { sheet: "지원사업 고객의 합격·연장 관리 데이터", crm: "계약 고객 기본정보", support: "배정 지원사업과 합격 이력" },
-  ltvExpansion: { sheet: "기존 고객의 선금·중도금·잔금 회차와 특이사항·상태", crm: "기존 계약 고객 기본정보" },
+  ltvExpansion: { sheet: "기존 고객의 선금·중도금·잔금 회차와 특이사항·상태", crm: "기존 계약 고객 기본정보", notion: "노션 선잔금·미납의 Supabase 별도 이관 자료" },
   balance: { sheet: "구형 잔금액·예정일·회수 상태 화면", crm: "계약 고객 기본정보" },
   schema: { sheet: "웹 페이지·API·A/B 상태·구조화 원장·백업 연결 정의", support: "지원사업 외부 데이터 연결 상태" },
   prompts: { sheet: "프롬프트와 설정 저장 데이터", ai: "사용자가 요청할 때 전송하는 프롬프트" }
@@ -9399,6 +9408,16 @@ function DataConnectionFooter({ view, db, saveState }) {
     detail: saveState || "상태 확인 중",
     href: GOOGLE_SHEET_URL,
     linkLabel: "원본 시트 열기"
+  });
+  if (view === "ltvExpansion") links.push({
+    key: "notion",
+    ok: true,
+    label: "노션 이관 자료 별도 보관",
+    source: "Supabase · 노션 선잔금",
+    data: pageSource.notion,
+    detail: "노션 이관 자료 탭에서 최신 반영 시각 확인 · 운영 합계와 분리",
+    href: "https://app.notion.com/p/60fd74beaa49403a8cf595e3963c8775",
+    linkLabel: "노션 원본 열기"
   });
   if (CRM_LINKED_VIEWS.has(view)) {
     let lastSync = 0;

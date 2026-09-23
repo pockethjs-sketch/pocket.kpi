@@ -118,7 +118,7 @@ Deno.serve(async (req) => {
   let body: any = {};
   if (req.method === "POST") try { body = await req.json(); } catch { return reply(req, { error: "bad_json" }, 400); }
   const action = String(body.action || url.searchParams.get("action") || "meta");
-  const readActions = new Set(["session", "meta", "bootstrap", "crm", "marketing", "contract_history", "support_board"]);
+  const readActions = new Set(["session", "meta", "bootstrap", "crm", "marketing", "contract_history", "support_board", "notion_receivables"]);
   const permission = action === "employees" ? "admin" : action === "mutation" ? mutationPermission(body.mutation)
     : readActions.has(action) || (action === "sheet_bridge" && ["contract_changes", "daily_sync_status", "health", "marketing_status"].includes(body.sheetAction)) ? "read" : "write";
   if (!canEmployeeAct(access, permission)) return reply(req, { error: "permission_denied" }, 403);
@@ -187,6 +187,24 @@ Deno.serve(async (req) => {
       .eq("organization_id", organizationId).eq("document_key", "supportBoard").maybeSingle();
     if (error) return reply(req, { error: "support_board_read_failed", code: error.code }, 500);
     return reply(req, { ok: true, supportBoard: data?.document_value || null, revision: data?.projected_revision || "" });
+  }
+
+  if (action === "notion_receivables") {
+    // The Notion import is reference material, not the payment ledger. Never expose raw_payload.
+    const rows: any[] = [];
+    const columns = "source_key,source_page_reference,company,deposit_text,balance_text,freelancer,projects_text,notes,request_status,payment_status,contract_date,updated_at";
+    for (let offset = 0; ; offset += 500) {
+      const { data, error } = await supabase.from("notion_contract_payment_records").select(columns)
+        .eq("organization_id", organizationId)
+        .order("contract_date", { ascending: false, nullsFirst: false }).order("source_key")
+        .range(offset, offset + 499);
+      if (error) return reply(req, { error: "notion_receivables_read_failed", code: error.code }, 500);
+      rows.push(...(data || []));
+      if ((data || []).length < 500) break;
+      if (offset >= 49500) return reply(req, { error: "notion_receivables_limit_exceeded" }, 500);
+    }
+    return reply(req, { ok: true, rows, count: rows.length,
+      latestImportedAt: rows.reduce((latest, row) => row.updated_at > latest ? row.updated_at : latest, "") });
   }
 
   if (action === "crm") {
