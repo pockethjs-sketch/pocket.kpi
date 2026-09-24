@@ -1,5 +1,10 @@
 # Employee authentication cutover — 2026-09-18
 
+## 2026-09-24 Notion receivables presentation release
+
+- Frontend-only stage grouping deployed in commit `a0b6e5e`, Actions `35994648716` succeeded. No API, Auth, RLS, database rows, or backup changes; the existing employee-authenticated read boundary remains unchanged.
+- 175 synthetic tests, security lint, build verification, and dependency audit (zero vulnerabilities) passed. The live HTML references the new entry and all six public JS/CSS assets match the tested build SHA-256. Authenticated visual/interaction verification is still separate and has not been performed in this release.
+
 ## 2026-09-23 Notion receivables read boundary
 
 - The existing `notion_contract_payment_records` import is shown only through `kpi-domain-api?action=notion_receivables`, after the same verified employee-session and active-organization-membership checks as other business reads. The query is organization-scoped, paginated, and selects display columns only; `raw_payload` is never sent to the browser.
