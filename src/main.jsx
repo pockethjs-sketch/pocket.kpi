@@ -8425,7 +8425,7 @@ function LtvExpansionView() {
     <button type="button" role="tab" aria-selected={sourceTab === "ledger"} onClick={() => setSourceTab("ledger")} className={"rounded px-3 py-1.5 text-[11px] font-extrabold " + (sourceTab === "ledger" ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-50")}>운영 잔금 원장</button>
     <button type="button" role="tab" aria-selected={sourceTab === "notion"} onClick={() => setSourceTab("notion")} className={"rounded px-3 py-1.5 text-[11px] font-extrabold " + (sourceTab === "notion" ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-50")}>노션 이관 자료</button>
   </div>;
-  if (sourceTab === "notion") return <div className="space-y-4"><SecTitle icon={Repeat} title="잔금 관리" right={sourceTabs} /><NotionReceivables /></div>;
+  if (sourceTab === "notion") return <div className="space-y-4"><SecTitle icon={Repeat} title="잔금 관리" />{sourceTabs}<NotionReceivables /></div>;
   return (
     <div className="space-y-4">
       <SecTitle icon={Repeat} title="잔금 관리" right={<><Btn onClick={() => setManualOpen(!manualOpen)}><Plus size={13} />고객 직접 추가</Btn><Btn kind="primary" onClick={() => setLedgerTab("add")}><Plus size={13} />금액 추가</Btn></>} />

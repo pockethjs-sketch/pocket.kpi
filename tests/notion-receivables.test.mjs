@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { filterNotionReceivables, notionReceivableSummary, notionSourceUrl } from '../src/data/notionReceivables.js';
+import { filterNotionReceivables, notionReceivableStage, notionReceivableStageCounts, notionReceivableSummary, notionSourceUrl } from '../src/data/notionReceivables.js';
 
 const records = [
   { source_key: 'n-1', company: '가상회사 A', request_status: '완료', payment_status: '입금전', deposit_text: '선금 확인', balance_text: '잔금 확인', projects_text: '브랜딩', freelancer: '담당 A' },
@@ -17,7 +17,21 @@ test('search and status filters apply without changing the source rows', () => {
   const before = JSON.stringify(records);
   assert.equal(filterNotionReceivables(records, { query: '브랜딩', requestStatus: '완료', paymentStatus: '입금전' }).length, 1);
   assert.equal(filterNotionReceivables(records, { query: '테스트 메모' })[0].source_key, 'n-2');
+  assert.equal(filterNotionReceivables(records, { stage: 'awaitingPayment' })[0].source_key, 'n-1');
   assert.equal(JSON.stringify(records), before);
+});
+
+test('Notion request completion never counts as payment completion', () => {
+  const examples = [
+    { request_status: '지급요청 전', payment_status: '입금전' },
+    { request_status: '지급요청2', payment_status: '입금전' },
+    { request_status: '완료', payment_status: '입금전' },
+    { request_status: '완료', payment_status: '카결완료' },
+    { request_status: '완료', payment_status: '' },
+  ];
+  assert.deepEqual(examples.map(notionReceivableStage), ['requestBefore', 'requestOngoing', 'awaitingPayment', 'paid', 'review']);
+  assert.deepEqual(notionReceivableStageCounts(examples), { requestBefore: 1, requestOngoing: 1, awaitingPayment: 1, paid: 1, review: 1 });
+  assert.equal(Object.values(notionReceivableStageCounts(examples)).reduce((sum, count) => sum + count, 0), examples.length);
 });
 
 test('only HTTPS Notion pages can be opened as source links', () => {
