@@ -1,5 +1,12 @@
 # Employee authentication cutover — 2026-09-18
 
+## 2026-09-28 Contract H payment parsing fix (Apps Script v61)
+
+- Expands Apps Script H-column parsing to exact checkmarks/checkbox/V and cumulative percentages. Amount matching, identity ambiguity checks, revision-guarded atomic mutation and existing financial input protection remain in place. No public endpoint or employee authentication changes.
+- Authorized Supabase metadata inspection found the user-specified record has an unpaid schedule and premeeting status. Current Google admin OAuth can inspect/update Script source, but Sheets API reports SERVICE_DISABLED and scripts.run returns 403. No source payment value has been assumed and no production payment correction has been made.
+- Synthetic verification and deployment outcomes are recorded separately. Direct Sheet values, credentials and customer payloads are not committed.
+- 193 tests, security lint, production build verification passed; dependency audit returned zero vulnerabilities. Production main deployment/HEAD now use version 61, backend `2026-09-28-contract-payment-percent-v31`; published and local Code hashes match and other four project files are unchanged. No source Sheet or business DB rows were directly changed. Authenticated synchronization/live H-value verification remains blocked by the current Google management OAuth execution scope.
+
 ## 2026-09-28 Receivables contrast hotfix
 
 - Release `a7db298`, Actions `36366224155` succeeded. Live entry and all seven JS/CSS hashes match the tested build; 183 tests and security/build checks passed, dependency audit 0 vulnerabilities. No production business data read/write was performed.

@@ -156,14 +156,13 @@ test('H checkbox confirms only exact unpaid single installment without inventing
   assert.equal(next.contractSheetPaymentSync.actualPaidAt,null);
   assert.equal(paymentPlan(g,{leads:[next]},now,hash).updated.length,0);
 });
-test('payment changes in H do not unconfirm or duplicate, partial and mismatched data are held',()=>{
+test('payment changes in H do not unconfirm or duplicate, mismatched data are held',()=>{
   const g=source([['26-09-07','Tellus','','투A','500','','신규','✔']]);
   const base=lead({status:'계약 완료',contractAmount:5500000,payments:[{id:'p1',amount:5500000,paidAt:''}],paid:0});
   for(const changed of [
     {contractAmount:5000000},
-    {payments:[{id:'p1',amount:2500000,paidAt:'2026-09-08'},{id:'p2',amount:3000000,paidAt:''}],paid:2500000},
     {payments:[{id:'p1',amount:5500000,paidAt:'',crmManaged:true}]},
-    {status:'프리미팅 완료'},
+    {status:'신규 DB'},
   ]) {const r=paymentPlan(g,{leads:[{...base,...changed}]},now,hash);assert.equal(r.updated.length,0);assert.equal(r.blocked.length,1);}
   const multiple=source([['26-09-07','Tellus','','투A','500','','신규','✔'],['26-09-07','','','투B','200','','신규','']]);
   assert.equal(paymentPlan(multiple,{leads:[{...base,contractAmount:7700000}]},now,hash).updated.length,0);
