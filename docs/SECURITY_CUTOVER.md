@@ -1,5 +1,11 @@
 # Employee authentication cutover — 2026-09-18
 
+## 2026-09-28 Receivables table presentation release request
+
+- User reviewed the isolated synthetic preview and approved applying the presentation to existing live data. Only frontend rendering changes; employee Auth, organization-scoped API reads, database rows, financial calculations and save handlers remain unchanged.
+- Synthetic preview files/screenshots stay in ignored `artifacts/` and are not part of the production build. No production session or customer payload was retrieved for this release.
+- 181 tests, security lint, production build contract and dependency audit (0 vulnerabilities) passed. Preview: 8 synthetic records, 10 columns, paid filter 2 rows, mobile page overflow absent, runtime exceptions 0. Authenticated production read/write E2E remains unverified. Deployment status is recorded separately after CI completes.
+
 ## 2026-09-24 Notion receivables presentation release
 
 - Frontend-only stage grouping deployed in commit `a0b6e5e`, Actions `35994648716` succeeded. No API, Auth, RLS, database rows, or backup changes; the existing employee-authenticated read boundary remains unchanged.

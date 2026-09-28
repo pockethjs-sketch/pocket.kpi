@@ -1,26 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { filterNotionReceivables, NOTION_RECEIVABLE_STAGES, notionReceivableStage, notionReceivableStageCounts, notionReceivableSummary, notionSourceUrl } from './data/notionReceivables.js';
+import { filterNotionReceivables, NOTION_RECEIVABLE_STAGES, notionReceivableStageCounts, notionReceivableSummary, notionSourceUrl } from './data/notionReceivables.js';
+import ReceivablesTable, { NOTION_RECEIVABLE_COLUMNS, ReceivableCompany, ReceivableStatus, ReceivableTag } from './ReceivablesTable.jsx';
 
 const PAGE_SIZE = 30;
 const display = (value) => String(value ?? '').trim() || '—';
-const stageTone = {
-  requestBefore: 'border-slate-200 bg-slate-50 text-slate-700',
-  requestOngoing: 'border-blue-200 bg-blue-50 text-blue-700',
-  awaitingPayment: 'border-amber-200 bg-amber-50 text-amber-800',
-  paid: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-  review: 'border-rose-200 bg-rose-50 text-rose-700',
-};
 const formatTime = (value) => {
   if (!value || Number.isNaN(new Date(value).getTime())) return '확인 불가';
   return new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
 };
-
-function DetailField({ label, value }) {
-  return <div className="min-w-0 border-b border-slate-100 py-2 last:border-0">
-    <dt className="text-[10px] font-bold text-slate-400">{label}</dt>
-    <dd className="mt-1 whitespace-pre-wrap break-words text-[11px] leading-relaxed text-slate-700">{display(value)}</dd>
-  </div>;
-}
 
 export default function NotionReceivables() {
   const [rows, setRows] = useState([]);
@@ -87,32 +74,23 @@ export default function NotionReceivables() {
         </details>
       </div>
       <div className="flex flex-wrap gap-x-4 gap-y-1 border-b border-slate-100 px-4 py-2 text-[10px] text-slate-500"><span>검색 결과 <b className="text-slate-900">{visible.length}</b> / {summary.count}건</span><span>요청 완료·입금전 <b className="text-amber-700">{summary.requestDonePaymentOpen}건</b></span>{summary.missingCompany > 0 && <span>업체명 미입력 {summary.missingCompany}건</span>}</div>
-      <div aria-hidden="true" className="hidden grid-cols-[minmax(160px,1.3fr)_110px_minmax(130px,1fr)_minmax(160px,1.4fr)_80px] gap-3 border-b border-slate-200 bg-slate-50 px-4 py-2 text-[10px] font-bold text-slate-500 md:grid"><span>업체</span><span>계약일</span><span>프로젝트</span><span>잔금 원문</span><span>단계</span></div>
-      <ol className="divide-y divide-slate-100">
+      <ReceivablesTable columns={NOTION_RECEIVABLE_COLUMNS} label="노션 선잔금·미납 원문" empty={!visible.length}>
         {shown.map((row) => {
-          const rowStage = notionReceivableStage(row);
-          const stageLabel = NOTION_RECEIVABLE_STAGES.find((item) => item.id === rowStage)?.label || '상태 확인';
           const sourceUrl = notionSourceUrl(row.source_page_reference);
-          return <li key={row.source_key}><details className="group">
-            <summary className="grid cursor-pointer list-none gap-1.5 px-4 py-3 hover:bg-slate-50 md:grid-cols-[minmax(160px,1.3fr)_110px_minmax(130px,1fr)_minmax(160px,1.4fr)_80px] md:items-center md:gap-3 [&::-webkit-details-marker]:hidden">
-              <span className="min-w-0 truncate text-[12px] font-extrabold text-slate-900">{display(row.company)}</span>
-              <span className="text-[10px] text-slate-500"><span className="md:hidden">계약일 · </span>{display(row.contract_date)}</span>
-              <span className="min-w-0 truncate text-[10px] text-slate-600"><span className="md:hidden">프로젝트 · </span>{display(row.projects_text)}</span>
-              <span className="min-w-0 truncate text-[10px] text-slate-500"><span className="md:hidden">잔금 · </span>{display(row.balance_text)}</span>
-              <span className={'w-fit whitespace-nowrap rounded border px-1.5 py-0.5 text-[10px] font-extrabold ' + stageTone[rowStage]}>{stageLabel}</span>
-            </summary>
-            <div className="border-t border-slate-100 bg-slate-50/60 px-4 py-2">
-              <dl className="grid gap-x-5 md:grid-cols-2 xl:grid-cols-3">
-                <DetailField label="프리 담당" value={row.freelancer} /><DetailField label="프로젝트" value={row.projects_text} /><DetailField label="계약진행일" value={row.contract_date} />
-                <DetailField label="선금 원문" value={row.deposit_text} /><DetailField label="잔금 원문" value={row.balance_text} /><DetailField label="요청 / 입금 원문 상태" value={`${display(row.request_status)} / ${display(row.payment_status)}`} />
-                <DetailField label="특이사항" value={row.notes} />
-              </dl>
-              {sourceUrl && <a href={sourceUrl} target="_blank" rel="noopener noreferrer" className="my-2 inline-block text-[11px] font-bold text-indigo-700 underline">노션 원본 열기</a>}
-            </div>
-          </details></li>;
+          return <tr key={row.source_key}>
+            <td className="receivables-date">{display(row.contract_date)}</td>
+            <td><ReceivableCompany href={sourceUrl}>{row.company}</ReceivableCompany></td>
+            <td><ReceivableTag>{row.freelancer}</ReceivableTag></td>
+            <td title="현재 이관 API에 가이드 정보가 없습니다"><span className="receivables-muted">—</span></td>
+            <td className="receivables-text">{display(row.deposit_text)}</td>
+            <td className="receivables-text">{display(row.balance_text)}</td>
+            <td><div className="receivables-tags">{row.projects_text ? String(row.projects_text).split(/\r?\n/).filter((label) => label.trim()).map((label, index) => <ReceivableTag key={index} kind="project">{label}</ReceivableTag>) : <span className="receivables-muted">—</span>}</div></td>
+            <td className="receivables-text">{display(row.notes)}</td>
+            <td><ReceivableStatus value={row.request_status} /></td>
+            <td><ReceivableStatus value={row.payment_status} payment /></td>
+          </tr>;
         })}
-      </ol>
-      {!visible.length && <p className="p-8 text-center text-xs text-slate-400">조건에 맞는 이관 자료가 없습니다.</p>}
+      </ReceivablesTable>
       {shown.length < visible.length && <div className="border-t border-slate-100 p-3 text-center"><button type="button" onClick={() => setVisibleLimit((limit) => limit + PAGE_SIZE)} className="rounded-md border border-slate-200 px-4 py-2 text-[11px] font-bold text-slate-700 hover:bg-slate-50">더 보기 · 남은 {visible.length - shown.length}건</button></div>}
     </>}
   </section>;

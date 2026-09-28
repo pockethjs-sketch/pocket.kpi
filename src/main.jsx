@@ -10,6 +10,7 @@ import DailyActivityChart from "./DailyActivityChart.jsx";
 import LeadRevenueQuality from "./LeadRevenueQuality.jsx";
 import EmployeeAdministration from "./EmployeeAdministration.jsx";
 import NotionReceivables from "./NotionReceivables.jsx";
+import ReceivablesTable, { LEDGER_RECEIVABLE_COLUMNS, ReceivableCompany, ReceivableTag } from "./ReceivablesTable.jsx";
 import { shadowStatusFromSheetsResult } from "./data/repositoryAdapter.js";
 import { reconcileMarketingDailyInquiries } from "./data/marketingInquiry.js";
 import { contractRoasByType, dailyStageActivity, dailyComparisonWindow, relativeMetricChange, previousDatedSpend, weekdayActivity, absoluteCountChange, previousMonthCostWindow, completeDatedSpend } from "./data/performanceMetrics.js";
@@ -8345,21 +8346,19 @@ function LtvExpansionView() {
     const kindLabel = (PAYMENT_KIND_OPTIONS.find((item) => item.value === kind) || PAYMENT_KIND_OPTIONS[2]).label;
     const payments = paymentsOfKind(lead, kind);
     const legacy = legacyPaymentBucketsOf(lead)[kind];
-    const tone = kind === "deposit" ? "border-sky-100 bg-sky-50/50 hover:border-sky-300" : kind === "middle" ? "border-violet-100 bg-violet-50/40 hover:border-violet-300" : "border-rose-100 bg-rose-50/40 hover:border-rose-300";
-    return <div className="px-2 py-2 border-r border-slate-100 min-w-0">
+    return <td>
       <div className="space-y-1.5">
-        {payments.map((payment, index) => <button key={payment.id || index} type="button" onClick={() => openPaymentEditor(lead, kind, payment)} title="클릭해서 회차 수정" className={"w-full rounded-md border px-2 py-1.5 text-left transition-colors " + tone}>
-          <span className="flex items-center justify-between gap-2"><b className="text-[9px] text-slate-600 truncate">{payment.label || kindLabel}</b><strong className="text-[10px] text-slate-900 whitespace-nowrap">{Number(payment.amount || 0).toLocaleString("ko-KR")}원</strong></span>
-          <span className={"block mt-0.5 text-[8px] font-bold " + (isPayDone(payment) ? "text-emerald-600" : payment.dueAt && payment.dueAt < todayISO() ? "text-rose-600" : "text-slate-400")}>{isPayDone(payment) ? "입금 " + (payment.paidAt ? fmtDate(payment.paidAt) : "완료") : payment.dueAt ? "예정 " + fmtDate(payment.dueAt) : "예정일 미정"}</span>
+        {payments.map((payment, index) => <button key={payment.id || index} type="button" onClick={() => openPaymentEditor(lead, kind, payment)} title="클릭해서 회차 수정" className="receivables-payment">
+          <span>{payment.label || kindLabel}</span><strong>{Number(payment.amount || 0).toLocaleString("ko-KR")}원</strong>
+          <small className={isPayDone(payment) ? "receivables-paid" : ""}>{isPayDone(payment) ? "입금 " + (payment.paidAt ? fmtDate(payment.paidAt) : "완료") : payment.dueAt ? (payment.dueAt < todayISO() ? "연체 · 예정 " : "예정 ") + fmtDate(payment.dueAt) : "예정일 미정"}</small>
         </button>)}
-        {!payments.length && legacy.length > 0 && <div className="whitespace-pre-line px-1 text-[9px] leading-[1.55] font-medium text-slate-600">{legacy.join("\n")}</div>}
-        {!payments.length && !legacy.length && <span className="block px-1 text-[10px] text-slate-300">-</span>}
+        {!payments.length && legacy.length > 0 && <div className="receivables-text">{legacy.join("\n")}</div>}
+        {!payments.length && !legacy.length && <span className="receivables-muted">—</span>}
       </div>
-      <button type="button" onClick={() => openPaymentEditor(lead, kind)} className="mt-1.5 inline-flex items-center gap-1 text-[9px] font-extrabold text-indigo-600 hover:text-indigo-800"><Plus size={9} />{kindLabel} 추가</button>
-    </div>;
+      <button type="button" onClick={() => openPaymentEditor(lead, kind)} className="receivables-action"><Plus size={13} />{kindLabel} 추가</button>
+    </td>;
   };
   const noteOf = (lead) => Object.prototype.hasOwnProperty.call(lead, "vendorNote") ? (lead.vendorNote || "-") : (importedField(lead, "특이사항") || String(lead.memo || "").replace(/\[업체 계약·입금 엑셀 이관\][\s\S]*/, "").trim() || "-");
-  const statusToneOf = (status) => status === "완료" ? "bg-rose-100 text-rose-700 border-rose-200" : status === "지급요청1" ? "bg-blue-100 text-blue-700 border-blue-200" : status === "지급요청2" ? "bg-emerald-100 text-emerald-700 border-emerald-200" : status === "지급요청3" ? "bg-purple-100 text-purple-700 border-purple-200" : "bg-slate-100 text-slate-600 border-slate-200";
   const changeLeadField = (lead, key, value, label) => {
     if (String(lead[key] == null ? "" : lead[key]) === String(value == null ? "" : value)) return;
     up((draft) => {
@@ -8527,71 +8526,49 @@ function LtvExpansionView() {
           <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5 mb-4"><div className="rounded-md border border-slate-200 bg-slate-50 p-3"><p className="text-[9px] font-bold text-slate-400">변경 건수</p><p className="text-xl font-black text-slate-900 mt-1">{visiblePaymentLogs.length}<small className="text-[10px] ml-1">건</small></p></div><div className="rounded-md border border-indigo-200 bg-indigo-50 p-3"><p className="text-[9px] font-bold text-indigo-500">추가 금액</p><p className="text-xl font-black text-indigo-800 mt-1">{fmtWon(paymentLogAmount)}</p></div><div className="hidden md:block rounded-md border border-slate-200 bg-white p-3"><p className="text-[9px] font-bold text-slate-400">조회 기준</p><p className="text-sm font-extrabold text-slate-700 mt-1">{paymentLogMonth.replace("-", "년 ")}월</p></div></div>
           <div className="overflow-x-auto border border-slate-200 rounded-md"><div className="min-w-[980px]"><div className="grid grid-cols-[145px_190px_190px_90px_120px_130px_80px_1fr] bg-slate-50 border-b border-slate-200 text-[9px] font-extrabold text-slate-500">{["기록 시점", "업체", "프로젝트", "구분", "회차", "금액", "작업", "입력자"].map((label) => <span key={label} className="px-3 py-2.5 border-r border-slate-200 last:border-0">{label}</span>)}</div><div className="divide-y divide-slate-100">{visiblePaymentLogs.map((log) => <div key={log.id} className="grid grid-cols-[145px_190px_190px_90px_120px_130px_80px_1fr] items-center text-[10px] text-slate-600 hover:bg-slate-50"><span className="px-3 py-2.5 tabular-nums">{formatLogTime(log.at)}</span><button type="button" onClick={() => openLead(log.leadId)} className="px-3 py-2.5 text-left font-extrabold text-slate-800 hover:text-indigo-700 truncate">{log.company}</button><span className="px-3 py-2.5 truncate">{log.project || "미지정"}</span><span className="px-3 py-2.5 font-bold">{(PAYMENT_KIND_OPTIONS.find((item) => item.value === log.kind) || {}).label || log.kind || "-"}</span><span className="px-3 py-2.5 truncate">{log.label || "-"}</span><span className="px-3 py-2.5 font-extrabold text-slate-900 tabular-nums">{Number(log.amount || 0).toLocaleString("ko-KR")}원</span><span className="px-3 py-2.5"><b className={"inline-flex rounded border px-1.5 py-0.5 text-[9px] " + (log.action === "추가" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : log.action === "삭제" ? "border-rose-200 bg-rose-50 text-rose-700" : "border-amber-200 bg-amber-50 text-amber-700")}>{log.action}</b></span><span className="px-3 py-2.5">{log.actor || "사용자"}</span></div>)}{!visiblePaymentLogs.length && <div className="py-12 text-center text-xs font-bold text-slate-400">이 월에 기록된 결제 회차 변경이 없습니다.</div>}</div></div></div>
         </div>}
-        {ledgerTab === "ledger" && <div className="overflow-x-auto">
-          <div className="min-w-[1580px]">
-            <div className="grid grid-cols-[230px_85px_85px_190px_190px_210px_minmax(340px,1fr)_125px_115px] gap-0 bg-slate-50 border-b border-slate-200 text-[10px] font-extrabold text-slate-500 sticky top-0">
-              {["업체 · 프로젝트", "프리", "가이드", "선금", "중도금", "잔금", "특이사항 · 수정 가능", "상태 · 변경 가능", "입금 · 변경 가능"].map((label) => <span key={label} className="px-3 py-2.5 border-r border-slate-200 last:border-r-0">{label}</span>)}
-            </div>
-            <div className="divide-y divide-slate-200">
-              {rows.map(({ lead, opp, addedDay }) => {
+        {ledgerTab === "ledger" && <ReceivablesTable columns={LEDGER_RECEIVABLE_COLUMNS} label="운영 잔금 원장" empty={!rows.length}>
+              {rows.map(({ lead, addedDay }) => {
                 const status = statusOf(lead);
                 const paymentState = paymentStateOf(lead);
                 const note = noteOf(lead);
                 const noteBlocks = noteBlocksOf(note);
-                return <div key={lead.id} className={"grid grid-cols-[230px_85px_85px_190px_190px_210px_minmax(340px,1fr)_125px_115px] gap-0 items-stretch hover:bg-slate-50/80 " + (ledgerStage === "completed" ? "bg-emerald-50/20" : ledgerStage === "archived" ? "bg-slate-50/80" : "bg-white")}>
-                  <div className="px-3 py-3 border-r border-slate-100 min-w-0">
-                    <button type="button" onClick={() => openLead(lead.id)} className="block max-w-full text-left text-xs font-extrabold text-slate-900 hover:text-indigo-700 truncate">{lead.company}</button>
-                    <div className="flex items-center gap-1 mt-1.5"><span className="rounded border border-indigo-100 bg-indigo-50 px-1.5 py-0.5 text-[8px] font-extrabold text-indigo-600">추가 {addedDay ? fmtDate(addedDay) : "날짜 미확인"}</span><span className="text-[8px] text-slate-400">계약 {lead.contractAt ? fmtDate(lead.contractAt) : "미확인"}</span>{lead.vendorImportUrl && <a href={lead.vendorImportUrl} target="_blank" rel="noreferrer" title="노션 원본 열기" className="text-slate-300 hover:text-indigo-600"><ExternalLink size={10} /></a>}</div>
-                    <div className="flex flex-wrap gap-1 mt-2">{projectLabelsOf(lead).map((label) => <span key={label} className="rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[8px] font-extrabold text-amber-800">{label}</span>)}{!projectLabelsOf(lead).length && <span className="text-[9px] text-slate-300">프로젝트 미등록</span>}</div>
-                    <button type="button" onClick={() => setLeadArchived(lead, ledgerStage !== "archived")} className={"mt-2 inline-flex items-center gap-1 rounded border px-1.5 py-1 text-[8px] font-extrabold " + (ledgerStage === "archived" ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100" : "border-slate-200 bg-white text-slate-500 hover:border-slate-400 hover:text-slate-700")}>
-                      {ledgerStage === "archived" ? <RefreshCw size={9} /> : <Archive size={9} />}{ledgerStage === "archived" ? "원장 복원" : "보관으로 이동"}
+                return <tr key={lead.id}>
+                  <td className="receivables-date">{lead.contractAt ? fmtDate(lead.contractAt) : "—"}</td>
+                  <td>
+                    <ReceivableCompany onClick={() => openLead(lead.id)}>{lead.company}</ReceivableCompany>
+                    <span className="receivables-subtext">추가 {addedDay ? fmtDate(addedDay) : "날짜 미확인"}</span>
+                    {lead.vendorImportUrl && <a href={lead.vendorImportUrl} target="_blank" rel="noreferrer" title="노션 원본 열기" className="receivables-action"><ExternalLink size={13} />원본</a>}
+                    <button type="button" onClick={() => setLeadArchived(lead, ledgerStage !== "archived")} className="receivables-action">
+                      {ledgerStage === "archived" ? <RefreshCw size={13} /> : <Archive size={13} />}{ledgerStage === "archived" ? "원장 복원" : "보관으로 이동"}
                     </button>
-                  </div>
-                  <div className="px-3 py-3 border-r border-slate-100 text-[11px] font-bold text-slate-700 break-words">{preOwnerOf(lead)}</div>
-                  <div className="px-3 py-3 border-r border-slate-100 text-[11px] font-bold text-slate-600 break-words">{guideOwnerOf(lead)}</div>
+                  </td>
+                  <td><ReceivableTag>{preOwnerOf(lead)}</ReceivableTag></td>
+                  <td><ReceivableTag>{guideOwnerOf(lead)}</ReceivableTag></td>
                   {paymentCell(lead, "deposit")}
                   {paymentCell(lead, "middle")}
                   {paymentCell(lead, "balance")}
-                  <div className="px-2.5 py-2.5 border-r border-slate-100 min-w-0">
+                  <td><div className="receivables-tags">{projectLabelsOf(lead).map((label) => <ReceivableTag key={label} kind="project">{label}</ReceivableTag>)}{!projectLabelsOf(lead).length && <span className="receivables-muted">—</span>}</div></td>
+                  <td>
                     {editingNoteId === lead.id ? <div className="space-y-2">
-                      {!!noteBlocks.length && <div className="max-h-28 overflow-y-auto rounded-md bg-slate-50 px-2.5 py-2">
-                        {noteBlocks.map((block, index) => <p key={index} className={(index ? "border-t border-slate-300 mt-2 pt-2 " : "") + "whitespace-pre-line text-[10px] leading-[1.6] text-slate-500"}>{block}</p>)}
-                      </div>}
-                      <div className="border-t border-slate-300 pt-2"><p className="text-[9px] font-extrabold text-indigo-600 mb-1.5">새 기록 추가 · 저장 시 현재 날짜와 시간이 자동 입력됩니다</p><Ta autoFocus rows={3} value={noteDraft} onChange={(e) => setNoteDraft(e.target.value)} onKeyDown={(e) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") saveNoteEdit(lead); if (e.key === "Escape") { setEditingNoteId(null); setNoteDraft(""); } }} className="text-[11px] leading-relaxed resize-y min-h-[70px]" placeholder="아래에 추가할 내용을 입력하세요" /></div>
-                      <div className="flex justify-end gap-1.5"><Btn size="xs" onClick={() => { setEditingNoteId(null); setNoteDraft(""); }}>취소</Btn><Btn kind="primary" size="xs" onClick={() => saveNoteEdit(lead)}><Check size={11} />기록 추가</Btn></div>
-                    </div> : <div className="min-h-[54px]">
-                      <div className="max-h-36 overflow-y-auto pr-1 space-y-1.5">
-                        {noteBlocks.map((block, index) => editingNoteBlock && editingNoteBlock.leadId === lead.id && editingNoteBlock.index === index ? <div key={index} className="rounded-md border border-indigo-200 bg-indigo-50/60 p-2"><Ta autoFocus rows={4} value={editingNoteBlock.value} onChange={(e) => setEditingNoteBlock({ ...editingNoteBlock, value: e.target.value })} className="text-[10px] leading-relaxed min-h-[78px]" /><div className="flex justify-end gap-1 mt-1.5"><Btn size="xs" onClick={() => setEditingNoteBlock(null)}>취소</Btn><Btn kind="primary" size="xs" onClick={() => saveNoteBlock(lead)}><Check size={10} />저장</Btn></div></div> : <div key={index} className="group/note relative rounded-md border border-transparent hover:border-slate-200 hover:bg-slate-50 px-1.5 py-1.5 pr-14">
-                          <p className="whitespace-pre-line text-[10px] leading-[1.6] font-medium text-slate-600">{block}</p>
-                          <div className="absolute right-1 top-1 flex items-center gap-0.5 opacity-40 group-hover/note:opacity-100"><button type="button" title="이 기록 수정" onClick={() => { setEditingNoteId(null); setEditingNoteBlock({ leadId: lead.id, index, value: block }); }} className="w-5 h-5 rounded border border-slate-200 bg-white text-slate-500 hover:text-indigo-600 flex items-center justify-center"><Pencil size={9} /></button><DangerBtn size="xs" label2="확인" onConfirm={() => deleteNoteBlock(lead, index)}><Trash2 size={9} /><span className="sr-only">기록 삭제</span></DangerBtn></div>
+                      {noteBlocks.map((block, index) => <p key={index} className="receivables-note receivables-text">{block}</p>)}
+                      <p className="receivables-subtext">새 기록 · 저장 시 현재 날짜와 시간 자동 입력</p><textarea aria-label={lead.company + " 새 특이사항"} autoFocus rows={3} value={noteDraft} onChange={(e) => setNoteDraft(e.target.value)} onKeyDown={(e) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") saveNoteEdit(lead); if (e.key === "Escape") { setEditingNoteId(null); setNoteDraft(""); } }} className="receivables-editor" placeholder="추가할 내용" />
+                      <div className="receivables-note-tools"><button type="button" onClick={() => { setEditingNoteId(null); setNoteDraft(""); }}>취소</button><button type="button" onClick={() => saveNoteEdit(lead)}>기록 추가</button></div>
+                    </div> : <div>
+                      <div>
+                        {noteBlocks.map((block, index) => editingNoteBlock && editingNoteBlock.leadId === lead.id && editingNoteBlock.index === index ? <div key={index} className="receivables-note-editor"><textarea aria-label={lead.company + " 특이사항 수정"} autoFocus rows={4} value={editingNoteBlock.value} onChange={(e) => setEditingNoteBlock({ ...editingNoteBlock, value: e.target.value })} className="receivables-editor" /><div className="receivables-note-tools"><button type="button" onClick={() => setEditingNoteBlock(null)}>취소</button><button type="button" onClick={() => saveNoteBlock(lead)}>저장</button></div></div> : <div key={index} className="receivables-note">
+                          <p>{block}</p>
+                          <div className="receivables-note-tools"><button type="button" aria-label="이 기록 수정" onClick={() => { setEditingNoteId(null); setEditingNoteBlock({ leadId: lead.id, index, value: block }); }}><Pencil size={13} /></button><DangerBtn size="xs" label2="확인" onConfirm={() => deleteNoteBlock(lead, index)}><Trash2 size={13} /><span className="sr-only">기록 삭제</span></DangerBtn></div>
                         </div>)}
-                        {!noteBlocks.length && <p className="px-1 py-2 text-[10px] text-slate-300">특이사항 없음</p>}
+                        {!noteBlocks.length && <p className="receivables-muted">—</p>}
                       </div>
-                      <button type="button" onClick={() => { setEditingNoteBlock(null); beginNoteEdit(lead); }} className="mt-1.5 inline-flex items-center gap-1 text-[9px] font-extrabold text-indigo-600 hover:text-indigo-800"><Plus size={9} />기록 추가</button>
+                      <button type="button" onClick={() => { setEditingNoteBlock(null); beginNoteEdit(lead); }} className="receivables-action"><Plus size={13} />기록 추가</button>
                     </div>}
-                  </div>
-                  <div className="px-2.5 py-2.5 border-r border-slate-100">
-                    <details className="relative group">
-                      <summary title="눌러서 상태 변경" className={"list-none cursor-pointer inline-flex items-center justify-between gap-1.5 rounded-md border px-2 py-1 text-[9px] font-extrabold whitespace-nowrap [&::-webkit-details-marker]:hidden " + statusToneOf(status)}><span>{status}</span><ChevronDown size={10} /></summary>
-                      <div className="absolute right-0 top-full mt-1 z-30 w-32 rounded-md border border-slate-200 bg-white p-1 shadow-xl">
-                        {STATUS_OPTIONS.map((option) => <button key={option} type="button" onClick={(e) => { changeLeadField(lead, "vendorImportStatus", option, "상태"); const details = e.currentTarget.closest("details"); if (details) details.removeAttribute("open"); }} className={"block w-full rounded px-2 py-1.5 text-left text-[10px] font-bold hover:bg-slate-100 " + (option === status ? "text-indigo-600 bg-indigo-50" : "text-slate-600")}>{option}</button>)}
-                      </div>
-                    </details>
-                  </div>
-                  <div className="px-2.5 py-2.5">
-                    <details className="relative group">
-                      <summary title="눌러서 입금 상태 변경" className={"list-none cursor-pointer inline-flex items-center justify-between gap-1.5 rounded-md border px-2 py-1 text-[9px] font-extrabold whitespace-nowrap [&::-webkit-details-marker]:hidden " + (paymentState === "입금완료" || paymentState === "카결완료" ? "border-blue-200 bg-blue-50 text-blue-700" : "border-slate-200 bg-slate-100 text-slate-500")}><span>{paymentState}</span><ChevronDown size={10} /></summary>
-                      <div className="absolute right-0 top-full mt-1 z-30 w-28 rounded-md border border-slate-200 bg-white p-1 shadow-xl">
-                        {PAYMENT_OPTIONS.map((option) => <button key={option} type="button" onClick={(e) => { changeLeadField(lead, "vendorImportPaymentState", option, "입금"); const details = e.currentTarget.closest("details"); if (details) details.removeAttribute("open"); }} className={"block w-full rounded px-2 py-1.5 text-left text-[10px] font-bold hover:bg-slate-100 " + (option === paymentState ? "text-indigo-600 bg-indigo-50" : "text-slate-600")}>{option}</button>)}
-                      </div>
-                    </details>
-                  </div>
-                </div>;
+                  </td>
+                  <td><select aria-label={lead.company + " 요청 상태"} className="receivables-select" value={status} onChange={(e) => changeLeadField(lead, "vendorImportStatus", e.target.value, "상태")}>{!STATUS_OPTIONS.includes(status) && <option value={status}>{status}</option>}{STATUS_OPTIONS.map((option) => <option key={option}>{option}</option>)}</select></td>
+                  <td><select aria-label={lead.company + " 입금 상태"} className={"receivables-select" + (paymentState === "입금완료" || paymentState === "카결완료" ? " receivables-select--paid" : "")} value={paymentState} onChange={(e) => changeLeadField(lead, "vendorImportPaymentState", e.target.value, "입금")}>{!PAYMENT_OPTIONS.includes(paymentState) && <option value={paymentState}>{paymentState}</option>}{PAYMENT_OPTIONS.map((option) => <option key={option}>{option}</option>)}</select></td>
+                </tr>;
               })}
-              {!rows.length && <Empty text="조건에 맞는 계약 고객이 없습니다." />}
-            </div>
-          </div>
-        </div>}
+        </ReceivablesTable>}
       </Card>
       <Modal open={!!paymentEditor} onClose={() => setPaymentEditor(null)} title={paymentEditor && paymentEditor.paymentId ? "결제 회차 수정" : "결제 회차 추가"}>
         {paymentEditor && <div className="space-y-4">

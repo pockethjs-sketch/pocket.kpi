@@ -1,0 +1,47 @@
+/* Scoped to receivables: preserve the app's upper classification/filter UI. */
+.receivables-table-shell { --rt-bg:#191919; --rt-line:#303030; --rt-text:#e3e3e0; --rt-muted:#aaa9a4; min-width:0; max-width:100%; background:var(--rt-bg); color:var(--rt-text); }
+.receivables-table-scroll { max-height:72vh; overflow:auto; scrollbar-color:#60605e #202020; scrollbar-width:thin; }
+.receivables-table { width:100%; table-layout:fixed; border-collapse:separate; border-spacing:0; font-size:14px; line-height:1.6; text-align:left; }
+.receivables-table th { position:sticky; top:0; z-index:2; background:var(--rt-bg); color:var(--rt-muted); padding:11px 10px; border-bottom:1px solid var(--rt-line); font-size:13px; font-weight:500; white-space:nowrap; }
+.receivables-column-title { display:flex; align-items:center; gap:7px; }
+.receivables-table td { padding:12px 10px; vertical-align:top; border-right:1px solid var(--rt-line); border-bottom:1px solid var(--rt-line); overflow-wrap:anywhere; }
+.receivables-table td:last-child { border-right:0; }
+.receivables-table tbody tr:hover { background:#212121; }
+.receivables-table .receivables-text { white-space:pre-wrap; }
+.receivables-table .receivables-date { font-size:13px; font-variant-numeric:tabular-nums; }
+.receivables-muted { color:var(--rt-muted); }
+.receivables-company { display:flex; align-items:flex-start; gap:7px; color:var(--rt-text); font-size:14px; font-weight:650; line-height:1.6; text-align:left; text-decoration:none; white-space:normal; }
+.receivables-company svg { flex:none; margin-top:3px; color:var(--rt-muted); }
+a.receivables-company:hover, button.receivables-company:hover { text-decoration:underline; text-underline-offset:4px; }
+.receivables-tags { display:flex; flex-wrap:wrap; gap:5px; align-items:flex-start; }
+.receivables-tag { display:inline-block; border-radius:3px; padding:0 5px; font-size:13px; line-height:1.6; font-weight:600; white-space:pre-wrap; }
+.receivables-tag--brown { background:#65452f; color:#f2d5be; }
+.receivables-tag--purple { background:#52405e; color:#eadbf5; }
+.receivables-tag--gold { background:#665222; color:#f7e3b0; }
+.receivables-tag--blue { background:#294d6a; color:#d0e9ff; }
+.receivables-tag--green { background:#294d3e; color:#d0eadc; }
+.receivables-tag--red { background:#6c3633; color:#f7d7d2; }
+.receivables-status { display:inline-flex; align-items:center; gap:5px; border-radius:12px; background:#393937; color:#e0e0dd; font-size:12px; font-weight:600; line-height:1.6; padding:1px 7px; white-space:nowrap; }
+.receivables-status svg { color:#b7b7b0; flex:none; }
+.receivables-status--paid { background:#254c6c; color:#cbe8ff; }
+.receivables-status--paid svg { color:#80c0f2; }
+.receivables-table :is(button,a,input,textarea,select,summary):focus-visible, .receivables-table-scroll:focus-visible { outline:2px solid #8fcaff; outline-offset:-2px; }
+.receivables-table .receivables-empty { text-align:center; padding:40px 20px; color:var(--rt-muted); }
+.receivables-table .receivables-subtext { display:block; margin-top:6px; color:var(--rt-muted); font-size:12px; }
+.receivables-table .receivables-action { display:inline-flex; align-items:center; gap:5px; margin-top:8px; font-size:12px; color:#b6d9fa; min-height:28px; }
+.receivables-table .receivables-action:hover { color:#e0efff; text-decoration:underline; }
+.receivables-table .receivables-payment { display:block; width:100%; text-align:left; border:1px solid transparent; border-radius:3px; padding:3px; margin-bottom:5px; font-size:13px; }
+.receivables-table .receivables-payment:hover { background:#292929; border-color:#555; }
+.receivables-payment strong { display:block; color:var(--rt-text); font-size:14px; font-weight:600; font-variant-numeric:tabular-nums; }
+.receivables-payment small { display:block; color:var(--rt-muted); font-size:12px; }
+.receivables-payment .receivables-paid { color:#a7d8f7; }
+.receivables-note { margin:0 0 8px; padding:0 0 8px; border-bottom:1px solid var(--rt-line); }
+.receivables-note:last-child { border-bottom:0; }
+.receivables-note p { white-space:pre-wrap; }
+.receivables-note-tools { display:flex; justify-content:flex-end; gap:5px; margin-top:4px; }
+.receivables-note-tools button { min-width:28px; min-height:28px; padding:3px 5px; color:#bfccd6; font-size:12px; }
+.receivables-table .receivables-editor { width:100%; background:#252525; color:var(--rt-text); border:1px solid #666; border-radius:3px; padding:8px; font-size:14px; line-height:1.6; resize:vertical; }
+.receivables-note-editor { margin-bottom:10px; }
+.receivables-select { color-scheme:dark; max-width:100%; min-height:30px; padding:3px 4px; background:#333331; color:#e4e4df; border:1px solid #565653; border-radius:12px; font-size:12px; }
+.receivables-select--paid { background:#254c6c; color:#cbe8ff; }
+@media (max-width:767px) { .receivables-table-scroll { max-height:68vh; } }
