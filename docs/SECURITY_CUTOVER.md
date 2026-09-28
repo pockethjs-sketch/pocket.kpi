@@ -5,6 +5,7 @@
 - User reviewed the isolated synthetic preview and approved applying the presentation to existing live data. Only frontend rendering changes; employee Auth, organization-scoped API reads, database rows, financial calculations and save handlers remain unchanged.
 - Synthetic preview files/screenshots stay in ignored `artifacts/` and are not part of the production build. No production session or customer payload was retrieved for this release.
 - 181 tests, security lint, production build contract and dependency audit (0 vulnerabilities) passed. Preview: 8 synthetic records, 10 columns, paid filter 2 rows, mobile page overflow absent, runtime exceptions 0. Authenticated production read/write E2E remains unverified. Deployment status is recorded separately after CI completes.
+- Released as `ab4f163`; GitHub Actions `36365556346` succeeded. Live HTML references the expected entry; all seven public JS/CSS assets return HTTP 200 and match the tested build SHA-256. No production business reads/writes were used to verify deployment. Synthetic fixtures are excluded from Git and the build.
 
 ## 2026-09-24 Notion receivables presentation release
 
