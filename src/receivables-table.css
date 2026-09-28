@@ -39,9 +39,16 @@ a.receivables-company:hover, button.receivables-company:hover { text-decoration:
 .receivables-note:last-child { border-bottom:0; }
 .receivables-note p { white-space:pre-wrap; }
 .receivables-note-tools { display:flex; justify-content:flex-end; gap:5px; margin-top:4px; }
-.receivables-note-tools button { min-width:28px; min-height:28px; padding:3px 5px; color:#bfccd6; font-size:12px; }
-.receivables-table .receivables-editor { width:100%; background:#252525; color:var(--rt-text); border:1px solid #666; border-radius:3px; padding:8px; font-size:14px; line-height:1.6; resize:vertical; }
+.receivables-table .receivables-note-tools button { display:inline-flex; align-items:center; justify-content:center; min-width:32px; min-height:32px; padding:5px 7px; background-color:#292929!important; color:#e3e3e0!important; border:1px solid #62625f!important; font-size:12px; line-height:1.4; }
+.receivables-table .receivables-note-tools button:hover { background-color:#3b3b39!important; border-color:#9c9c96!important; }
+.receivables-table .receivables-note-tools button.text-red-600 { color:#ffb4b4!important; border-color:#925858!important; }
+/* The application has global input/textarea/select !important rules for light forms.
+   Scope the dark overrides here so load order cannot make controls unreadable. */
+.receivables-table textarea.receivables-editor { width:100%; background-color:#252525!important; color:var(--rt-text)!important; -webkit-text-fill-color:var(--rt-text); border:1px solid #777!important; border-radius:5px!important; padding:8px; font-size:14px; line-height:1.6; resize:vertical; }
+.receivables-table textarea.receivables-editor::placeholder { color:#b0b0aa!important; -webkit-text-fill-color:#b0b0aa; }
 .receivables-note-editor { margin-bottom:10px; }
-.receivables-select { color-scheme:dark; max-width:100%; min-height:30px; padding:3px 4px; background:#333331; color:#e4e4df; border:1px solid #565653; border-radius:12px; font-size:12px; }
-.receivables-select--paid { background:#254c6c; color:#cbe8ff; }
+.receivables-table select.receivables-select { color-scheme:dark; width:100%; max-width:100%; min-height:34px; padding:5px 4px; background-color:#333331!important; color:#f1f1ed!important; -webkit-text-fill-color:#f1f1ed; border:1px solid #777772!important; border-radius:5px!important; font-size:13px; font-weight:600; line-height:1.5; cursor:pointer; }
+.receivables-table select.receivables-select option { background-color:#282828!important; color:#f1f1ed!important; -webkit-text-fill-color:#f1f1ed; }
+.receivables-table select.receivables-select--paid { background-color:#254c6c!important; color:#d6edff!important; -webkit-text-fill-color:#d6edff; border-color:#7195b2!important; }
+.receivables-table :is(select.receivables-select,textarea.receivables-editor):focus { border-color:#8fcaff!important; box-shadow:0 0 0 2px #8fcaff40!important; }
 @media (max-width:767px) { .receivables-table-scroll { max-height:68vh; } }

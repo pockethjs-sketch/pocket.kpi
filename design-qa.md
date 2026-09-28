@@ -1,5 +1,13 @@
 # 잔금 관리 — 노션형 표 QA (2026-09-28)
 
+## 운영 컨트롤 대비 후속 수정
+
+- 사용자 오류 캡처: `codex-clipboard-cf9a0961-59dd-4f5e-ac02-34f60bc0b780.png`. 어두운 선택창의 글자가 밝은 폼용 공통 CSS important 색상에 덮이고 삭제 버튼 배경은 흰색으로 남음.
+- Targeted correction: 잔금 표 내부 select/option/textarea 및 메모 수정/삭제 버튼에 scoped important 색상 적용. 기존 핸들러 유지.
+- Evidence: `C:/Users/PK-INVEXT/.codex/visualizations/2026/09/19/01a0b713-ff77-7a73-b0a4-f264bf146664/receivables-controls-fixed.png`, `receivables-controls-options.png`, 720×480, deviceScaleFactor 1. 운영 컴포넌트 마크업·공통 CSS를 사용하고 데이터는 합성.
+- 글자/아이콘 가독성과 32~34px 컨트롤 확인. 선택값/옵션 rgb(241,241,237), 메모 rgb(227,227,224), 삭제 #ffb4b4/#292929. 기존 흰 폼은 rgb(51,65,85) 유지. 입금 변경/삭제 2단계 확인/모바일 페이지 넘침 없음/런타임 예외 0 통과.
+- 이 컨트롤 수정의 시각 검사는 통과. OS별 native popup과 실제 운영 저장 E2E는 미검증이며 아래 전체 표 QA의 잔여 범위와 구분한다.
+
 이전 계약 총괄 QA 기록은 [2026-09-15 보관본](docs/design-qa-20260915.md)에 보존했다.
 
 final result: blocked

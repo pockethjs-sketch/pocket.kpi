@@ -1,5 +1,10 @@
 # Employee authentication cutover — 2026-09-18
 
+## 2026-09-28 Receivables contrast hotfix
+
+- CSS-only production change, scoped to dark table controls: fixes light-form important colors overriding select/option/textarea and white shared delete-button backgrounds. No authentication, financial data, API or mutation handler changes.
+- Synthetic browser verification uses extracted production control markup and Btn/DangerBtn, no signed-in session or production calls. Confirms computed foreground/background, payment select change, two-step delete, mobile layout and zero runtime exceptions. The native OS popup itself is not screenshot-verified; identical option nodes were inspected in listbox presentation.
+
 ## 2026-09-28 Receivables table presentation release request
 
 - User reviewed the isolated synthetic preview and approved applying the presentation to existing live data. Only frontend rendering changes; employee Auth, organization-scoped API reads, database rows, financial calculations and save handlers remain unchanged.
