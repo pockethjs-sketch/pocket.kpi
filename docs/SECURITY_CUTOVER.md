@@ -2,6 +2,7 @@
 
 ## 2026-09-28 Receivables contrast hotfix
 
+- Release `a7db298`, Actions `36366224155` succeeded. Live entry and all seven JS/CSS hashes match the tested build; 183 tests and security/build checks passed, dependency audit 0 vulnerabilities. No production business data read/write was performed.
 - CSS-only production change, scoped to dark table controls: fixes light-form important colors overriding select/option/textarea and white shared delete-button backgrounds. No authentication, financial data, API or mutation handler changes.
 - Synthetic browser verification uses extracted production control markup and Btn/DangerBtn, no signed-in session or production calls. Confirms computed foreground/background, payment select change, two-step delete, mobile layout and zero runtime exceptions. The native OS popup itself is not screenshot-verified; identical option nodes were inspected in listbox presentation.
 
