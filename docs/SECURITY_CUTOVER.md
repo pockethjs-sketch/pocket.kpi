@@ -1,5 +1,12 @@
 # Employee authentication cutover — 2026-09-18
 
+## 2026-09-30 Manual sync orchestration
+
+- Explicit premeeting and DB/quality refresh actions now include the existing authenticated contract-sheet reconciliation after primary save acknowledgement, followed by a current DB reload. Page/TM entry no longer collects CRM data; premeeting tab entry no longer reads the source sheet/rebuilds its review queue. Saved DB/status reads and user-input journal replay remain enabled.
+- No endpoint, Auth, organization permission, source-sheet write, database schema, server trigger, or backup change. The single-browser busy guard prevents overlapping manual jobs; changed-field merging preserves edits made during CRM fetches. Partial success is reported rather than mislabelled as full success.
+- Tests use synthetic inputs and actual extracted frontend handlers; deployment verification uses public static asset hashes only. No credentials or production customer payload are retrieved. Actual signed-in manual synchronization is a separate runtime check.
+- Local verification: 214 tests passed, security lint and production build contract passed, npm audit reported zero vulnerabilities. Web deployment is tracked separately in the operations ledger.
+
 ## 2026-09-30 Sheet-authoritative financial reconciliation
 
 - User explicitly authorized O-column totals to replace different web totals and H checkmarks to confirm 100% receipts (percentages mean cumulative partial receipts). The existing authenticated sheet synchronization atomically reconciles totals, schedules, H confirmations and before/after activity logs. No direct business-table write or authentication bypass is introduced.

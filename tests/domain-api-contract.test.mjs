@@ -70,10 +70,9 @@ test("contract and balance state is relationally projected while compatibility s
 test("deal projection joins only active account and lead rows", () => {
   assert.match(activeDealJoinMigration, /accounts[\s\S]*archived_at is null/);
   assert.match(activeDealJoinMigration, /leads[\s\S]*archived_at is null/);
-  assert.match(frontend, /CRM DB 저장 실패/);
-  assert.match(frontend, /CRM DB 동기화 완료/);
-  assert.match(frontend, /브라우저 임시보관 · 다음 갱신 때 재시도/);
-  assert.match(frontend, /e\.payload && e\.payload\.code/);
+  assert.match(frontend, /원격 저장 실패 · 로컬 보관됨/);
+  assert.match(frontend, /서버 반영 대기 · 로컬 임시 저장/);
+  assert.match(frontend, /manualSyncError\(e\)/);
 });
 
 test("CRM refresh does not rewrite unchanged ordering and sync timestamps", () => {

@@ -69,5 +69,5 @@ test("calendar synchronization and mutation baselines use Supabase primary, not 
 test("public frontend does not embed a CRM bearer token", () => {
   assert.match(frontend, /var CRM_JWT = '';/);
   assert.doesNotMatch(frontend, /var CRM_JWT = ['"]eyJ/);
-  assert.match(frontend, /const syncProxy = await window\.crmFetchRefreshPayload/);
+  assert.match(frontend, /proxy = await window\.crmFetchRefreshPayload/);
 });

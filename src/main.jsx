@@ -17,6 +17,7 @@ import { contractRoasByType, dailyStageActivity, dailyComparisonWindow, relative
 import { accountFromEmployeeAccess } from "./data/employeeAccount.js";
 import { paymentRows, paymentScheduleSum, paymentTotalAmount, syncPaymentScheduleTotal } from "./data/paymentSchedule.js";
 import { buildDailyMeetingRecord, dailyMeetingContent, dailyMeetingRecords } from "./data/dailyMeetingLog.js";
+import { syncDataAndContracts, manualSyncError } from "./data/manualSync.js";
 
 /* ===== 운영 데이터 연동 설정 =====
      Supabase 화면별 API가 읽기·쓰기를 담당합니다.
@@ -2344,7 +2345,7 @@ function useDB() {
         finalState = "기본 화면 표시 · 최신 데이터 확인 중";
       }
     }
-    /* 화면은 캐시/최초 데이터가 준비되는 즉시 열고 외부 동기화는 뒤에서 처리합니다. */
+    /* 캐시를 먼저 표시하고 저장된 원격 DB를 읽습니다. 외부 원천 수집은 진입 시 실행하지 않습니다. */
     latestDbRef.current = data;
     setDb({ ...data });
     setSaveState(initialSource === "local" && window.crmRemoteStatePromise ? "캐시 표시 · 최신 데이터 확인 중" : finalState);
@@ -2466,94 +2467,7 @@ function useDB() {
         setSaveState(finalState);
       }
     }
-    /* 지원사업 보드는 10분 안에 받은 캐시가 있으면 재요청하지 않습니다. */
-    const supportSyncedAt = data.supportBoard && data.supportBoard.syncedAt ? Date.parse(data.supportBoard.syncedAt) : 0;
-    const supportCacheFresh = supportSyncedAt > 0 && (Date.now() - supportSyncedAt) < 10 * 60 * 1000;
-    if (!supportCacheFresh) {
-      try {
-        const importedSupportBoard = await window.fetchSupportBoard();
-        if (importedSupportBoard) {
-          const supportBase = crmCloneValue(latestDbRef.current || data);
-          const previous = supportBase.supportBoard || null;
-          if (JSON.stringify(previous && { ...previous, syncedAt: undefined }) !== JSON.stringify({ ...importedSupportBoard, syncedAt: undefined })) {
-            supportBase.supportBoard = { ...importedSupportBoard, syncedAt: new Date().toISOString() };
-            data = supportBase;
-            latestDbRef.current = data;
-            skip.current = true;
-            setDb({ ...data });
-            await window.storage.set(KEY3, JSON.stringify(data), { origin: "system", reason: "support_board_refresh" });
-            finalState = "저장됨 · 지원사업 보드 " + importedSupportBoard.companies.length + "개사 이관";
-          }
-        }
-      } catch (e) {
-        finalState = "지원사업 보드 연결 실패 · 기존 데이터 표시";
-      }
-    }
-    /* 본사 CRM 유입·품질 동기화. 캘린더 생성은 서버 최근 3일 전용 작업에서만 처리. */
-    try {
-      if (window.crmShouldSync && window.crmShouldSync()) {
-        window.crmSyncInProgress = true;
-        setSaveState("본사 CRM 동기화 중…");
-        const syncEnd = todayISO();
-        const syncStart = addDaysISO(syncEnd, -CRM_SYNC_WINDOW_DAYS);
-        const syncBase = crmCloneValue(latestDbRef.current || data);
-        data = crmCloneValue(syncBase);
-        /* localhost도 공개 Bearer 직접 호출 대신 같은 서버 프록시 계약을 사용한다. */
-        const syncProxy = await window.crmFetchRefreshPayload(syncStart, syncEnd);
-        const res = await window.crmFetchPremeeting(data, syncProxy ? syncProxy.leads : undefined);
-        let crmChanged = !!(res && res.changed);
-        if (res && res.db) data = res.db;
-        if (CRM_JWT && window.crmSyncFutureFinance) {
-          const financeRes = await window.crmSyncFutureFinance(data);
-          if (financeRes && financeRes.db) data = financeRes.db;
-          if (financeRes && financeRes.changed) crmChanged = true;
-        }
-        if (crmChanged) {
-          try {
-            const contractStages = new Set(["프리미팅 완료", "견적·제안 발송", "계약 완료"]);
-            const contractBefore = new Map((syncBase.leads || []).map((lead) => [String(lead.id), lead.status || ""]));
-            (data.leads || []).forEach((lead) => {
-              const previousStatus = contractBefore.get(String(lead.id));
-              if (!contractStages.has(lead.status) || contractStages.has(previousStatus)) return;
-              appendContractStatusLog(data, {
-                company: lead.company, leadId: lead.id, action: "CRM 자동 동기화", source: "CRM 캘린더",
-                actor: "시스템",
-                detail: "내방완료 프리미팅을 계약현황에 자동 반영" + (lead.salesOwner ? " · 영업담당 " + lead.salesOwner : ""),
-                meta: { previousStatus: previousStatus || "미등록", nextStatus: lead.status, premeetingAt: meetingDoneDate(lead), projectNo: lead.projNo || "" },
-              });
-            });
-            /* CRM 작업 시작 뒤 사용자가 추가·수정한 값은 latestDbRef에 남아 있다.
-               CRM이 실제로 바꾼 필드 패치만 최신 화면 상태에 적용해 수동등록·금액·입금을 보존한다. */
-            const crmMutation = crmBuildMutation(JSON.stringify(syncBase), JSON.stringify(data), { origin: "crm_sync", reason: "automatic_crm_refresh", allowedLeadRemovals: [] });
-            data = crmApplyMutationLocal(latestDbRef.current || syncBase, crmMutation);
-            latestDbRef.current = data;
-            skip.current = true;
-            setDb({ ...data });
-            const crmSaveResult = await window.storage.set(KEY3, JSON.stringify(data), { origin: "crm_sync", reason: "automatic_crm_refresh", allowedLeadRemovals: [] });
-            finalState = crmSaveResult && crmSaveResult.unchanged
-              ? "CRM DB 최신 상태 확인됨"
-              : "CRM DB 동기화 완료";
-          } catch (e) {
-            const mergeCode = String((e && e.payload && e.payload.code) || (e && e.message) || e || "unknown");
-            console.error("CRM merge commit failed", { code: mergeCode, status: e && e.status });
-            finalState = "CRM DB 저장 실패 · " + mergeCode + " · 브라우저 임시보관 · 다음 갱신 때 재시도";
-          }
-        } else {
-          data = latestDbRef.current || data;
-        }
-        if (res && !res.err) window.crmMarkSynced();
-        else if (res && res.err) finalState = location.protocol === "file:" ? "CRM 연결 실패 · 포켓CRM 실행.cmd 사용" : "CRM 동기화 실패 · " + res.err;
-      }
-    } catch (e) {
-      const syncError = String(e && e.message || e);
-      finalState = syncError === "proxy_not_deployed"
-        ? "CRM 동기화 대기 · Apps Script 프록시 미배포"
-        : syncError === "crm_token_missing"
-          ? "CRM 동기화 대기 · 서버 토큰 미설정"
-           : "CRM 동기화 실패 · " + syncError;
-    } finally {
-      window.crmSyncInProgress = false;
-    }
+    // Entry only loads persisted DB data. Source refreshes require a sync button or server schedule.
     skip.current = true;
     data = latestDbRef.current || data;
     latestDbRef.current = data;
@@ -3412,7 +3326,7 @@ function QualityBreakdownTip({ quality, leads, children }) {
 }
 
 function TmManagementView() {
-  const { db, period, setDb, toast } = useApp();
+  const { db, period, up, toast } = useApp();
   const [crmSyncBusy, setCrmSyncBusy] = useState(false);
   const [lastManualSync, setLastManualSync] = useState(() => {
     try { return Number(localStorage.getItem("crm:lastTmQualityManualSync")) || 0; } catch (e) { return 0; }
@@ -3427,55 +3341,62 @@ function TmManagementView() {
     tmItems: lead && lead.score && lead.score.tm && lead.score.tm.items,
   });
   const refreshCrmQuality = async () => {
-    if (crmSyncBusy) return;
+    if (crmSyncBusy || window.crmSyncInProgress) return;
+    if (!window.crmRemoteApplied || !window.crmRemoteLoaded) { toast("최신 데이터 로드가 끝난 뒤 다시 눌러주세요"); return; }
     if (!window.crmFetchPremeeting) { toast("CRM 동기화 기능을 찾지 못했습니다"); return; }
+    window.crmSyncInProgress = true;
     setCrmSyncBusy(true);
     try {
-      const beforeQuality = Object.fromEntries((db.leads || []).map((lead) => [lead.id, qualityFingerprint(lead)]));
-      const next = JSON.parse(JSON.stringify(db));
-      const endDay = todayISO();
-      const startDate = new Date(endDay + "T00:00:00+09:00");
-      startDate.setDate(startDate.getDate() - 60);
-      const startDay = startDate.getFullYear() + "-" + String(startDate.getMonth() + 1).padStart(2, "0") + "-" + String(startDate.getDate()).padStart(2, "0");
-      let proxy = null;
-      let proxyError = null;
-      let syncSource = "CRM 직접 조회";
-      try {
-        proxy = await window.crmFetchRefreshPayload(startDay, endDay);
-        syncSource = "Apps Script 경유";
-      } catch (error) {
-        proxyError = error;
-        proxy = null;
-      }
-      if (!proxy && window.crmIsHosted && window.crmIsHosted()) throw proxyError || new Error("proxy_not_deployed");
-      const leadRes = await window.crmFetchPremeeting(next, proxy ? proxy.leads : undefined);
-      if (!leadRes || leadRes.err) {
-        const message = leadRes && leadRes.err === "token" ? "CRM 인증 토큰이 만료되었습니다" : "CRM DB·품질 조회에 실패했습니다";
-        toast(message); return;
-      }
-      let syncedDb = leadRes.db;
-      const qualityChanged = (syncedDb.leads || []).filter((lead) => !!lead.crmSheet && beforeQuality[lead.id] !== qualityFingerprint(lead)).length;
-      setDb({ ...syncedDb });
+      const combined = await syncDataAndContracts({
+        waitForCommit: () => window.crmWaitForRemoteCommit(45000),
+        syncContracts: () => window.crmSyncNewContracts(),
+        reload: () => window.crmReloadAfterContractSync(),
+        primary: async () => {
+          const beforeQuality = Object.fromEntries((db.leads || []).map((lead) => [lead.id, qualityFingerprint(lead)]));
+          const next = JSON.parse(JSON.stringify(db));
+          const endDay = todayISO();
+          const startDate = new Date(endDay + "T00:00:00+09:00");
+          startDate.setDate(startDate.getDate() - 60);
+          const startDay = startDate.getFullYear() + "-" + String(startDate.getMonth() + 1).padStart(2, "0") + "-" + String(startDate.getDate()).padStart(2, "0");
+          let proxy = null;
+          let proxyError = null;
+          let syncSource = "CRM 직접 조회";
+          try {
+            proxy = await window.crmFetchRefreshPayload(startDay, endDay);
+            syncSource = "Apps Script 경유";
+          } catch (error) {
+            proxyError = error;
+            proxy = null;
+          }
+          if (!proxy && window.crmIsHosted && window.crmIsHosted()) throw proxyError || new Error("proxy_not_deployed");
+          const leadRes = await window.crmFetchPremeeting(next, proxy ? proxy.leads : undefined);
+          if (!leadRes || leadRes.err) {
+            const message = leadRes && leadRes.err === "token" ? "CRM 인증 토큰이 만료되었습니다" : "CRM DB·품질 조회에 실패했습니다";
+            throw new Error(message);
+          }
+          let syncedDb = leadRes.db;
+          const qualityChanged = (syncedDb.leads || []).filter((lead) => !!lead.crmSheet && beforeQuality[lead.id] !== qualityFingerprint(lead)).length;
+          const patch = crmBuildMutation(JSON.stringify(db), JSON.stringify(syncedDb), { origin: 'crm_sync', reason: 'manual_crm_refresh', allowedLeadRemovals: [] });
+          if (patch.changedCount) up(current => Object.assign(current, crmApplyMutationLocal(current, patch)), { reason: 'manual_crm_refresh' });
+          return { count: leadRes.count || 0, added: leadRes.added || 0, qualityChanged, syncSource };
+        },
+      });
       if (window.crmMarkSynced) window.crmMarkSynced();
       const syncedAt = Date.now();
       setLastManualSync(syncedAt);
       try { localStorage.setItem("crm:lastTmQualityManualSync", String(syncedAt)); } catch (e) {}
-      toast(syncSource + " · CRM " + (leadRes.count || 0) + "건 확인 · 신규 " + (leadRes.added || 0) + "건 · 품질 변경 " + qualityChanged + "건 · 일정은 프리미팅 동기화에서 갱신");
+      toast("CRM " + combined.primary.count + "건 확인 · 품질 변경 " + combined.primary.qualityChanged + "건 · 계약 반영 " + (combined.sheet.updated || []).length + "곳 · 입금 반영 " + (combined.sheet.paymentUpdated || []).length + "곳 · 일정은 프리미팅 동기화에서 갱신");
     } catch (e) {
       const reason = String(e && e.message || e);
       if (reason === "proxy_not_deployed") toast("Apps Script에 CRM 수동 갱신 기능이 아직 배포되지 않았습니다");
       else if (reason === "crm_token_missing") toast("Apps Script의 CRM_JWT 설정이 없습니다");
       else if (reason.indexOf("crm_http_401") >= 0) toast("Apps Script의 CRM_JWT가 만료되었습니다");
-      else toast("CRM DB·품질 조회에 실패했습니다 · " + reason);
+      else toast(manualSyncError(e));
     } finally {
+      window.crmSyncInProgress = false;
       setCrmSyncBusy(false);
     }
   };
-  useEffect(() => {
-    let lastSync = lastManualSync;
-    try { lastSync = Math.max(lastSync, Number(localStorage.getItem("crm:lastSync")) || 0); } catch (e) {}
-    if (Date.now() - lastSync > 5 * 60 * 1000) refreshCrmQuality();
-  }, []);
   const qualityOf = (lead) => tmQualityBucket(lead);
   const isConverted = (lead) => {
     const detail = (lead.crmSheet && lead.crmSheet.detailLabel) || "";
@@ -3848,6 +3769,7 @@ function DealsView() {
       return;
     }
     contractReviewRunning.current = true;
+    window.crmSyncInProgress = true;
     setContractReviewBusy(true);
     try {
       await window.crmWaitForRemoteCommit(45000);
@@ -3868,16 +3790,11 @@ function DealsView() {
     } finally {
       setContractReviewBusy(false);
       contractReviewRunning.current = false;
+      window.crmSyncInProgress = false;
     }
   };
   useEffect(() => {
-    refreshContractReview(false, false);
-    const readyTimer = (!window.crmRemoteApplied || !window.crmRemoteLoaded || window.crmSyncInProgress) ? setInterval(() => {
-      if (window.crmRemoteApplied && window.crmRemoteLoaded && !window.crmSyncInProgress) {
-        clearInterval(readyTimer);
-        refreshContractReview(false, false);
-      }
-    }, 3000) : null;
+    // Observe existing server results only; do not read/sync the source sheet on tab entry.
     let active = true, reading = false, observedSync = '';
     const readStatus = async () => {
       if (reading || !window.crmGetDailySyncStatus) return;
@@ -3903,7 +3820,7 @@ function DealsView() {
     };
     readStatus();
     const timer = setInterval(readStatus, 60000);
-    return () => { active = false; clearInterval(timer); clearInterval(readyTimer); };
+    return () => { active = false; clearInterval(timer); };
   }, []);
   const sortBy = (k) => { if (sortKey === k) setSortDir((v) => -v); else { setSortKey(k); setSortDir(1); } };
   const arrow = (k) => sortKey === k ? <span className="text-indigo-500">{sortDir > 0 ? "▲" : "▼"}</span> : <span className="text-slate-300">↕</span>;
@@ -3914,17 +3831,29 @@ function DealsView() {
     if (contractReviewRunning.current) return;
     if (!window.crmRemoteApplied || !window.crmRemoteLoaded || window.crmSyncInProgress) { toast("CRM 최신 데이터 로드가 끝난 뒤 다시 눌러주세요"); return; }
     contractReviewRunning.current = true;
+    window.crmSyncInProgress = true;
     setCrmSyncBusy(true);
     try {
-      await window.crmWaitForRemoteCommit(45000);
-      const result = await window.crmSyncRecentPremeetings();
-      if (!result || !result.ok || result.action !== 'premeeting_sync') throw new Error('premeeting_sync_failed');
-      await window.crmReloadAfterContractSync();
+      const combined = await syncDataAndContracts({
+        waitForCommit: () => window.crmWaitForRemoteCommit(45000),
+        primary: async () => {
+          const result = await window.crmSyncRecentPremeetings();
+          if (!result || !result.ok || result.action !== 'premeeting_sync') throw new Error('premeeting_sync_failed');
+          return result;
+        },
+        syncContracts: () => window.crmSyncNewContracts(),
+        reload: () => window.crmReloadAfterContractSync(),
+      });
+      const result = combined.primary;
       setPremeetingResult({ ...result, checkedAt: new Date().toISOString() });
-      toast("프리미팅 동기화 완료 · " + result.range.start + "~" + result.range.end + " · 일정 " + result.count + "건 · 신규 " + result.added + "곳 · 수정 " + result.updated + "곳" + ((result.blocked || []).length ? " · 식별자 확인 필요 " + result.blocked.length + "건" : ""));
+      setContractAutoSync({ ...combined.sheet, checkedAt: new Date().toISOString() });
+      setContractReviewError("");
+      toast("프리미팅 " + result.count + "건 확인 · 신규 " + result.added + "곳 · 수정 " + result.updated + "곳 · 계약 반영 " + (combined.sheet.updated || []).length + "곳 · 입금 반영 " + (combined.sheet.paymentUpdated || []).length + "곳 · 확인 필요 " + ((result.blocked || []).length + (combined.sheet.blocked || []).length + (combined.sheet.paymentBlocked || []).length) + "곳");
     } catch (e) {
-      toast("프리미팅 동기화 실패 · " + String(e && e.message || e));
+      if (e.stage === 'sheet') setContractReviewError(String(e.message || e));
+      toast(manualSyncError(e));
     } finally {
+      window.crmSyncInProgress = false;
       setCrmSyncBusy(false);
       contractReviewRunning.current = false;
     }

@@ -69,7 +69,7 @@ test('DB/quality refresh cannot create meetings through retired broad-range or f
  const source=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
  assert.doesNotMatch(source,/await window\.crmFetchCheckedMeetings\(/);
  assert.doesNotMatch(source,/var (?:new)?[Cc]alendarDate =/);
- assert.match(source,/refreshContractReview\(false, false\)/);
+ assert.doesNotMatch(source,/refreshContractReview\(false, false\)/);
  assert.doesNotMatch(source,/setInterval\([^\n]*refreshContractReview/);
 });
 
