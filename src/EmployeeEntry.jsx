@@ -4,6 +4,7 @@ import { employeeAuth, employeeHeaders, employeeRequest, masterAliasRequest, sco
 import { consumeMasterSetupToken, isMasterLoginAlias, isPlausibleEmail } from './data/masterLoginAlias.js';
 import { freshEntryUrl, isChunkLoadError, recoverChunkLoad } from './data/chunkRecovery.js';
 import './styles.css';
+import { applyEmployeeMenuPolicy } from './data/employeeMenuPolicy.js';
 
 const MASTER_SETUP_STORAGE_KEY = 'pocket-kpi:master-setup-token:v1';
 
@@ -24,9 +25,9 @@ function EmployeeEntry() {
       try {
         const { data } = await employeeAuth.auth.getSession();
         if (!data.session) { if (alive) { setLoadedApp(null); setMessage('승인된 직원 이메일로 로그인하세요.'); } return; }
-        const access = await employeeRequest('session');
+        const access = await applyEmployeeMenuPolicy(await employeeRequest('session'));
         if (!alive) return;
-        const identity = `${access.userId}:${access.role}:${access.scope || 'all'}`;
+        const identity = `${access.userId}:${access.role}:${access.scope || 'all'}:${(access.menuPages || []).join(',')}`;
         if (currentUser && currentUser !== identity) { location.reload(); return; }
         currentUser = identity;
         window.kpiEmployeeAccess = access;

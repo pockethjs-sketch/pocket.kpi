@@ -1,5 +1,11 @@
 # Employee authentication cutover — 2026-09-18
 
+## 2026-09-30 Two-menu viewer presentation
+
+- Current membership metadata confirms the requested employee has ACTIVE VIEWER membership. Apply an identity-specific frontend menu preference after verified session resolution: premeeting companies and receivables only, with premeeting as the initial page. Hide cross-page search and keep MASTER/other employees unchanged. Public configuration contains an organization/user fingerprint, not an email or credential.
+- This is explicitly **menu visibility, not server-side data isolation**. Existing VIEWER read authorization and write denial remain unchanged; bootstrap/API read scope is not narrowed. No production DB, RLS, claim RPC or Edge changes; the previously rejected scope migration remains unapplied.
+- 237 synthetic tests pass; isolated browser confirms exactly two navigation entries, both page transitions and no runtime errors. No employee session or customer data was used. Release tracked separately in the operations ledger.
+
 ## 2026-09-30 Product sales presentation
 
 - Read-only aggregation of already employee-authorized CRM/product state, with no new API, schema, source collection, service credential or authorization change. Existing catalog mutation handlers are preserved; VIEWER catalog editing is disabled in addition to existing server enforcement.

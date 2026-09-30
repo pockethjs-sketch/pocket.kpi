@@ -9376,7 +9376,7 @@ function DataConnectionFooter({ view, db, saveState }) {
 }
 export default function App() {
   const { db, setDb, up, reset, saveState } = useDB();
-  const [view, setView] = useState(window.kpiEmployeeAccess?.scope === 'premeeting' ? 'deals' : 'performanceCheck');
+  const [view, setView] = useState(window.kpiEmployeeAccess?.menuPages?.[0] || (window.kpiEmployeeAccess?.scope === 'premeeting' ? 'deals' : 'performanceCheck'));
   const [leadId, setLeadId] = useState(null);
   const [projId, setProjId] = useState(null);
   const [period, setPeriod] = useState(periodNow());
@@ -9406,7 +9406,10 @@ export default function App() {
   const isMaster = !!(currentAccount && currentAccount.role === "MASTER");
   const allowedPageSet = new Set(currentAccount && Array.isArray(currentAccount.allowedPages) ? currentAccount.allowedPages : []);
   const canAccess = (pageId) => !['templates','org'].includes(pageId) && !!currentAccount && (isMaster || (!MASTER_ONLY_PAGES.includes(pageId) && allowedPageSet.has(pageId)));
-  const permittedSections = currentAccount ? NAV_SECTIONS.map((section) => {
+  const permittedSections = currentAccount && Array.isArray(employee?.menuPages) ? currentAccount.allowedPages.filter(canAccess).map(id => {
+    const item = NAV.find(item => item.id === id);
+    return item ? { ...item, home: id, homeAllowed: true, navTarget: id, items: [] } : null;
+  }).filter(Boolean) : currentAccount ? NAV_SECTIONS.map((section) => {
     const homeAllowed = canAccess(section.home);
     const items = section.items.filter((item) => canAccess(item.id));
     if (!homeAllowed && !items.length) return null;
@@ -9505,7 +9508,7 @@ export default function App() {
               const active = activeSection && activeSection.id === s.id;
               return (
                 <div key={s.id}>
-                  <button title={s.label + (s.homeAllowed ? " 총괄 대시보드" : " 메뉴")} onClick={() => setView(s.navTarget)}
+                  <button title={Array.isArray(employee?.menuPages) ? s.label : s.label + (s.homeAllowed ? " 총괄 대시보드" : " 메뉴")} onClick={() => setView(s.navTarget)}
                     className={"relative w-full flex items-center gap-2.5 rounded-xl transition-colors " + (navOpen ? "px-3 py-2.5" : "justify-center px-0 py-2.5") + " " + (active ? "bg-indigo-600 text-white shadow-sm" : "text-slate-300 hover:bg-slate-800 hover:text-white")}>
                     <s.icon size={17} className="shrink-0" />
                     {navOpen && <><span className="flex-1 text-left text-sm font-extrabold">{s.label}</span><ChevronDown size={13} className={"transition-transform " + (active ? "rotate-180 text-indigo-200" : "text-slate-600")} /></>}
@@ -9568,10 +9571,10 @@ export default function App() {
               </div>}
               </div>
               <div className="flex-1" />
-              <div className="relative w-36 md:w-56">
+              {canAccess("leads") && <div className="relative w-36 md:w-56">
                 <Search size={13} className="absolute left-2.5 top-2.5 text-slate-300" />
                 <Inp value={qDraft} onChange={(e) => setQDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && qDraft.trim()) { if (!canAccess("leads")) { toast("유입 DB 접근 권한이 없습니다"); return; } setGlobalQ(qDraft.trim()); setQDraft(""); setView("leads"); } }} placeholder="유입 DB 통합 검색 (Enter)" className="pl-8" />
-              </div>
+              </div>}
             </div>
           </header>
           <main className={"flex-1 w-full " + (view === "deals" ? "p-2 lg:p-4 max-w-none mx-0" : "p-4 lg:p-7 max-w-screen-2xl mx-auto")}>
