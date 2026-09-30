@@ -1,6 +1,29 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { accountFromEmployeeAccess } from '../src/data/employeeAccount.js';
+import { readFileSync } from 'node:fs';
+
+test('restored templates are available to ordinary accounts but not the two-menu viewer', () => {
+  const pages = ['deals', 'ltvExpansion', 'templates', 'org'];
+  for (const role of ['EDITOR', 'VIEWER']) {
+    assert.deepEqual(accountFromEmployeeAccess({userId:'synthetic',role}, pages).allowedPages, ['deals','ltvExpansion','templates']);
+  }
+  assert.deepEqual(accountFromEmployeeAccess({userId:'synthetic',role:'VIEWER',menuPages:['deals','ltvExpansion']}, pages).allowedPages, ['deals','ltvExpansion']);
+  assert.deepEqual(accountFromEmployeeAccess({userId:'synthetic',role:'EDITOR',scope:'premeeting'}, pages).allowedPages, ['deals']);
+});
+
+test('template navigation and existing data bindings are restored without seeding data', () => {
+  const source = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
+  const navigation = source.slice(source.indexOf('const NAV_SECTIONS ='), source.indexOf('const NAV ='));
+  assert.match(navigation, /id: "templates", label: "메시지 · 스크립트"/);
+  const access = source.match(/const canAccess =[^\n]+/)[0];
+  assert.ok(!access.includes('templates'));
+  assert.ok(access.includes("pageId !== 'org'"));
+  const component = source.slice(source.indexOf('function TemplatesView()'), source.indexOf('function MarketingView()'));
+  for (const key of ['tm','pre','post']) assert.ok(component.includes(`db.templates.${key}[b]`));
+  assert.equal((component.match(/readOnly=\{readOnly\}/g)||[]).length, 3);
+  assert.ok(!component.includes('seedTemplates'));
+});
 
 test('owner and admin are presented as the legacy MASTER account', () => {
   for (const serverRole of ['OWNER', 'ADMIN', 'admin']) {

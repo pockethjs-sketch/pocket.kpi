@@ -1,5 +1,10 @@
 # Employee authentication cutover — 2026-09-18
 
+## 2026-09-30 Restore message/script navigation
+
+- Restore Other > Messages/scripts and its hub card using the unchanged stored templates and existing save path. No source-data reset, backend deployment, membership or RLS changes. VIEWER textareas are read-only; copy remains available.
+- Keep organization KPI retired and retain both restricted menu profiles. The designated two-menu VIEWER does not gain template visibility. Synthetic navigation/account regression tests added; release verification is tracked separately in the operations ledger.
+
 ## 2026-09-30 Two-menu viewer presentation
 
 - Current membership metadata confirms the requested employee has ACTIVE VIEWER membership. Apply an identity-specific frontend menu preference after verified session resolution: premeeting companies and receivables only, with premeeting as the initial page. Hide cross-page search and keep MASTER/other employees unchanged. Public configuration contains an organization/user fingerprint, not an email or credential.
