@@ -1,5 +1,12 @@
 # Employee authentication cutover — 2026-09-18
 
+## 2026-09-30 Legacy-auth save rejection / contract lookup prerequisite
+
+- Production frontend mutation builder filtered `auth` inside nested patches but not at the document root. Filtered bootstrap + local normalization therefore produced a forbidden `documents.auth` write. A synthetic reproduction confirms the server rejection and subsequent 45-second commit wait; recent production metadata also shows a mutation HTTP 403. No browser session/body was retrieved, so that specific response code is not claimed as inspected.
+- Exclude only the retired top-level `auth` document in new/rebuilt mutations. Preserve all business patches, including nested fields; keep failed journals until normal replay is acknowledged. Server-side legacy-auth rejection, employee session and membership checks remain unchanged.
+- Distinguish the local pending-save timeout from a Sheet read failure in the existing alert. No new review-list UI, source-sheet write, trigger, schema or permission change.
+- Four synthetic regression tests cover auth addition/update/deletion, payment and memo preservation, network-failed mixed-journal replay and auth-only no-op. Deployment and live H-column reconciliation are recorded separately; neither is implied by local test success.
+
 ## 2026-09-28 Contract H payment parsing fix (Apps Script v61)
 
 - Expands Apps Script H-column parsing to exact checkmarks/checkbox/V and cumulative percentages. Amount matching, identity ambiguity checks, revision-guarded atomic mutation and existing financial input protection remain in place. No public endpoint or employee authentication changes.

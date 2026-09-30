@@ -367,7 +367,6 @@ import { buildDailyMeetingRecord, dailyMeetingContent, dailyMeetingRecords } fro
     Object.keys(before).forEach(function (key) { keys[key] = true; });
     Object.keys(after).forEach(function (key) { keys[key] = true; });
     Object.keys(keys).forEach(function (key) {
-      if (key === 'auth') return; // Retired local account model is never persisted by employee sessions.
       var nextPath = path.concat([key]);
       if (!Object.prototype.hasOwnProperty.call(after, key)) {
         ops.push({ op: 'delete', path: nextPath });
@@ -502,6 +501,10 @@ import { buildDailyMeetingRecord, dailyMeetingContent, dailyMeetingRecords } fro
     Object.keys(previous || {}).forEach(function (key) { keys[key] = true; });
     Object.keys(next || {}).forEach(function (key) { keys[key] = true; });
     Object.keys(keys).forEach(function (key) {
+      // Only the retired top-level account document is local-only. This also
+      // excludes auth when rebuilding failed journals against the latest DB.
+      // Keep every business patch; do not clear the journal before its ACK.
+      if (key === 'auth') return;
       var before = previous[key], after = next[key], idField = CRM_COLLECTION_ID_FIELDS[key];
       if (idField && crmArrayHasStableIds(before || [], idField) && crmArrayHasStableIds(after || [], idField)) {
         var beforeMap = {}, afterMap = {}, upsert = [], patches = [], remove = [];
@@ -4327,7 +4330,7 @@ function DealsView() {
           <Btn size="xs" disabled={contractReviewBusy || crmSyncBusy} onClick={() => refreshContractReview(true)}><RefreshCw size={12} className={contractReviewBusy ? 'animate-spin' : ''}/>{contractReviewBusy ? '시트 확인 중…' : '시트 동기화'}</Btn>
         </div>
       </div>
-      {(contractReviewError || syncSchedule?.statusError || syncSchedule?.daily?.ok === false || (syncSchedule && syncSchedule.triggerCount !== 1)) && <p role="alert" className="text-xs font-semibold text-red-600">{contractReviewError ? '계약 시트 조회 실패 · 다시 동기화해 주세요' : syncSchedule?.statusError ? '자동 갱신 상태 조회 실패' : syncSchedule?.daily?.ok === false ? '최근 자동 갱신 실패 · 수동 동기화로 확인해 주세요' : '서버 자동 갱신 설정 확인 필요'}</p>}
+      {(contractReviewError || syncSchedule?.statusError || syncSchedule?.daily?.ok === false || (syncSchedule && syncSchedule.triggerCount !== 1)) && <p role="alert" className="text-xs font-semibold text-red-600">{contractReviewError ? (contractReviewError === 'remote_save_timeout' ? '미저장 입력의 서버 반영 대기 · 계약 시트 조회 전 중단됨' : '계약 시트 조회 실패 · 다시 동기화해 주세요') : syncSchedule?.statusError ? '자동 갱신 상태 조회 실패' : syncSchedule?.daily?.ok === false ? '최근 자동 갱신 실패 · 수동 동기화로 확인해 주세요' : '서버 자동 갱신 설정 확인 필요'}</p>}
       {dealsTab === 'sync' ? <div role="tabpanel" id="deals-panel-sync" aria-labelledby="deals-tab-sync" className="space-y-3"><RecentSyncActivity loadLogs={window.crmFetchSyncActivity} leads={db.leads} openLead={openLead} reloadKey={[syncSchedule?.premeeting?.at, syncSchedule?.sheet?.at, premeetingResult?.checkedAt, contractAutoSync?.checkedAt].join('|')}/>{!!(contractAutoSync?.blocked || []).length && <details className="text-xs text-slate-600"><summary className="cursor-pointer text-amber-700">계약 자동 반영 보류 업체·이유</summary><ul className="mt-2 space-y-1">{contractAutoSync.blocked.map((item) => <li key={item.sourceKey}>{item.company} — {String(item.reason || '').replace(/contractAmount/g, '계약액').replace(/contractAt/g, '계약일').replace(/status/g, '진행 상태')}</li>)}</ul></details>}{!!(contractAutoSync?.paymentBlocked || []).length && <details className="text-xs text-slate-600"><summary className="cursor-pointer text-amber-700">입금 반영 보류 업체·이유</summary><ul className="mt-2 space-y-1">{contractAutoSync.paymentBlocked.map((item) => <li key={item.sourceKey}>{item.company} — {item.reason}</li>)}</ul></details>}</div> : <div role="tabpanel" id="deals-panel-companies" aria-labelledby="deals-tab-companies" className="space-y-4">
       <Card cls="p-3">
         <div className="flex flex-col 2xl:flex-row 2xl:items-center gap-3">
