@@ -9,6 +9,7 @@ import RecentSyncActivity from "./RecentSyncActivity.jsx";
 import DailyActivityChart from "./DailyActivityChart.jsx";
 import LeadRevenueQuality from "./LeadRevenueQuality.jsx";
 import EmployeeAdministration from "./EmployeeAdministration.jsx";
+import ProductSalesOverview from "./ProductSalesOverview.jsx";
 import NotionReceivables from "./NotionReceivables.jsx";
 import ReceivablesTable, { LEDGER_RECEIVABLE_COLUMNS, ReceivableCompany, ReceivableTag } from "./ReceivablesTable.jsx";
 import { shadowStatusFromSheetsResult } from "./data/repositoryAdapter.js";
@@ -5996,99 +5997,48 @@ function PromptsView() {
    VIEW 10 — 상품 · 가격
    ============================================================ */
 function ProductsView() {
-  const { db, up, period } = useApp();
-  const r = pRange(period);
-  const CATBAR = { "지원사업 관리": "bg-emerald-500", "투자유치": "bg-amber-500", "브랜딩 관리": "bg-violet-500", "AX 개발": "bg-blue-500", "포켓비즈": "bg-cyan-500" };
-  const bStats = (name) => {
-    const inP = db.leads.filter((l) => l.buildup === name && inR(l.contractAt || l.premeetingDoneAt || l.createdAt, r));
-    const wonL = inP.filter((l) => l.status === "계약 완료");
-    const newWon = wonL.filter((l) => (l.ctype || "신규") === "신규").length;
-    const meetings = inP.filter((l) => (l.ctype || "신규") === "신규" && ["프리미팅 완료", "견적·제안 발송", "계약 완료"].includes(l.status)).length;
-    const camount = wonL.reduce((s, l) => s + (l.contractAmount || 0), 0);
-    return { deals: inP.length, ccount: newWon, meetings, camount, conv: meetings ? Math.round(newWon / meetings * 100) : 0 };
-  };
-  const total = db.products.reduce((a, p) => { const s = bStats(p.name); a.camount += s.camount; a.ccount += s.ccount; return a; }, { camount: 0, ccount: 0 });
-  return (
-    <div className="space-y-4">
-      <SecTitle icon={Package} title="상품 · 가격 · KPI 성과" sub="빌드업 서비스를 만들고(가격·항목·월 목표), 각 빌드업의 계약수·미팅·전환율·계약금액을 한 곳에서 봅니다. 전환율 = 신규 계약 ÷ 신규 미팅."
-        right={<Btn kind="primary" onClick={() => up((d) => d.products.push({ id: uid(), name: "새 빌드업", duration: "", desc: "", rr: "", items: [] }))}><Plus size={13} />빌드업 추가</Btn>} />
-      <div className="rounded-lg bg-indigo-50 border border-indigo-100 px-3 py-2 text-xs text-indigo-900 flex items-center gap-2 flex-wrap">
-        <Sparkles size={13} className="text-indigo-500 shrink-0" />{pLabel(period)} 기준 · 총 <b>{total.ccount}</b>계약 · 계약금액 <b>{fmtK(total.camount)}원</b> · 각 카드에서 가격·항목·월 목표를 관리하세요.
-      </div>
-      <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3">
-        {db.products.map((p) => {
-          const st = bStats(p.name);
-          const tgt = p.items.reduce((s, it) => s + (it.mTarget || 0), 0);
-          const rate = tgt ? Math.min(100, Math.round(st.ccount / tgt * 100)) : null;
-          const cc = st.conv >= 50 ? "#10b981" : st.conv >= 25 ? "#f59e0b" : "#ef4444";
-          return (
-            <Card key={p.id} cls="overflow-hidden">
-              <div className={"h-1 " + (CATBAR[p.name] || "bg-slate-400")} />
-              <div className="p-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0 space-y-1">
-                    <Inp value={p.name} onChange={(e) => up((d) => { d.products.find((x) => x.id === p.id).name = e.target.value; })} className="font-bold text-slate-900" />
-                    <div className="grid grid-cols-2 gap-1.5">
-                      <Inp value={p.rr || ""} placeholder="👤 담당 R&R" onChange={(e) => up((d) => { d.products.find((x) => x.id === p.id).rr = e.target.value; })} className="text-xs" />
-                      <Inp value={p.duration || ""} placeholder="⏱ 소요기간" onChange={(e) => up((d) => { d.products.find((x) => x.id === p.id).duration = e.target.value; })} className="text-xs" />
-                    </div>
-                  </div>
-                  <div className="shrink-0 text-center">
-                    <div className="w-11 h-11 rounded-full flex items-center justify-center" style={{ background: "conic-gradient(" + cc + " " + st.conv + "%, #eef1f6 0)" }}>
-                      <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-[10px] font-extrabold" style={{ color: cc }}>{st.conv}%</div>
-                    </div>
-                    <p className="text-[9px] text-slate-400 mt-0.5">전환율</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-3 gap-1.5 mt-2.5 text-center">
-                  <div className="rounded-lg bg-slate-50 py-1.5"><p className="text-base font-extrabold text-slate-900 tabular-nums leading-none">{st.ccount}</p><p className="text-[9px] text-slate-400 mt-1">신규 계약수</p></div>
-                  <div className="rounded-lg bg-slate-50 py-1.5"><p className="text-base font-extrabold text-slate-900 tabular-nums leading-none">{st.meetings}</p><p className="text-[9px] text-slate-400 mt-1">미팅</p></div>
-                  <div className="rounded-lg bg-emerald-50 py-1.5 flex flex-col justify-center"><p className="text-xs font-extrabold text-emerald-700 tabular-nums leading-none">{fmtK(st.camount)}</p><p className="text-[9px] text-slate-400 mt-1">계약금액</p></div>
-                </div>
-                {tgt > 0 && (
-                  <div className="mt-2.5">
-                    <div className="flex justify-between text-[10px] text-slate-400 mb-1"><span>월 목표 달성</span><span className="font-bold text-slate-600">{st.ccount} / {tgt}건 {rate != null ? "· " + rate + "%" : ""}</span></div>
-                    <Bar pct={rate || 0} color={rate >= 100 ? "bg-emerald-500" : rate >= 50 ? "bg-amber-400" : "bg-slate-300"} />
-                  </div>
-                )}
-                <p className="text-[10px] text-slate-400 mt-1.5">연결된 딜 {st.deals}건</p>
-                <details className="mt-2.5 group">
-                  <summary className="text-xs font-bold text-slate-500 cursor-pointer hover:text-indigo-600 flex items-center justify-between select-none">
-                    <span>세부 항목 · 가격 <span className="text-slate-400 font-normal">({p.items.length}개)</span></span>
-                    <span className="text-slate-300 group-open:rotate-180 transition-transform">▾</span>
-                  </summary>
-                  <div className="mt-2 space-y-1.5">
-                    <div className="grid grid-cols-[minmax(0,1fr)_140px_90px_20px] gap-1.5 px-1 text-[10px] font-bold text-slate-400">
-                      <span>세부 상품명</span><span className="text-right">가격 (원)</span><span className="text-right">월 목표 계약수</span><span />
-                    </div>
-                    {p.items.map((it) => (
-                      <div key={it.id} className="grid grid-cols-[minmax(0,1fr)_140px_90px_20px] items-center gap-1.5">
-                        <Inp className="min-w-0 text-xs" value={it.name} onChange={(e) => up((d) => { d.products.find((x) => x.id === p.id).items.find((y) => y.id === it.id).name = e.target.value; })} />
-                        <Inp className="w-full text-xs text-right tabular-nums" value={Number(it.price || 0).toLocaleString("ko-KR")} title="가격 (원)" onChange={(e) => up((d) => { d.products.find((x) => x.id === p.id).items.find((y) => y.id === it.id).price = num(e.target.value); })} />
-                        <Inp className="w-full text-xs text-right tabular-nums" value={it.mTarget || 0} title="월 목표 계약수 · 실제 계약수가 아닌 목표값" onChange={(e) => up((d) => { d.products.find((x) => x.id === p.id).items.find((y) => y.id === it.id).mTarget = num(e.target.value); })} />
-                        <button className="text-red-300 hover:text-red-600 shrink-0" title="항목 삭제" onClick={() => up((d) => { const pp = d.products.find((x) => x.id === p.id); pp.items = pp.items.filter((y) => y.id !== it.id); })}><Trash2 size={12} /></button>
-                      </div>
-                    ))}
-                    <div className="flex items-center justify-between pt-1">
-                      <Btn size="xs" onClick={() => up((d) => d.products.find((x) => x.id === p.id).items.push({ id: uid(), name: "새 항목", price: 0, unit: "1건", note: "", mTarget: 0 }))}><Plus size={11} />항목 추가</Btn>
-                      <span className="text-[10px] text-slate-400">가격은 원 단위 · 월 목표 계약수는 실제 실적이 아닌 목표값</span>
-                    </div>
-                    <div className="pt-2 border-t border-slate-100 flex justify-end">
-                      <DangerBtn size="xs" onConfirm={() => up((d) => { d.products = d.products.filter((x) => x.id !== p.id); })}><Trash2 size={11} />이 빌드업 삭제</DangerBtn>
-                    </div>
-                  </div>
-                </details>
-              </div>
-            </Card>
-          );
-        })}
-      </div>
-      <Card cls="p-4">
-        <p className="text-sm font-bold text-slate-800 mb-1">세일즈 핵심 논리 (전 조직 공용)</p>
-        <p className="text-xs text-slate-500 leading-relaxed">각 빌드업을 내재화하려면 TF당 3명 이상 채용이 필요하고, 인건비·부대비용은 빌드업 비용의 3배 이상입니다. 포켓 빌드업은 검증된 팀이 <span className="font-semibold text-slate-700">가성비 · 속도 · 퀄리티</span>를 동시에 보장하는 스케일업 지렛대입니다.</p>
-      </Card>
+  const { db, up, period, openLead } = useApp();
+  const [tab, setTab] = useState("sales");
+  const readOnly = window.kpiEmployeeAccess?.role === "VIEWER";
+  const updateProduct = (id, change) => up((d) => { const p = d.products.find((x) => x.id === id); if (p) change(p); });
+  return <div className="space-y-4">
+    <SecTitle icon={Package} title="상품 · 가격" sub="판매 실적을 먼저 확인하고, 빌드업 구성과 가격은 별도 화면에서 관리합니다." />
+    <div className="flex gap-1 border-b border-slate-200" role="tablist" aria-label="상품 화면">
+      {[["sales", "판매 현황"], ["catalog", "상품·가격 관리"]].map(([id, label]) => <button key={id} id={"products-tab-" + id} type="button" role="tab" aria-selected={tab === id} aria-controls={"products-panel-" + id} onClick={() => setTab(id)} className={"px-5 py-3 text-sm font-bold border-b-2 " + (tab === id ? "border-indigo-600 text-indigo-700" : "border-transparent text-slate-500")}>{label}</button>)}
     </div>
-  );
+    {tab === "sales" ? <div role="tabpanel" id="products-panel-sales" aria-labelledby="products-tab-sales"><ProductSalesOverview leads={db.leads} products={db.products} range={pRange(period)} periodLabel={pLabel(period)} openLead={openLead} /></div> :
+      <div role="tabpanel" id="products-panel-catalog" aria-labelledby="products-tab-catalog" className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-slate-500">가격과 월 목표는 설정값입니다. 판매 실적이나 기존 계약금액을 변경하지 않습니다.</p>
+          {!readOnly && <Btn kind="primary" onClick={() => up((d) => d.products.push({ id: uid(), name: "새 빌드업", duration: "", desc: "", rr: "", items: [] }))}><Plus size={13} />빌드업 추가</Btn>}
+        </div>
+        {readOnly && <p className="text-sm text-indigo-700">뷰어 계정 · 상품과 가격을 조회만 할 수 있습니다.</p>}
+        <div className="grid xl:grid-cols-2 gap-4">
+          {(db.products || []).map((p) => <Card key={p.id} cls="p-4">
+            <fieldset disabled={readOnly} className="min-w-0 space-y-3">
+              <legend className="mb-3 text-base font-extrabold text-slate-900">{p.name || "이름 없는 빌드업"}</legend>
+              <div className="grid sm:grid-cols-3 gap-2">
+                <Fld label="빌드업 이름"><Inp className="w-full" value={p.name} onChange={(e) => updateProduct(p.id, x => { x.name = e.target.value; })} /></Fld>
+                <Fld label="담당 R&R"><Inp className="w-full" value={p.rr || ""} onChange={(e) => updateProduct(p.id, x => { x.rr = e.target.value; })} /></Fld>
+                <Fld label="소요기간"><Inp className="w-full" value={p.duration || ""} onChange={(e) => updateProduct(p.id, x => { x.duration = e.target.value; })} /></Fld>
+              </div>
+              <div className="overflow-x-auto"><table className="w-full min-w-[420px] text-sm">
+                <thead className="bg-slate-50 text-slate-500"><tr><th className="p-2 text-left">세부 상품명</th><th className="p-2 text-right">가격 (원)</th><th className="p-2 text-right">월 목표 (건)</th><th className="w-8"><span className="sr-only">삭제</span></th></tr></thead>
+                <tbody>{(p.items || []).map((it) => <tr key={it.id}>
+                  <td className="py-2 pr-2"><Inp aria-label="세부 상품명" className="w-full min-w-32" value={it.name} onChange={(e) => updateProduct(p.id, x => { x.items.find(y => y.id === it.id).name = e.target.value; })} /></td>
+                  <td className="py-2 pr-2"><Inp aria-label="가격 (원)" className="w-full min-w-28 text-right tabular-nums" value={Number(it.price || 0).toLocaleString("ko-KR")} onChange={(e) => updateProduct(p.id, x => { x.items.find(y => y.id === it.id).price = num(e.target.value); })} /></td>
+                  <td className="py-2 pr-2"><Inp aria-label="월 목표 계약수" className="w-full min-w-20 text-right" value={it.mTarget || 0} onChange={(e) => updateProduct(p.id, x => { x.items.find(y => y.id === it.id).mTarget = num(e.target.value); })} /></td>
+                  <td>{!readOnly && <button type="button" title="항목 삭제" className="p-1 text-red-500" onClick={() => updateProduct(p.id, x => { x.items = x.items.filter(y => y.id !== it.id); })}><Trash2 size={14} /></button>}</td>
+                </tr>)}</tbody>
+              </table></div>
+              {!readOnly && <div className="flex items-center justify-between gap-2">
+                <Btn size="xs" onClick={() => updateProduct(p.id, x => { x.items = [...(x.items || []), { id: uid(), name: "새 항목", price: 0, unit: "1건", note: "", mTarget: 0 }]; })}><Plus size={12} />항목 추가</Btn>
+                <DangerBtn size="xs" onConfirm={() => up((d) => { d.products = d.products.filter(x => x.id !== p.id); })}><Trash2 size={12} />빌드업 삭제</DangerBtn>
+              </div>}
+            </fieldset>
+          </Card>)}
+        </div>
+      </div>}
+  </div>;
 }
 
 /* ============================================================
@@ -9125,7 +9075,7 @@ function SchemaView() {
     { category: "계약", name: "지원사업 관리", read: [], write: [], external: ["Supabase", "CRM API"], use: "지원사업 배정·합격·일정" },
     { category: "계약", name: "잔금 관리", read: ["Supabase notion_contract_payment_records"], write: ["계약_잔금관리", "계약_잔금로그", "데이터_입금원장"], external: ["노션 선잔금 및 미납 (이관 원천)"], use: "운영 결제 원장과 별도 노션 이관 자료 조회 · 합계 자동 병합 없음" },
     { category: "계약", name: "포켓비즈", read: [], write: ["계약_포켓비즈"], external: [], use: "구독사·MRR·입금 상태" },
-    { category: "계약", name: "상품 · 가격", read: [], write: ["계약_상품가격"], external: [], use: "상품 가격과 목표 계약수" },
+    { category: "계약", name: "상품 · 가격", read: ["데이터_계약원장"], write: ["계약_상품가격"], external: [], use: "계약일 기준 빌드업별 판매 계약 수·신규/기존 상세와 상품 가격·목표 관리" },
     { category: "기타", name: "기타 총괄", read: [], write: [], external: [], use: "기타 메뉴 바로가기" },
     { category: "기타", name: "메시지 · 스크립트", read: [], write: [], external: [], use: "메시지 템플릿" },
     { category: "기타", name: "조직 · KPI", read: [], write: [], external: [], use: "사용자와 KPI 기준" },

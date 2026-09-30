@@ -1,5 +1,16 @@
 # Employee authentication cutover — 2026-09-18
 
+## 2026-09-30 Product sales presentation
+
+- Read-only aggregation of already employee-authorized CRM/product state, with no new API, schema, source collection, service credential or authorization change. Existing catalog mutation handlers are preserved; VIEWER catalog editing is disabled in addition to existing server enforcement.
+- Counts distinguish per-lead contracts from multi-buildup memberships and separate historical events; no financial value is rewritten or allocated. See PRODUCT_SALES.md. Synthetic-only validation, with no production customer payload retrieved. Deployment is tracked separately in the operations ledger.
+
+## 2026-09-30 Existing viewer approval
+
+- Operator replaced the restricted editor request with ordinary VIEWER access and explicitly accepted full business/financial visibility. Registered one specified employee in the existing organization-scoped invitation table using an idempotent insert; no credential or email address is committed here.
+- Production reread confirms VIEWER approval, unclaimed, with no Auth signup yet. Employee must use the existing first-use password/email-confirmation flow. No invitation email was sent by this database registration and successful employee login is not yet verified.
+- No schema/RLS/claim-function/Edge/frontend change, no business writes, and no MASTER change. The rejected scope migration remains unapplied; this approval is for the existing full-read role, not premeeting-only access. Fourteen synthetic authorization tests passed, including VIEWER write denial.
+
 ## 2026-09-30 Menu retirement and scoped-account preparation
 
 - Retire templates/org navigation without deleting stored business documents; settings now opens email-based account registration. MASTER remains unchanged.
