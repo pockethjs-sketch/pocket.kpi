@@ -1,5 +1,12 @@
 # Employee authentication cutover — 2026-09-18
 
+## 2026-09-30 Stale login-entry chunk recovery
+
+- Public read-only check confirmed the reported previous main asset returns HTTP404 while the current page references a newer entry (GitHub Pages HTML max-age=600). An already-open login entry can hold an obsolete dynamic import path after deployment; this is an application-file load failure, not evidence of a rejected password.
+- Only after employee session/membership verification, recognized chunk transport errors may reload the same origin/path with a cache-busting query. A sessionStorage guard allows one automatic attempt per ten minutes; offline/storage failure uses an explicit retry button. Auth failures and application evaluation errors never enter this recovery path.
+- No sign-out, auth-storage clear, customer-journal deletion, permission bypass, or backend change. Existing authorization-before-import is preserved. Synthetic tests cover error classification, loop protection, offline fallback and retained storage. Production business authentication is not tested with recovered/shared credentials.
+- Local verification: 219 tests passed, npm audit zero vulnerabilities. Build/deployment status is recorded separately in the operations ledger.
+
 ## 2026-09-30 Manual sync orchestration
 
 - Explicit premeeting and DB/quality refresh actions now include the existing authenticated contract-sheet reconciliation after primary save acknowledgement, followed by a current DB reload. Page/TM entry no longer collects CRM data; premeeting tab entry no longer reads the source sheet/rebuilds its review queue. Saved DB/status reads and user-input journal replay remain enabled.

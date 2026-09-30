@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { employeeAuth, employeeHeaders, employeeRequest, masterAliasRequest, scopedEmployeeStorage } from './employeeSession.js';
 import { consumeMasterSetupToken, isMasterLoginAlias, isPlausibleEmail } from './data/masterLoginAlias.js';
+import { freshEntryUrl, isChunkLoadError, recoverChunkLoad } from './data/chunkRecovery.js';
 import './styles.css';
 
 const MASTER_SETUP_STORAGE_KEY = 'pocket-kpi:master-setup-token:v1';
@@ -13,11 +14,13 @@ function EmployeeEntry() {
   const [message, setMessage] = useState('직원 로그인 확인 중…');
   const [busy, setBusy] = useState(false);
   const [LoadedApp, setLoadedApp] = useState(null);
+  const [appLoadFailed, setAppLoadFailed] = useState(false);
   useEffect(() => {
     let alive = true, currentUser = '', checking = false;
     const check = async () => {
       if (checking) return;
       checking = true;
+      let loadingApp = false;
       try {
         const { data } = await employeeAuth.auth.getSession();
         if (!data.session) { if (alive) { setLoadedApp(null); setMessage('승인된 직원 이메일로 로그인하세요.'); } return; }
@@ -34,9 +37,17 @@ function EmployeeEntry() {
           await employeeAuth.auth.signOut({ scope: 'local' });
           location.reload();
         };
+        loadingApp = true;
         const { default: App } = await import('./main.jsx');
-        if (alive) { setLoadedApp(() => App); setMessage(''); }
+        if (alive) { setAppLoadFailed(false); setLoadedApp(() => App); setMessage(''); }
       } catch (error) {
+        if (alive && loadingApp && isChunkLoadError(error)) {
+          setLoadedApp(null);
+          setAppLoadFailed(true);
+          setMessage('로그인 권한은 확인됐지만 화면 파일을 불러오지 못했습니다. 새 배포 또는 네트워크 문제입니다. 최신 화면을 다시 불러오세요.');
+          recoverChunkLoad(error, { storage: window.sessionStorage, location: window.location, online: window.navigator.onLine !== false });
+          return;
+        }
         if (alive) { setLoadedApp(null); setMessage(error.message === 'employee_approval_required' ? '이메일 인증 후 관리자 승인이 필요합니다.' : `로그인 확인 실패: ${error.message}`); }
       } finally { checking = false; }
     };
@@ -96,6 +107,7 @@ function EmployeeEntry() {
     {!isMasterLoginAlias(loginId) && <button type="button" disabled={busy || !isPlausibleEmail(loginId) || password.length < 12} className="border rounded p-2 w-full disabled:opacity-40" onClick={() => submit(true)}>처음 사용 · 이메일 인증 (비밀번호 12자 이상)</button>}
     {isMasterLoginAlias(loginId) && masterSetupToken && <p className="text-xs text-amber-700">일회용 최초 설정 링크입니다. 새 비밀번호를 정하면 이 링크는 다시 사용할 수 없습니다.</p>}
     <p className="text-xs text-slate-600" role="status">{message}</p>
+    {appLoadFailed && <button type="button" className="border border-blue-300 text-blue-700 rounded p-2 w-full" onClick={() => window.location.replace(freshEntryUrl(window.location.href))}>최신 화면 다시 불러오기</button>}
     <button type="button" className="text-xs underline" onClick={() => employeeAuth.auth.signOut({ scope: 'local' })}>현재 로그인 해제</button>
   </form></div>;
 }
