@@ -108,7 +108,7 @@ test('Apps Script replans after revision conflict instead of replaying old money
   const start=code.indexOf('function _crmAutoSyncNewContracts(body)');
   const end=code.indexOf('\nfunction doPost',start);
   let read=0,save=0;
-  const sandbox={_crmContractSourceGroups:()=>source(),_crmReadSupabasePrimaryEnvelope_:()=>({revision:'r'+(++read),data:JSON.stringify({leads:[lead(read>1?{contractAmount:999}: {})]})}),
+  const sandbox={_crmContractSourceGroups:()=>source(),_crmReadSupabasePrimaryEnvelope_:()=>({revision:'r'+(++read),data:JSON.stringify({leads:[lead(read>1?{contractAmount:99000000,paid:99000000,payments:[{id:'paid',amount:99000000,paidAt:'2026-09-15'}]}: {})]})}),
     _crmPlanContractAndPaymentSync:combinedPlan,_crmIso:()=>now,_crmHash:hash,_crmSaveMutationV2:()=>{save++;return {error:'revision_conflict'};}};
   vm.createContext(sandbox);vm.runInContext(code.slice(start,end),sandbox);
   const r=sandbox._crmAutoSyncNewContracts({});assert.equal(save,1);assert.equal(read,2);assert.equal(r.updated.length,0);assert.equal(r.blocked.length,1);
@@ -178,7 +178,7 @@ test('same request may apply contract and its matched payment atomically',()=>{
   assert.equal(r.mutation.collections.leads.patches.length,1);
   const next=apply({leads:[original]},r);
   assert.equal(next.leads[0].contractAmount,5500000);assert.equal(next.leads[0].payments[0].paidConfirmed,true);
-  assert.equal(next.contractStatusLogs.length,2);
+  assert.equal(next.contractStatusLogs.length,3);
 });
 
 function reloadHarness() {

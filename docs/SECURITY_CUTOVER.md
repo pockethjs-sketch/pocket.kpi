@@ -1,5 +1,11 @@
 # Employee authentication cutover — 2026-09-18
 
+## 2026-09-30 Sheet-authoritative financial reconciliation
+
+- User explicitly authorized O-column totals to replace different web totals and H checkmarks to confirm 100% receipts (percentages mean cumulative partial receipts). The existing authenticated sheet synchronization atomically reconciles totals, schedules, H confirmations and before/after activity logs. No direct business-table write or authentication bypass is introduced.
+- Confirmed historical metadata shows a web user-edit installment later conflicting with a Sheet-applied total; frontend schedule normalization restored the older total. Both fields now move together. Previously received amounts/dates/notes are preserved; overpayments, ambiguous identities, recurring contracts and CRM-managed schedules remain held instead of inventing refunds or deleting receipts.
+- Employee authorization, organization checks, HMAC, revision conflict replanning, source-sheet read-only behavior and backup/collection schedules remain unchanged. Production execution and verification are separate from code deployment.
+
 ## 2026-09-30 Legacy-auth save rejection / contract lookup prerequisite
 
 - Production frontend mutation builder filtered `auth` inside nested patches but not at the document root. Filtered bootstrap + local normalization therefore produced a forbidden `documents.auth` write. A synthetic reproduction confirms the server rejection and subsequent 45-second commit wait; recent production metadata also shows a mutation HTTP 403. No browser session/body was retrieved, so that specific response code is not claimed as inspected.

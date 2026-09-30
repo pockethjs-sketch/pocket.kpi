@@ -181,7 +181,8 @@ export function _crmPlanContractAutoSync(groups, state, now, hash) {
 
 // H confirms a cumulative amount, not another receipt. Never invent collection dates,
 // undo payments, guess among ambiguous installments, or alter CRM-owned schedules.
-export function _crmPlanContractPaymentSync(groups, state, now, hash) {
+export function _crmPlanContractPaymentSync(groups, state, now, hash, options) {
+  var sourceAuthoritative = !!(options && options.sourceAuthoritative);
   var patches = [], logs = [], updated = [], blocked = [], unchanged = 0;
   var today = new Date(Date.parse(now) + 9 * 3600000).toISOString().slice(0, 10);
   var leads = (state.leads || []).filter(function (l) { return l && !l.archivedAt && !l.archived_at; });
@@ -223,7 +224,7 @@ export function _crmPlanContractPaymentSync(groups, state, now, hash) {
     if (Number(l.paid || 0) > paid) { reject('별도 입금 기록과 결제 회차 불일치'); return; }
     if (target < paid) { reject('시트 입금액 감소 · 기존 입금 취소 안 함'); return; }
     if (target === paid) { unchanged += 1; return; }
-    if (previous && (previous.sourceKey !== g.sourceKey || (previous.scheduleHash && previous.scheduleHash !== _crmPaymentScheduleHash(payments, hash)))) {
+    if (previous && (previous.sourceKey !== g.sourceKey || (!sourceAuthoritative && previous.scheduleHash && previous.scheduleHash !== _crmPaymentScheduleHash(payments, hash)))) {
       reject('이전 자동 반영 이후 수동 결제 수정 확인 필요'); return;
     }
     var paymentHash = hash(JSON.stringify([g.sourceKey, row.date, row.dealText, g.amount, percent]));
@@ -245,6 +246,23 @@ export function _crmPlanContractPaymentSync(groups, state, now, hash) {
       if (!p.label || p.label === '일시금') { p.label = '선금'; remainder.label = '잔금'; }
       p.amount = delta; p.paidConfirmed = true;
       nextPayments.splice(nextPayments.indexOf(p) + 1, 0, remainder);
+    } else if (sourceAuthoritative) {
+      // H is the cumulative receipt amount. Allocate in the existing schedule
+      // order, splitting only the boundary installment; preserve its dates/notes.
+      var left = delta;
+      unpaid.forEach(function (p) {
+        if (left <= 0) return;
+        var take = Math.min(Number(p.amount), left);
+        if (take < Number(p.amount)) {
+          var rest = JSON.parse(JSON.stringify(p));
+          rest.id = 'sheet-rest-' + hash(String(l.id) + String(p.id) + paymentHash).slice(0, 24);
+          rest.amount = Number(p.amount) - take; rest.paidConfirmed = false;
+          rest.no = nextPayments.reduce(function (n, x) { return Math.max(n, Number(x.no) || 0); }, nextPayments.length) + 1;
+          nextPayments.splice(nextPayments.indexOf(p) + 1, 0, rest);
+        }
+        p.amount = take; p.paidConfirmed = true; left -= take;
+      });
+      if (left !== 0) { reject('H열 확인액과 결제 회차 불일치'); return; }
     } else { reject('부분 입금에 대응하는 결제 회차가 불명확함'); return; }
     var metadata = { sourceKey: g.sourceKey, paymentHash: paymentHash, sourceDate: row.date, confirmedAt: now, amount: target,
       percent: percent, actualPaidAt: null, scheduleHash: _crmPaymentScheduleHash(nextPayments, hash) };
@@ -264,24 +282,103 @@ export function _crmPlanContractPaymentSync(groups, state, now, hash) {
     collections: { leads: { idField: 'id', patches: patches }, contractStatusLogs: { idField: 'id', upsert: logs } } } };
 }
 
+// O is authoritative for the total. Reconcile the schedule in the same mutation;
+// otherwise frontend normalization would restore the old installment total.
+export function _crmPlanContractAmountSync(groups, state, now, hash) {
+  var patches = [], logs = [], updated = [], blocked = [], unchanged = 0;
+  var today = new Date(Date.parse(now) + 9 * 3600000).toISOString().slice(0, 10);
+  var leads = (state.leads || []).filter(function (l) { return l && !l.archivedAt && !l.archived_at; });
+  groups.forEach(function (g) {
+    var matches = leads.filter(function (l) { return _crmSyncAliases(l.company).some(function (a) { return g.aliases.indexOf(a) >= 0; }); });
+    if (matches.length !== 1) {
+      if (matches.length > 1) blocked.push({ company: g.company, sourceKey: g.sourceKey, reason: 'O열 총액: 동명이업체/별칭 중복' });
+      return;
+    }
+    var l = matches[0];
+    var eligible = l.status === '계약 완료' || (['프리미팅 확정', '프리미팅 완료', '견적·제안 발송'].indexOf(l.status) >= 0 &&
+      (!!l.premeetingAt || !!l.premeetingDoneAt || Number((l.crmMeeting || {}).type) === 1 || (l.crmMeetings || []).some(function (m) { return Number(m.type) === 1; })));
+    if (!eligible) return;
+    var reject = function (reason) { blocked.push({ id: l.id, company: g.company, sourceKey: g.sourceKey, reason: reason }); };
+    if (groups.filter(function (x) { return _crmSyncAliases(l.company).some(function (a) { return x.aliases.indexOf(a) >= 0; }); }).length !== 1 ||
+      g.rows.length !== 1 || g.duplicateRows) { reject('O열 총액: 업체·계약 원본 중복 확인 필요'); return; }
+    if (!g.amountKnown || !Number.isSafeInteger(g.amount) || g.amount <= 0 || g.lastDate > today) { reject('O열 총액: 금액·날짜 확인 필요'); return; }
+    if ((l.contractSheetSync && l.contractSheetSync.sourceKey && l.contractSheetSync.sourceKey !== g.sourceKey) ||
+      (l.contractSheetPaymentSync && l.contractSheetPaymentSync.sourceKey !== g.sourceKey)) { reject('O열 총액: 다른 계약 원본과 연결됨'); return; }
+    if (g.rows.some(function (r) { return /추가|연장|월관리|매월|월운영/.test(r.memo + ' ' + r.dealText); })) { reject('O열 총액: 추가·반복 계약 확인 필요'); return; }
+    var payments = l.payments || [];
+    if (payments.some(function (p) { return p.crmManaged || !Number.isSafeInteger(Number(p.amount)) || Number(p.amount) <= 0; })) {
+      reject('O열 총액: CRM 관리 또는 유효하지 않은 결제 회차'); return;
+    }
+    var scheduleTotal = payments.reduce(function (n, p) { return n + Number(p.amount); }, 0);
+    var paid = payments.reduce(function (n, p) { return n + (p.paidAt || p.paidConfirmed ? Number(p.amount) : 0); }, 0);
+    if (Number(l.paid || 0) > paid || paid > g.amount) { reject('O열 총액이 기존 수령액과 충돌 · 입금 취소 안 함'); return; }
+    var totalMatches = Number(l.contractAmount || 0) === g.amount && (l.status === '계약 완료' || Number(l.expected || 0) === g.amount);
+    if (scheduleTotal === g.amount && totalMatches) { unchanged += 1; return; }
+    var next = JSON.parse(JSON.stringify(payments));
+    var unpaid = next.filter(function (p) { return !p.paidAt && !p.paidConfirmed; });
+    var remaining = g.amount - paid;
+    if (scheduleTotal !== g.amount) {
+      if (!unpaid.length && remaining > 0) {
+        next.push({ id: 'sheet-amount-' + hash(String(l.id) + g.sourceKey + g.amount + paid).slice(0, 24),
+          no: next.reduce(function (n, p) { return Math.max(n, Number(p.no) || 0); }, 0) + 1,
+          label: paid ? '잔금' : '일시금', amount: remaining, dueAt: '', paidAt: '', paidConfirmed: false, memo: '' });
+      } else if (remaining > 0) {
+        var weight = unpaid.reduce(function (n, p) { return n + Number(p.amount); }, 0), assigned = 0;
+        unpaid.forEach(function (p, i) {
+          var amount = i === unpaid.length - 1 ? remaining - assigned : Math.floor(remaining * Number(p.amount) / weight);
+          assigned += amount; p.amount = amount;
+        });
+        if (unpaid.some(function (p) { return p.amount <= 0; })) { reject('O열 총액: 회차별 최소 금액 확인 필요'); return; }
+      } else if (unpaid.length) { reject('O열 총액: 잔여 회차 취소 확인 필요'); return; }
+    }
+    var proposed = { contractAmount: g.amount, payments: next };
+    if (l.status !== '계약 완료') proposed.expected = g.amount;
+    // Only our own schedule reallocation may rebase the H planner's fingerprint.
+    if (l.contractSheetPaymentSync && JSON.stringify(next) !== JSON.stringify(payments)) {
+      proposed.contractSheetPaymentSync = JSON.parse(JSON.stringify(l.contractSheetPaymentSync));
+      proposed.contractSheetPaymentSync.scheduleHash = _crmPaymentScheduleHash(next, hash);
+    }
+    proposed.contractSheetAmountSync = { policy: 'sheet-o-authoritative-v1', sourceKey: g.sourceKey,
+      amount: g.amount, appliedAt: now, sourceRow: g.rows[0].row, sourceDate: g.rows[0].date };
+    patches.push({ id: String(l.id), ops: Object.keys(proposed).filter(function (k) { return JSON.stringify(l[k]) !== JSON.stringify(proposed[k]); })
+      .map(function (k) { return { op: 'set', path: [k], value: proposed[k] }; }) });
+    logs.push({ id: 'contract-amount-' + hash(String(l.id) + g.sourceKey + now + JSON.stringify([l.contractAmount, payments, g.amount])).slice(0, 32),
+      at: now, date: today, company: l.company, leadId: l.id, action: '외부 시트 자동 반영', source: '계약 프로세스 시트', actor: '시스템',
+      detail: 'O열 기준 총액·결제 회차 조정 · ' + (scheduleTotal || Number(l.contractAmount || 0)).toLocaleString('en-US') + '원 → ' + g.amount.toLocaleString('en-US') + '원 · 기존 입금일/메모 보존',
+      meta: { sourceKey: g.sourceKey, sourceRow: g.rows[0].row, policy: 'sheet-o-authoritative-v1',
+        before: { contractAmount: Number(l.contractAmount || 0), paymentScheduleTotal: scheduleTotal },
+        after: { contractAmount: g.amount, paymentScheduleTotal: g.amount } } });
+    updated.push({ id: l.id, company: l.company, contractAmount: g.amount });
+  });
+  return { updated: updated, blocked: blocked, unchanged: unchanged, mutation: { origin: 'contract_sheet_sync', reason: 'contract_sheet_amount_authority',
+    collections: { leads: { idField: 'id', patches: patches }, contractStatusLogs: { idField: 'id', upsert: logs } } } };
+}
+
 export function _crmPlanContractAndPaymentSync(groups, state, now, hash) {
-  var contract = _crmPlanContractAutoSync(groups, state, now, hash);
   var projected = JSON.parse(JSON.stringify(state));
-  (contract.mutation.collections.leads.patches || []).forEach(function (patch) {
-    var lead = (projected.leads || []).find(function (l) { return String(l.id) === String(patch.id); });
-    if (lead) patch.ops.forEach(function (op) { lead[op.path[0]] = op.value; });
+  var apply = function (plan) { plan.mutation.collections.leads.patches.forEach(function (patch) {
+      var lead = (projected.leads || []).find(function (l) { return String(l.id) === String(patch.id); });
+      if (lead) patch.ops.forEach(function (op) { lead[op.path[0]] = op.value; });
+    }); };
+  var amount = _crmPlanContractAmountSync(groups, projected, now, hash); apply(amount);
+  var held = amount.blocked.map(function (b) { return b.sourceKey; });
+  var safeGroups = groups.filter(function (g) { return held.indexOf(g.sourceKey) < 0; });
+  var contract = _crmPlanContractAutoSync(safeGroups, projected, now, hash); apply(contract);
+  var payment = _crmPlanContractPaymentSync(safeGroups, projected, now, hash, { sourceAuthoritative: true });
+  var patches = [], logs = [];
+  [amount, contract, payment].forEach(function (plan) {
+    plan.mutation.collections.leads.patches.forEach(function (patch) {
+      var existing = patches.find(function (p) { return String(p.id) === String(patch.id); });
+      if (existing) existing.ops = existing.ops.concat(patch.ops);
+      else patches.push(patch);
+    });
+    logs = logs.concat(plan.mutation.collections.contractStatusLogs.upsert);
   });
-  var payment = _crmPlanContractPaymentSync(groups, projected, now, hash);
-  var patches = contract.mutation.collections.leads.patches.slice();
-  payment.mutation.collections.leads.patches.forEach(function (patch) {
-    var existing = patches.find(function (p) { return String(p.id) === String(patch.id); });
-    if (existing) existing.ops = existing.ops.concat(patch.ops);
-    else patches.push(patch);
-  });
-  return { updated: contract.updated, blocked: contract.blocked, unchanged: contract.unchanged,
+  var updated = amount.updated.concat(contract.updated).filter(function (v, i, a) { return a.findIndex(function (x) { return String(x.id) === String(v.id); }) === i; });
+  return { updated: updated, blocked: amount.blocked.concat(contract.blocked), unchanged: contract.unchanged,
     paymentUpdated: payment.updated, paymentBlocked: payment.blocked, paymentUnchanged: payment.unchanged,
     mutation: { origin: 'contract_sheet_sync', reason: 'new_contract_and_payment_sync', collections: {
       leads: { idField: 'id', patches: patches }, contractStatusLogs: { idField: 'id',
-        upsert: contract.mutation.collections.contractStatusLogs.upsert.concat(payment.mutation.collections.contractStatusLogs.upsert) }
+        upsert: logs }
     } } };
 }

@@ -1085,7 +1085,7 @@ import { buildDailyMeetingRecord, dailyMeetingContent, dailyMeetingRecords } fro
     var base = CRM_API_BASE.split('/crm/v3/')[0];
     var headers = { 'authorization': 'Bearer ' + CRM_JWT, 'x-requested-with': 'XMLHttpRequest', 'accept': 'application/json' };
     var targets = (db.leads || []).filter(function (lead) {
-      return !!(lead && lead.crmFinanceAuto && lead.crmFinanceAuto.policy === 'future-only-v1' && lead.status === '계약 완료' && Number(lead.projNo));
+      return !!(lead && !lead.contractSheetAmountSync && lead.crmFinanceAuto && lead.crmFinanceAuto.policy === 'future-only-v1' && lead.status === '계약 완료' && Number(lead.projNo));
     });
     if (!targets.length) return { changed: false, db: db, checked: 0, updated: 0, errors: 0 };
     var toKstDay = function (value) {
