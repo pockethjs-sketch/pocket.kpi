@@ -4825,54 +4825,28 @@ function PayModal({ id, onClose, upPay, applyPreset }) {
 function TemplatesView() {
   const { db, up, currentAccount } = useApp();
   const readOnly = currentAccount?.serverRole === 'VIEWER';
-  const [tab, setTab] = useState("tm");
   const [b, setB] = useState(BUILDUPS[0]);
-  const TABS = [["tm", "TM 스크립트"], ["pre", "미팅 전 시퀀스"], ["post", "미팅 후 재영업"]];
+  const confirmation = db.templates?.pre?.[b]?.confirm || "";
   return (
     <div className="space-y-4">
-      <SecTitle icon={MessageSquareText} title="메시지 · 스크립트" sub="빌드업별로 커스텀된 TM 스크립트와 자동 발송 시퀀스입니다. 여기서 수정하면 오늘의 액션·리드 상세에 즉시 반영됩니다." />
+      <SecTitle icon={MessageSquareText} title="메시지 · 스크립트" sub="빌드업별 확정 직후 안내 문구를 편집하고 복사합니다." />
       <div className="flex gap-2 flex-wrap items-center">
-        <div className="flex rounded-lg border border-slate-200 overflow-hidden">
-          {TABS.map(([k, label]) => <button key={k} onClick={() => setTab(k)} className={"px-3.5 py-1.5 text-xs font-semibold transition-colors " + (tab === k ? "bg-slate-900 text-white" : "bg-white text-slate-500 hover:bg-slate-50")}>{label}</button>)}
-        </div>
         <div className="flex gap-1.5 flex-wrap">
           {BUILDUPS.map((x) => <button key={x} onClick={() => setB(x)} className={"px-2.5 py-1 rounded-full text-xs font-medium border transition-colors " + (b === x ? (BSTYLE[x].chip + " ring-1 ring-current") : "bg-white text-slate-500 border-slate-200")}>{x}</button>)}
         </div>
       </div>
       <Card cls="p-4">
         <p className="text-xs text-slate-400 mb-3">사용 가능한 변수: {"{회사명} {담당자} {빌드업} {미팅일시} {영업담당} {링크}"} — 발송 시 리드 정보로 자동 치환됩니다.</p>
-        {tab === "tm" && (
-          <div>
-            <div className="flex items-center justify-between mb-2"><p className="text-sm font-bold text-slate-800">{b} · TM 스크립트</p><CopyBtn text={db.templates.tm[b] || ""} /></div>
-            <Ta readOnly={readOnly} rows={16} value={db.templates.tm[b] || ""} onChange={(e) => up((d) => { d.templates.tm[b] = e.target.value; })} />
-          </div>
-        )}
-        {tab === "pre" && (
-          <div className="space-y-4">
-            {PRE_STEPS.map((st) => (
-              <div key={st.key}>
-                <div className="flex items-center justify-between mb-1.5">
-                  <p className="text-sm font-bold text-slate-800">{st.label} <span className="text-xs font-normal text-slate-400">· {st.desc} 발송</span></p>
-                  <CopyBtn text={(db.templates.pre[b] || {})[st.key] || ""} />
-                </div>
-                <Ta readOnly={readOnly} rows={4} value={(db.templates.pre[b] || {})[st.key] || ""} onChange={(e) => up((d) => { d.templates.pre[b] = d.templates.pre[b] || {}; d.templates.pre[b][st.key] = e.target.value; })} />
-              </div>
-            ))}
-          </div>
-        )}
-        {tab === "post" && (
-          <div className="space-y-4">
-            {POST_STEPS.map((st) => (
-              <div key={st.key}>
-                <div className="flex items-center justify-between mb-1.5">
-                  <p className="text-sm font-bold text-slate-800">{st.label} <span className="text-xs font-normal text-slate-400">· 미팅 완료 +{st.off}일 자동 큐잉 (드랍 시 중단)</span></p>
-                  <CopyBtn text={(db.templates.post[b] || {})[st.key] || ""} />
-                </div>
-                <Ta readOnly={readOnly} rows={4} value={(db.templates.post[b] || {})[st.key] || ""} onChange={(e) => up((d) => { d.templates.post[b] = d.templates.post[b] || {}; d.templates.post[b][st.key] = e.target.value; })} />
-              </div>
-            ))}
-          </div>
-        )}
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-sm font-bold text-slate-800">확정 직후 안내 <span className="text-xs font-normal text-slate-400">· {b}</span></p>
+          <CopyBtn text={confirmation} />
+        </div>
+        <Ta aria-label="확정 직후 안내 문구" readOnly={readOnly} rows={16} value={confirmation} onChange={(e) => up((d) => {
+          d.templates = d.templates || {};
+          d.templates.pre = d.templates.pre || {};
+          d.templates.pre[b] = d.templates.pre[b] || {};
+          d.templates.pre[b].confirm = e.target.value;
+        })} />
       </Card>
     </div>
   );
@@ -8862,7 +8836,7 @@ function RevisionNotesView() {
 function OtherHubView() {
   const { go, canAccess } = useApp();
   const items = [
-    { id: "templates", icon: MessageSquareText, title: "메시지 · 스크립트", desc: "빌드업별 TM 스크립트·미팅 전후 메시지", meta: "업무 템플릿" },
+    { id: "templates", icon: MessageSquareText, title: "메시지 · 스크립트", desc: "빌드업별 확정 직후 안내 문구", meta: "확정 안내" },
     { id: "schema", icon: Link2, title: "데이터 구조도", desc: "페이지·API·저장·백업 전체 흐름", meta: "아키텍처" },
     { id: "settings", icon: Users, title: "계정 생성", desc: "직원 이메일·업무 범위·권한 등록", meta: "MASTER 전용" },
   ];

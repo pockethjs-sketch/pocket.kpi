@@ -20,9 +20,24 @@ test('template navigation and existing data bindings are restored without seedin
   assert.ok(!access.includes('templates'));
   assert.ok(access.includes("pageId !== 'org'"));
   const component = source.slice(source.indexOf('function TemplatesView()'), source.indexOf('function MarketingView()'));
-  for (const key of ['tm','pre','post']) assert.ok(component.includes(`db.templates.${key}[b]`));
-  assert.equal((component.match(/readOnly=\{readOnly\}/g)||[]).length, 3);
+  assert.ok(component.includes('db.templates?.pre?.[b]?.confirm'));
+  assert.equal((component.match(/readOnly=\{readOnly\}/g)||[]).length, 1);
+  assert.ok(component.includes('<CopyBtn text={confirmation} />'));
+  for (const removed of ['TM 스크립트','미팅 전 시퀀스','미팅 후 재영업','PRE_STEPS.map','POST_STEPS.map']) assert.ok(!component.includes(removed));
   assert.ok(!component.includes('seedTemplates'));
+});
+
+test('confirmation edit preserves unrelated saved templates and other buildups', () => {
+  const source = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
+  const component = source.slice(source.indexOf('function TemplatesView()'), source.indexOf('function MarketingView()'));
+  const body = component.match(/onChange=\{\(e\) => up\(\(d\) => \{([\s\S]*?)\}\)\}/)[1];
+  const update = new Function('d','b','e',body);
+  const original = {templates:{tm:{A:'keep'},pre:{A:{confirm:'old',d3:'keep',d1:'keep'},B:{confirm:'other'}},post:{A:{f0:'keep'}}}};
+  const expected = structuredClone(original); expected.templates.pre.A.confirm='new';
+  update(original,'A',{target:{value:'new'}});
+  assert.deepEqual(original,expected);
+  const empty={}; update(empty,'A',{target:{value:'new'}});
+  assert.deepEqual(empty,{templates:{pre:{A:{confirm:'new'}}}});
 });
 
 test('owner and admin are presented as the legacy MASTER account', () => {

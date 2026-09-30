@@ -1,5 +1,10 @@
 # Employee authentication cutover — 2026-09-18
 
+## 2026-09-30 Confirmation-only template editor
+
+- Simplify template presentation to the existing pre[buildup].confirm field, keeping buildup selection/copy/edit and VIEWER read-only behavior. Remove TM, before-meeting reminder and post-meeting tabs from this editor only. Preserve all stored templates and existing task/sequence behavior; no source reset or automatic-message trigger change.
+- Synthetic extracted-handler test verifies only the selected confirmation is changed, including empty-document initialization. Account/menu rules and backend authorization are unchanged. Release verification is tracked in the operations ledger.
+
 ## 2026-09-30 Restore message/script navigation
 
 - Restore Other > Messages/scripts and its hub card using the unchanged stored templates and existing save path. No source-data reset, backend deployment, membership or RLS changes. VIEWER textareas are read-only; copy remains available.
