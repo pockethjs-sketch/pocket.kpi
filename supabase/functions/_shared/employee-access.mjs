@@ -32,7 +32,9 @@ export async function authorizeEmployee({ request, organizationId, verifyUser, f
       !['OWNER', 'ADMIN', 'EDITOR', 'VIEWER'].includes(membership.role)) {
     return denied(403, 'employee_approval_required');
   }
-  return { ok: true, userId: user.id, organizationId, role: membership.role };
+  const scope = membership.access_scope || 'all';
+  if (!['all', 'premeeting'].includes(scope) || (scope === 'premeeting' && ['OWNER','ADMIN'].includes(membership.role))) return denied(403, 'invalid_employee_scope');
+  return { ok: true, userId: user.id, organizationId, role: membership.role, scope };
 }
 
 export function canEmployeeAct(access, permission) {

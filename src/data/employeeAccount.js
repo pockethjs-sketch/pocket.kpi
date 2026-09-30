@@ -12,6 +12,7 @@ export function accountFromEmployeeAccess(employee, pageIds = []) {
     displayName: role,
     role,
     serverRole,
-    allowedPages: role === 'MASTER' ? [] : [...new Set(pageIds)],
+    scope: employee.scope || 'all',
+    allowedPages: employee.scope === 'premeeting' ? ['deals'] : role === 'MASTER' ? [] : [...new Set(pageIds)].filter(id => !['org','templates'].includes(id)),
   };
 }

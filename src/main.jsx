@@ -17,6 +17,7 @@ import { contractRoasByType, dailyStageActivity, dailyComparisonWindow, relative
 import { accountFromEmployeeAccess } from "./data/employeeAccount.js";
 import { paymentRows, paymentScheduleSum, paymentTotalAmount, syncPaymentScheduleTotal } from "./data/paymentSchedule.js";
 import { buildDailyMeetingRecord, dailyMeetingContent, dailyMeetingRecords } from "./data/dailyMeetingLog.js";
+import { preparePremeetingState } from './data/premeetingState.js';
 import { syncDataAndContracts, manualSyncError } from "./data/manualSync.js";
 
 /* ===== 운영 데이터 연동 설정 =====
@@ -269,7 +270,7 @@ import { syncDataAndContracts, manualSyncError } from "./data/manualSync.js";
     } catch (e) {}
     var meta = await crmFetchDomainAction('meta', { timeoutMs: 15000 });
     crmApplyRemoteEnvelope(meta);
-    var marketingPromise = crmFetchDomainAction('marketing', { timeoutMs: 20000 }).then(function (marketing) {
+    var marketingPromise = window.kpiEmployeeAccess?.scope === 'premeeting' ? Promise.resolve(null) : crmFetchDomainAction('marketing', { timeoutMs: 20000 }).then(function (marketing) {
       /* 공급자 상태가 FAILED/DISABLED여도 Supabase에는 마지막 원자 커밋된 정상 일별값이
          남아 있습니다. 상태 오류만으로 오래된 Sheets 광고값으로 후퇴하지 않습니다. */
       return marketing;
@@ -506,6 +507,7 @@ import { syncDataAndContracts, manualSyncError } from "./data/manualSync.js";
       // excludes auth when rebuilding failed journals against the latest DB.
       // Keep every business patch; do not clear the journal before its ACK.
       if (key === 'auth') return;
+      if (window.kpiEmployeeAccess?.scope === 'premeeting' && !['leads','contractStatusLogs','contractEvents'].includes(key)) return;
       var before = previous[key], after = next[key], idField = CRM_COLLECTION_ID_FIELDS[key];
       if (idField && crmArrayHasStableIds(before || [], idField) && crmArrayHasStableIds(after || [], idField)) {
         var beforeMap = {}, afterMap = {}, upsert = [], patches = [], remove = [];
@@ -2279,7 +2281,7 @@ function useDB() {
         const latest = latestDbRef.current;
         const localChanges = crmBuildMutation(baseline, JSON.stringify(latest), { origin: 'user', reason: 'contract_sync_local_edits', allowedLeadRemovals: [] });
         // Marketing has an independent source; contract refresh must not clear its cached values.
-        const fresh = { ...remote.state, adSpend: latest.adSpend, adDaily: latest.adDaily, adSpendMeta: latest.adSpendMeta };
+        const fresh = window.kpiEmployeeAccess?.scope === 'premeeting' ? preparePremeetingState(remote.state) : { ...remote.state, adSpend: latest.adSpend, adDaily: latest.adDaily, adSpendMeta: latest.adSpendMeta };
         const value = JSON.stringify(fresh);
         window.crmLastRemoteValue = value;
         window.crmOptimisticRemoteValue = value;
@@ -2304,6 +2306,23 @@ function useDB() {
     return () => { if (window.crmReloadAfterContractSync === refresh) delete window.crmReloadAfterContractSync; };
   }, []);
   useEffect(() => { (async () => {
+    if (window.kpiEmployeeAccess?.scope === 'premeeting') {
+      try {
+        // Wait for current authorized server state before showing a partial-account cache.
+        const cached = await window.storage.get(KEY3);
+        const remote = await window.crmRemoteStatePromise;
+        if (!remote || (!remote.value && !remote.unchanged)) throw new Error('scope_state_unavailable');
+        const source = JSON.parse(remote.value || cached?.value || '{}');
+        const replay = crmConsumePendingMutations(preparePremeetingState(source));
+        const data = preparePremeetingState(replay.state);
+        window.crmRemoteApplied = true;
+        latestDbRef.current = data; skip.current = true; setDb(data);
+        localStorage.setItem(KEY3, JSON.stringify(data));
+        if (replay.count) await window.storage.set(KEY3, JSON.stringify(data), replay.saveOptions);
+        setSaveState('최신 데이터 확인됨');
+      } catch { setSaveState('프리미팅 데이터 조회 실패 · 새로고침하여 다시 시도하세요'); }
+      return;
+    }
     let data = null;
     let initialSource = "";
     let finalState = "저장됨";
@@ -3602,7 +3621,7 @@ function ScoreBoard({ lead, up }) {
   );
 }
 function LeadModal() {
-  const { db, up, leadId, openLead, toast, go, users, openProject } = useApp();
+  const { db, up, leadId, openLead, toast, go, users, openProject, currentAccount } = useApp();
   const lead = db.leads.find((l) => l.id === leadId);
   const [note, setNote] = useState(""); const [aiBusy, setAiBusy] = useState(false);
   const [showTM, setShowTM] = useState(false);
@@ -3644,6 +3663,7 @@ function LeadModal() {
     setAiBusy(false);
   };
   const createProject = () => {
+    if (currentAccount.scope === 'premeeting') { toast('프리미팅 기업 전용 계정은 프로젝트를 생성할 수 없습니다'); return; }
     const tplKey = Object.keys(db.procTpls).find((k) => db.procTpls[k].buildup === lead.buildup) || Object.keys(db.procTpls)[0];
     const pid = uid();
     up((d) => d.projects.unshift({ id: pid, leadId: lead.id, company: lead.company, buildup: lead.buildup, tpl: tplKey, item: lead.buildup, amount: lead.contractAmount || lead.expected || 0, owner: lead.salesOwner || "", startDate: todayISO(), status: "진행중", sessions: lead.buildup === "지원사업 관리" ? { total: 5, logs: [] } : null,
@@ -3659,7 +3679,7 @@ function LeadModal() {
     "계약 완료": myProject ? { text: "빌드업 프로젝트가 연결되어 있습니다.", btn: "프로젝트 열기", act: () => { openProject(myProject.id); go("projects"); openLead(null); } } : { text: "계약 축하합니다! 프로세스 템플릿으로 빌드업 프로젝트를 생성하세요.", btn: "빌드업 프로젝트 생성", act: createProject },
     "드랍": { text: "재영업 발송이 중단됐습니다. 뉴스레터 체크 시 장기 소식만 유지됩니다." },
   };
-  const hint = HINTS[lead.status];
+  const hint = currentAccount.scope === 'premeeting' && lead.status === '계약 완료' ? { text: '계약·결제 정보는 이 화면에서 관리합니다. 프로젝트 관리는 별도 권한이 필요합니다.' } : HINTS[lead.status];
   const seqRow = (label, due, sentKey, tpl) => {
     const sent = (lead.sent || {})[sentKey];
     const filled = fillTemplate(tpl, lead);
@@ -4279,7 +4299,7 @@ function DealsView() {
             <Btn size="xs" kind="ghost" disabled={contractReviewBusy} onClick={() => contractReview.pending > 0 ? setContractReviewOpen(true) : refreshContractReview(true)} cls="border-amber-200 text-amber-700 hover:bg-amber-50">
               <RefreshCw size={12} className={contractReviewBusy ? "animate-spin" : ""} />신규 계약{contractReview.pending > 0 ? " " + contractReview.pending : ""}
             </Btn>
-            <Btn size="xs" kind="ghost" onClick={() => setCrmImportOpen(true)} cls="border-indigo-200 text-indigo-700 hover:bg-indigo-50"><Link2 size={12} />CRM 링크</Btn>
+            {currentAccount.scope !== 'premeeting' && <Btn size="xs" kind="ghost" onClick={() => setCrmImportOpen(true)} cls="border-indigo-200 text-indigo-700 hover:bg-indigo-50"><Link2 size={12} />CRM 링크</Btn>}
             <Btn size="xs" kind="ghost" onClick={() => setContractLogOpen(true)} cls="border-slate-200 text-slate-700 hover:bg-slate-50"><ClipboardList size={12} />활동 로그{contractStatusLogs.length ? " " + contractStatusLogs.length : ""}</Btn>
             <span className="hidden sm:block w-px h-5 bg-slate-200 mx-0.5" />
             <Btn size="xs" kind="primary" onClick={() => setAddOpen(true)}><Plus size={12} />딜 추가</Btn>
@@ -8889,17 +8909,15 @@ function RevisionNotesView() {
 }
 
 function OtherHubView() {
-  const { db, go, users } = useApp();
+  const { go, canAccess } = useApp();
   const items = [
-    { id: "org", icon: Target, title: "조직 · KPI", desc: "자동 KPI와 목표·보상 규칙", meta: (db.kpis || []).length + "개 KPI" },
-    { id: "templates", icon: MessageSquareText, title: "메시지 · 스크립트", desc: "TM 스크립트와 미팅 전후 메시지", meta: "발송 문구 관리" },
     { id: "schema", icon: Link2, title: "데이터 구조도", desc: "페이지·API·저장·백업 전체 흐름", meta: "아키텍처" },
-    { id: "settings", icon: Settings, title: "설정 · 사용자", desc: "사용자·접속·연동·백업 관리", meta: users.length + "명 등록" },
+    { id: "settings", icon: Users, title: "계정 생성", desc: "직원 이메일·업무 범위·권한 등록", meta: "MASTER 전용" },
   ];
   return (
     <div className="space-y-4">
       <SecTitle icon={Settings} title="기타 총괄" />
-      {[["운영", items.slice(0, 3)], ["관리 도구", items.slice(3)]].map(([label, group]) => (
+      {[["운영 · 계정 관리", items.filter(item => canAccess(item.id))]].map(([label, group]) => (
         <section key={label}>
           <p className="mb-2 text-[11px] font-extrabold tracking-wide text-slate-400">{label}</p>
           <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
@@ -8949,15 +8967,12 @@ const AUTH_PAGE_GROUPS = [
   ] },
   { id: "other", label: "기타", pages: [
     { id: "otherHub", label: "기타 총괄" },
-    { id: "templates", label: "메시지 · 스크립트" },
-    { id: "org", label: "조직 · KPI" },
     { id: "balance", label: "잔금 구버전" },
     { id: "schema", label: "데이터 구조도" },
     { id: "revisions", label: "수정사항" },
   ] },
   { id: "admin", label: "관리", pages: [
-    { id: "accessControl", label: "권한 관리", masterOnly: true },
-    { id: "settings", label: "설정 · 사용자", masterOnly: true },
+    { id: "settings", label: "계정 생성", masterOnly: true },
   ] },
 ];
 const NAV_SECTIONS = [
@@ -8979,12 +8994,9 @@ const NAV_SECTIONS = [
     { id: "products", label: "상품 · 가격", icon: Package },
   ] },
   { id: "otherHub", label: "기타", icon: Settings, home: "otherHub", items: [
-    { id: "templates", label: "메시지 · 스크립트", icon: MessageSquareText },
-    { id: "org", label: "조직 · KPI", icon: Target },
     { id: "balance", label: "잔금 구버전", icon: CalendarDays },
     { id: "schema", label: "데이터 구조도", icon: Link2 },
-    { id: "accessControl", label: "권한 관리", icon: Users },
-    { id: "settings", label: "설정 · 사용자", icon: Settings },
+    { id: "settings", label: "계정 생성", icon: Users },
   ] },
   { id: "revisions", label: "수정사항", icon: Pencil, home: "revisions", items: [] },
 ];
@@ -9414,7 +9426,7 @@ function DataConnectionFooter({ view, db, saveState }) {
 }
 export default function App() {
   const { db, setDb, up, reset, saveState } = useDB();
-  const [view, setView] = useState("performanceCheck");
+  const [view, setView] = useState(window.kpiEmployeeAccess?.scope === 'premeeting' ? 'deals' : 'performanceCheck');
   const [leadId, setLeadId] = useState(null);
   const [projId, setProjId] = useState(null);
   const [period, setPeriod] = useState(periodNow());
@@ -9443,7 +9455,7 @@ export default function App() {
   );
   const isMaster = !!(currentAccount && currentAccount.role === "MASTER");
   const allowedPageSet = new Set(currentAccount && Array.isArray(currentAccount.allowedPages) ? currentAccount.allowedPages : []);
-  const canAccess = (pageId) => !!currentAccount && (isMaster || (!MASTER_ONLY_PAGES.includes(pageId) && allowedPageSet.has(pageId)));
+  const canAccess = (pageId) => !['templates','org'].includes(pageId) && !!currentAccount && (isMaster || (!MASTER_ONLY_PAGES.includes(pageId) && allowedPageSet.has(pageId)));
   const permittedSections = currentAccount ? NAV_SECTIONS.map((section) => {
     const homeAllowed = canAccess(section.home);
     const items = section.items.filter((item) => canAccess(item.id));
@@ -9462,7 +9474,7 @@ export default function App() {
   useEffect(() => { ANTHROPIC_API_KEY = (db && db.settings && db.settings.apiKey) || ""; }, [db]);
   if (!db) return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50">
-      <div className="text-center"><div className="w-9 h-9 rounded-xl bg-indigo-600 text-white font-black flex items-center justify-center mx-auto text-lg">P</div><p className="text-sm text-slate-400 mt-3">포켓 CRM 불러오는 중…</p></div>
+      <div className="text-center"><div className="w-9 h-9 rounded-xl bg-indigo-600 text-white font-black flex items-center justify-center mx-auto text-lg">P</div><p className="text-sm text-slate-500 mt-3">{saveState.includes('실패') ? saveState : '포켓 CRM 불러오는 중…'}</p>{saveState.includes('실패') && <button className="mt-3 underline" onClick={() => location.reload()}>다시 시도</button>}</div>
     </div>
   );
   if (!currentAccount) {
@@ -9524,7 +9536,7 @@ export default function App() {
   const ctx = { db, setDb, up, reset, saveState, toast, go, leadId, openLead: setLeadId, projId, openProject: setProjId, me, setMe, users, currentAccount, isMaster, canAccess, period, setPeriod, globalQ, setGlobalQ };
   const VIEWS = { performanceCheck: IntegratedPerformanceView, marketingHub: MarketingHubView, marketingMeta: MarketingMetaView, marketingSearch: MarketingSearchView, premeetingHub: PremeetingHubView, tmManagement: TmManagementView, contractHub: ContractHubView, supportManagement: SupportContractView, ltvExpansion: LtvExpansionView, balance: BalanceManagementView, otherHub: OtherHubView, revisions: RevisionNotesView, leads: LeadsView, deals: DealsView, templates: TemplatesView, marketing: MarketingView, projects: ProjectsView, pocketbiz: PocketBizView, perf: PerfView, org: OrgKpiView, prompts: PromptsView, products: ProductsView, schema: SchemaView, accessControl: AccessControlView, settings: SettingsView };
   const effectiveView = canAccess(view) ? view : firstAllowedPage;
-  const Cur = effectiveView === 'accessControl' ? EmployeeAdministration : (VIEWS[effectiveView] || IntegratedPerformanceView);
+  const Cur = ['accessControl','settings'].includes(effectiveView) ? EmployeeAdministration : (VIEWS[effectiveView] || IntegratedPerformanceView);
   const activeSection = permittedSections.find((section) => section.home === effectiveView || section.items.some((item) => item.id === effectiveView)) || permittedSections[0];
   return (
     <Ctx.Provider value={ctx}>
@@ -9580,7 +9592,7 @@ export default function App() {
                 <User size={14} className="text-slate-400 shrink-0" />
                 <span className="text-xs font-extrabold text-slate-700">{currentAccount.displayName || currentAccount.username}</span>
                 <Chip cls={isMaster ? "bg-indigo-50 text-indigo-700 border-indigo-200" : "bg-slate-50 text-slate-600 border-slate-200"}>{currentAccount.role}</Chip>
-                {isMaster && <button title="권한 관리" onClick={() => setView("accessControl")} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><Settings size={13} /></button>}
+                {isMaster && <button title="계정 생성" onClick={() => setView("settings")} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><Settings size={13} /></button>}
                 <button title="로그아웃" onClick={() => window.kpiSignOut()} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X size={13} /></button>
               </div>
               <div className="h-5 w-px bg-slate-200 hidden md:block" />

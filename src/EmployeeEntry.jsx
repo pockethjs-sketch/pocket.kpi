@@ -26,10 +26,11 @@ function EmployeeEntry() {
         if (!data.session) { if (alive) { setLoadedApp(null); setMessage('승인된 직원 이메일로 로그인하세요.'); } return; }
         const access = await employeeRequest('session');
         if (!alive) return;
-        if (currentUser && currentUser !== access.userId) { location.reload(); return; }
-        currentUser = access.userId;
+        const identity = `${access.userId}:${access.role}:${access.scope || 'all'}`;
+        if (currentUser && currentUser !== identity) { location.reload(); return; }
+        currentUser = identity;
         window.kpiEmployeeAccess = access;
-        window.kpiEmployeeStorage = scopedEmployeeStorage(window.localStorage, access.userId);
+        window.kpiEmployeeStorage = scopedEmployeeStorage(window.localStorage, access.scope === 'premeeting' ? `${access.userId}:premeeting` : access.userId);
         window.kpiEmployeeHeaders = employeeHeaders;
         window.kpiEmployeeRequest = employeeRequest;
         window.kpiSignOut = async () => {

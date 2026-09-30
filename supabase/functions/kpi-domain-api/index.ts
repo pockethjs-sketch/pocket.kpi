@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { authorizeEmployee, canEmployeeAct, mutationPermission } from "../_shared/employee-access.mjs";
+import { canAccessAction, isPremeetingOnly, isPremeetingLead, premeetingDocuments, validatePremeetingMutation } from "../_shared/premeeting-access.mjs";
 
 const ALLOWED_ORIGINS = new Set([
   "https://pockethjs-sketch.github.io",
@@ -28,6 +29,19 @@ function reply(req: Request, body: unknown, status = 200) {
 
 const number = (value: unknown) => Number(value || 0);
 const monthKey = (date: string) => String(date || "").slice(0, 7);
+
+async function readScopeLeads(client: any, org: string, includeArchived = false) {
+  const rows: any[] = [];
+  for (let offset = 0; offset < 50000; offset += 500) {
+    let query = client.from('leads').select('source_payload,projected_revision,archived_at').eq('organization_id', org);
+    if (!includeArchived) query = query.is('archived_at', null);
+    const { data, error } = await query.order('id').range(offset, offset + 499);
+    if (error) return { data: null, error };
+    rows.push(...(data || []));
+    if ((data || []).length < 500) return { data: rows, error: null };
+  }
+  return { data: null, error: { code: 'scope_limit_exceeded' } };
+}
 
 function buildMarketing(rows: any[], syncRows: any[]) {
   const byProviderDate = new Map<string, any>();
@@ -109,7 +123,7 @@ Deno.serve(async (req) => {
     findMembership: async (org: string, userId: string, verifiedEmail: string) => {
       const claim = await supabase.rpc("kpi_claim_employee_invitation", { p_organization_id: org, p_user_id: userId, p_verified_email: verifiedEmail });
       if (claim.error) return { error: claim.error };
-      return supabase.from("organization_memberships").select("organization_id,user_id,role,state,archived_at")
+      return supabase.from("organization_memberships").select("organization_id,user_id,role,state,archived_at,access_scope")
         .eq("organization_id", org).eq("user_id", userId).maybeSingle();
     },
   });
@@ -122,16 +136,19 @@ Deno.serve(async (req) => {
   const permission = action === "employees" ? "admin" : action === "mutation" ? mutationPermission(body.mutation)
     : readActions.has(action) || (action === "sheet_bridge" && ["contract_changes", "daily_sync_status", "health", "marketing_status"].includes(body.sheetAction)) ? "read" : "write";
   if (!canEmployeeAct(access, permission)) return reply(req, { error: "permission_denied" }, 403);
-  if (action === "session") return reply(req, { ok: true, userId: access.userId, organizationId, role: access.role });
+  if (!canAccessAction(access, action, body)) return reply(req, { error: "page_scope_denied" }, 403);
+  if (action === "session") return reply(req, { ok: true, userId: access.userId, organizationId, role: access.role, scope: access.scope });
   if (action === "employees") {
     if (req.method === "POST") {
       const email = String(body.email || "").trim().toLowerCase();
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !["EDITOR", "VIEWER", "ADMIN"].includes(body.role)) return reply(req, { error: "invalid_employee" }, 400);
-      const { error } = await supabase.from("employee_invitations").insert({ organization_id: organizationId, email, role: body.role, approved_by: access.userId });
+      const scope = body.scope || 'all';
+      if (!['all','premeeting'].includes(scope) || (scope === 'premeeting' && body.role === 'ADMIN')) return reply(req, { error: 'invalid_employee_scope' }, 400);
+      const { error } = await supabase.from("employee_invitations").insert({ organization_id: organizationId, email, role: body.role, access_scope: scope, approved_by: access.userId });
       if (error) return reply(req, { error: error.code === "23505" ? "employee_already_approved" : "employee_approval_failed" }, 400);
       return reply(req, { ok: true });
     }
-    const { data, error } = await supabase.from("employee_invitations").select("email,role,claimed_user_id,created_at").eq("organization_id", organizationId);
+    const { data, error } = await supabase.from("employee_invitations").select("email,role,access_scope,claimed_user_id,created_at").eq("organization_id", organizationId);
     return error ? reply(req, { error: "employees_read_failed" }, 500) : reply(req, { ok: true, employees: data });
   }
   if (action === "sheet_bridge") {
@@ -157,6 +174,10 @@ Deno.serve(async (req) => {
   }
 
   if (action === "meta") {
+    if (isPremeetingOnly(access)) {
+      const { data, error } = await supabase.from('app_current_state').select('primary_revision,updated_at').eq('organization_id', organizationId).maybeSingle();
+      return error ? reply(req, { error: 'meta_read_failed' }, 500) : reply(req, { ok: true, storageVersion: 2, mutationVersion: 3, revision: data?.primary_revision || '', updatedAt: data?.updated_at });
+    }
     const [{ data: current, error: currentError }, { data: projection, error: projectionError }, { data: sync, error: syncError }] = await Promise.all([
       supabase.from("app_current_state").select("primary_revision,updated_at").eq("organization_id", organizationId).maybeSingle(),
       supabase.from("app_state_projections").select("primary_revision,status,entity_counts,financial_totals,projected_at").eq("organization_id", organizationId).maybeSingle(),
@@ -178,6 +199,11 @@ Deno.serve(async (req) => {
         const { apiKey, ...safe } = row.document_value || {};
         documents[row.document_key] = safe;
       } else documents[row.document_key] = row.document_value;
+    }
+    if (isPremeetingOnly(access)) {
+      const { data: rows, error: leadError } = await readScopeLeads(supabase, organizationId);
+      if (leadError) return reply(req, { error: 'scope_read_failed' }, 500);
+      return reply(req, { ok: true, documents: premeetingDocuments(documents, (rows || []).map(r => r.source_payload)), revision: data?.[0]?.projected_revision || '' });
     }
     return reply(req, { ok: true, documents, revision: data?.[0]?.projected_revision || "" });
   }
@@ -208,10 +234,16 @@ Deno.serve(async (req) => {
   }
 
   if (action === "crm") {
+    if (isPremeetingOnly(access)) {
+      const { data, error } = await readScopeLeads(supabase, organizationId);
+      if (error) return reply(req, { error: 'scope_read_failed' }, 503);
+      return reply(req, { ok: true, leads: data!.map(r => r.source_payload).filter(isPremeetingLead), revision: data?.[0]?.projected_revision || '' });
+    }
     const { data, error } = await supabase.from("leads").select("source_payload,projected_revision")
       .eq("organization_id", organizationId).is("archived_at", null).order("created_at", { ascending: true });
     if (error) return reply(req, { error: "crm_read_failed", code: error.code }, 500);
-    return reply(req, { ok: true, leads: (data || []).map((row) => row.source_payload), revision: data?.[0]?.projected_revision || "" });
+    const leads = (data || []).map(row => row.source_payload);
+    return reply(req, { ok: true, leads: isPremeetingOnly(access) ? leads.filter(isPremeetingLead) : leads, revision: data?.[0]?.projected_revision || "" });
   }
 
   if (action === "contract_history") {
@@ -281,6 +313,15 @@ Deno.serve(async (req) => {
     if (req.method !== "POST") return reply(req, { error: "method_not_allowed" }, 405);
     const required = ["mutationId", "baseRevision", "nextRevision", "mutation"];
     if (required.some((key) => !body[key])) return reply(req, { error: "missing_mutation_fields" }, 400);
+    if (isPremeetingOnly(access)) {
+      const [{ data: rows, error: readError }, { data: docs, error: docError }] = await Promise.all([
+        readScopeLeads(supabase, organizationId, true),
+        supabase.from('app_documents').select('document_key,document_value,projected_revision').eq('organization_id', organizationId).in('document_key', ['contractStatusLogs','contractEvents']),
+      ]);
+      if (readError || docError) return reply(req, { error: 'scope_read_failed' }, 503);
+      if ((rows || []).some(r => !r.archived_at && r.projected_revision !== body.baseRevision) || (docs || []).some(r => r.projected_revision !== body.baseRevision)) return reply(req, { error: 'revision_conflict' }, 409);
+      if (!validatePremeetingMutation(body.mutation, (rows || []).map(r => ({ ...r.source_payload, archived_at: r.archived_at })), Object.fromEntries((docs || []).map(r => [r.document_key, r.document_value])))) return reply(req, { error: 'page_scope_denied' }, 403);
+    }
     // Never replace legacy auth records or erase a server-only API key while saving a filtered bootstrap.
     if (body.mutation.documents?.auth || (body.mutation.deleteDocuments || []).includes("auth") || body.mutation.collections?.auth) return reply(req, { error: "legacy_auth_read_only" }, 403);
     if (body.mutation.documents?.settings) {
@@ -298,7 +339,8 @@ Deno.serve(async (req) => {
     });
     if (error) return reply(req, { error: "mutation_commit_failed", code: error.code }, 500);
     if (!data?.ok) return reply(req, data, data?.error === "revision_conflict" ? 409 : 400);
-    return reply(req, { ...data, storageVersion: 2, mutationVersion: 3, primary: "supabase", sheetsBackup: { pending: true } });
+    const result = isPremeetingOnly(access) ? { ok: true, revision: data.revision, duplicate: !!data.duplicate } : data;
+    return reply(req, { ...result, storageVersion: 2, mutationVersion: 3, primary: "supabase", sheetsBackup: { pending: true } });
   }
   return reply(req, { error: "unknown_action" }, 400);
 });

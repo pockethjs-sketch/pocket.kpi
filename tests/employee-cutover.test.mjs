@@ -5,11 +5,12 @@ import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 import { createHmac } from 'node:crypto';
 import { authorizeEmployee, canEmployeeAct, mutationPermission } from '../supabase/functions/_shared/employee-access.mjs';
+import * as scopeAccess from '../supabase/functions/_shared/premeeting-access.mjs';
 const domain = readFileSync(new URL('../supabase/functions/kpi-domain-api/index.ts', import.meta.url), 'utf8');
 const gs = readFileSync(new URL('../../pocket-kpi-deploy/Code.gs', import.meta.url), 'utf8');
-function handler(role, user = true) {
+function handler(role, user = true, scope = 'all') {
   let callback, writes = 0;
-  const member = { organization_id: 'org', user_id: 'user', role, state: 'ACTIVE', archived_at: null };
+  const member = { organization_id: 'org', user_id: 'user', role, state: 'ACTIVE', archived_at: null, access_scope: scope };
   const client = {
     auth: { getUser: async () => user ? { data: { user: { id: 'user', role: 'authenticated', email_confirmed_at: '2026-09-18' } } } : { error: {} } },
     rpc: async (name) => { if (name !== 'kpi_claim_employee_invitation') writes++; return { data: { ok: true } }; },
@@ -19,7 +20,7 @@ function handler(role, user = true) {
     },
   };
   const source = stripTypeScriptTypes(domain.replace(/^import .*;\r?\n/gm, ''), { mode: 'transform' });
-  vm.runInNewContext(source, { createClient: () => client, authorizeEmployee, canEmployeeAct, mutationPermission,
+  vm.runInNewContext(source, { createClient: () => client, authorizeEmployee, canEmployeeAct, mutationPermission, ...scopeAccess,
     URL, Request, Response, TextEncoder, AbortSignal, crypto: globalThis.crypto,
     Deno: { env: { get: (key) => key === 'KPI_ORGANIZATION_ID' ? 'org' : 'test-only' }, serve: (fn) => { callback = fn; } } });
   return { call: (action, body = {}) => callback(new Request('https://example.invalid', { method: 'POST', headers: { authorization: 'Bearer synthetic-session', 'content-type': 'application/json' }, body: JSON.stringify({ action, ...body }) })), writes: () => writes };
@@ -27,6 +28,13 @@ function handler(role, user = true) {
 test('real handler denies invalid sessions before data read/write', async () => {
   const h = handler('ADMIN', false);
   for (const action of ['crm', 'mutation', 'sheet_bridge', 'employees']) assert.equal((await h.call(action)).status, 401);
+  assert.equal(h.writes(), 0);
+});
+test('limited employee cannot request other business pages or privileged actions', async () => {
+  const h = handler('EDITOR', true, 'premeeting');
+  assert.equal((await (await h.call('session')).json()).scope, 'premeeting');
+  for (const action of ['marketing','contract_history','support_board','notion_receivables','crm_refresh','employees']) assert.equal((await h.call(action)).status, 403);
+  assert.equal((await h.call('sheet_bridge', { sheetAction: 'marketing_status' })).status, 403);
   assert.equal(h.writes(), 0);
 });
 test('real handler denies viewer writes and editor administration', async () => {

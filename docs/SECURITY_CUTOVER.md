@@ -1,5 +1,12 @@
 # Employee authentication cutover — 2026-09-18
 
+## 2026-09-30 Menu retirement and scoped-account preparation
+
+- Retire templates/org navigation without deleting stored business documents; settings now opens email-based account registration. MASTER remains unchanged.
+- Prepared premeeting-only server membership scope, scoped API reads/mutations, isolated cache, partial-state initialization without legacy seeding, and direct REST restriction. These backend files and migration are **not applied to production**: automatic safety review rejected the common RLS/claim-function change pending explicit operator approval of its impact on existing direct database clients.
+- Do not create the requested limited employee as an ordinary all-access employee. Frontend blocks limited registration until the authenticated session advertises scope support. Existing all-access registration remains the existing employee-invitation flow. Password creation and email verification stay self-service; no shared credential or auth-user SQL insertion.
+- 224 tests and scoped synthetic browser read/edit/save/manual-sync passed, with no marketing fetch or runtime exceptions. Production employee login and restricted account activation remain unverified. Web-only release is tracked in the operations ledger; neither migration nor Edge deployment is implied by a Pages release.
+
 ## 2026-09-30 Stale login-entry chunk recovery
 
 - Public read-only check confirmed the reported previous main asset returns HTTP404 while the current page references a newer entry (GitHub Pages HTML max-age=600). An already-open login entry can hold an obsolete dynamic import path after deployment; this is an application-file load failure, not evidence of a rejected password.
