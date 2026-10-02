@@ -1,5 +1,10 @@
 # Employee authentication cutover — 2026-09-18
 
+## 2026-10-02 Channel ROAS drilldown
+
+- Marketing hub channel/total ROAS opens a read-only company breakdown from already employee-authorized CRM state. Uses the same contract-date selection and amount helper as the table; shows exact contract amounts, source channel, type/date/owner and ad denominator. Unknown/zero spend remains non-computable, with rows still available.
+- No new fetch, data writes, authorization changes or collection triggers. Company buttons invoke the existing authorized detail view. Synthetic tests and static deployment verification are tracked in PROJECT_STATE; no production customer payload is needed for QA.
+
 ## 2026-10-02 Main contract/receipt ROAS presentation
 
 - Main contract card retains contract-date ROAS and adds confirmed-receipt ROAS for the same selected contract cohort/customer type and ad-spend denominator. Reuses existing actualPaid semantics, including partial CRM deposits and undated confirmed installments; not a receipt-date cashflow metric. No fabricated receipt dates or historical cash deltas.

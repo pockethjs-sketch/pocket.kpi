@@ -5,6 +5,7 @@ const localStorage = window.kpiEmployeeStorage;
 import ContractOwnerSheet, { ContractCustomerTypeLabel } from "./ContractOwnerSheet.jsx";
 import ContractMonthlyPerformance from "./ContractMonthlyPerformance.jsx";
 import ContractBasisView from "./ContractBasisView.jsx";
+import ChannelRoasDetails from "./ChannelRoasDetails.jsx";
 import RecentSyncActivity from "./RecentSyncActivity.jsx";
 import DailyActivityChart from "./DailyActivityChart.jsx";
 import LeadRevenueQuality from "./LeadRevenueQuality.jsx";
@@ -14,7 +15,7 @@ import NotionReceivables from "./NotionReceivables.jsx";
 import ReceivablesTable, { LEDGER_RECEIVABLE_COLUMNS, ReceivableCompany, ReceivableTag } from "./ReceivablesTable.jsx";
 import { shadowStatusFromSheetsResult } from "./data/repositoryAdapter.js";
 import { reconcileMarketingDailyInquiries } from "./data/marketingInquiry.js";
-import { contractRoasByType, dailyStageActivity, dailyComparisonWindow, relativeMetricChange, previousDatedSpend, weekdayActivity, absoluteCountChange, previousMonthCostWindow, completeDatedSpend } from "./data/performanceMetrics.js";
+import { contractRoasByType, contractRoasRows, dailyStageActivity, dailyComparisonWindow, relativeMetricChange, previousDatedSpend, weekdayActivity, absoluteCountChange, previousMonthCostWindow, completeDatedSpend } from "./data/performanceMetrics.js";
 import { accountFromEmployeeAccess } from "./data/employeeAccount.js";
 import { paymentRows, paymentScheduleSum, paymentTotalAmount, syncPaymentScheduleTotal } from "./data/paymentSchedule.js";
 import { buildDailyMeetingRecord, dailyMeetingContent, dailyMeetingRecords } from "./data/dailyMeetingLog.js";
@@ -6642,7 +6643,8 @@ function IntegratedPerformanceView() {
 }
 
 function MarketingHubView() {
-  const { db, period, go } = useApp();
+  const { db, period, go, openLead } = useApp();
+  const [roasChannel, setRoasChannel] = useState(null);
   const r = pRange(period);
   const leads = db.leads.filter((l) => inR(l.createdAt, r));
   const met = leads.filter(hasCompletedMeeting);
@@ -6668,6 +6670,10 @@ function MarketingHubView() {
   const totalCpl = spend != null && leads.length ? Math.round(spend / leads.length) : null;
   const totalCac = spend != null && paid.length ? Math.round(spend / paid.length) : null;
   const totalRoas = contractPerformance.totalRoas;
+  const roasDetailLeads = roasChannel == null ? [] : db.leads.filter(lead => roasChannel === "전체" || channelGroupName(lead.channel) === roasChannel);
+  const roasDetailRows = contractRoasRows(roasDetailLeads, r);
+  const roasDetailSpend = roasChannel === "전체" ? spend : roasChannel == null ? null : marketingSpendForPeriod(db, period, roasChannel);
+  const roasDetailSummary = contractRoasByType(roasDetailLeads, r, roasDetailSpend);
   const monthKey = (y, m) => y + "-" + pad(m);
   const shiftMonthKey = (key, offset) => {
     const [y, m] = key.split("-").map(Number);
@@ -6886,7 +6892,7 @@ function MarketingHubView() {
                   <td className="px-3 py-3 text-right text-xs font-bold text-emerald-600 tabular-nums">{pct(x.paidCompanies.length, x.rows.length)}%</td>
                   <td className="px-3 py-3 text-right text-xs font-bold text-slate-600 tabular-nums">{x.cac == null ? "-" : fmtK(x.cac) + "원"}</td>
                   <td className="px-3 py-3 text-right font-black text-teal-700 tabular-nums">{fmtK(x.rev)}원</td>
-                  <td className={"px-4 py-3 text-right font-black tabular-nums " + (x.roas != null && x.roas >= 100 ? "text-emerald-700" : x.roas == null ? "text-slate-300" : "text-rose-600")}>{x.roas == null ? "-" : x.roas + "%"}</td>
+                  <td className={"px-4 py-3 text-right font-black tabular-nums " + (x.roas != null && x.roas >= 100 ? "text-emerald-700" : x.roas == null ? "text-slate-500" : "text-rose-600")}><button type="button" aria-label={x.name + " ROAS 계산 기업 보기"} title="계산에 포함된 기업·계약금액 보기" className="min-h-8 rounded px-1 underline decoration-dotted underline-offset-4 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500" onClick={() => setRoasChannel(x.name)}>{x.roas == null ? "-" : x.roas + "%"}</button></td>
                 </tr>
               ))}
               {!channelRows.length && <tr><td colSpan={11}><Empty text="해당 기간의 마케팅 데이터가 없습니다." /></td></tr>}
@@ -6904,13 +6910,16 @@ function MarketingHubView() {
                   <td className="px-3 py-3 text-right text-xs font-bold text-emerald-300 tabular-nums">{pct(paid.length, leads.length)}%</td>
                   <td className="px-3 py-3 text-right text-xs font-bold tabular-nums">{totalCac == null ? "-" : fmtK(totalCac) + "원"}</td>
                   <td className="px-3 py-3 text-right text-sm font-black text-teal-300 tabular-nums">{fmtK(contractPerformance.amount)}원</td>
-                  <td className="px-4 py-3 text-right text-sm font-black text-rose-300 tabular-nums">{totalRoas == null ? "-" : totalRoas + "%"}</td>
+                  <td className="px-4 py-3 text-right text-sm font-black text-rose-300 tabular-nums"><button type="button" aria-label="전체 ROAS 계산 기업 보기" title="전체 ROAS 계산에 포함된 기업·계약금액 보기" className="min-h-8 rounded px-1 underline decoration-dotted underline-offset-4 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white" onClick={() => setRoasChannel("전체")}>{totalRoas == null ? "-" : totalRoas + "%"}</button></td>
                 </tr>
               </tfoot>
             )}
           </table>
         </div>
       </Card>
+      <Modal open={roasChannel != null} onClose={() => setRoasChannel(null)} wide title={(roasChannel || "전체") + " ROAS · 계산 기업"}>
+        {roasChannel != null && <ChannelRoasDetails rows={roasDetailRows} spend={roasDetailSpend} roas={roasDetailSummary.totalRoas} channel={roasChannel} periodLabel={pLabel(period)} onOpenLead={id => { setRoasChannel(null); openLead(id); }} />}
+      </Modal>
     </div>
   );
 }

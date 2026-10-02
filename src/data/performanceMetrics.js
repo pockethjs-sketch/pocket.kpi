@@ -80,14 +80,17 @@ export function previousDatedSpend(adDaily, window, displayedSpend) {
   return rows.filter(row => inRange(row.date, window.previous)).reduce((sum, row) => sum + (Number(row.spend) || 0), 0);
 }
 
+// The table total and its drilldown must use exactly the same contract rows/amounts.
+export function contractRoasRows(leads, range) {
+  return (leads || []).filter(lead => lead.status === '계약 완료' && inRange(lead.contractAt, range)).map(lead => {
+    const paymentSum = (lead.payments || []).reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0);
+    return { lead, amount: Number(lead.contractAmount) || paymentSum || 0, customerType: lead.ctype === '기존' ? '기존' : '신규' };
+  });
+}
+
 export function contractRoasByType(leads, range, spend) {
   const amounts = { 신규: 0, 기존: 0 };
-  for (const lead of leads || []) {
-    if (lead.status !== '계약 완료' || !inRange(lead.contractAt, range)) continue;
-    const type = lead.ctype === '기존' ? '기존' : '신규';
-    const paymentSum = (lead.payments || []).reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0);
-    amounts[type] += Number(lead.contractAmount) || paymentSum || 0;
-  }
+  for (const row of contractRoasRows(leads, range)) amounts[row.customerType] += row.amount;
   const roas = amount => spend > 0 ? Math.round(amount / spend * 100) : null;
   return {
     amount: amounts.신규 + amounts.기존,
