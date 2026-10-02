@@ -1,5 +1,10 @@
 # Employee authentication cutover — 2026-09-18
 
+## 2026-10-02 Main contract/receipt ROAS presentation
+
+- Main contract card retains contract-date ROAS and adds confirmed-receipt ROAS for the same selected contract cohort/customer type and ad-spend denominator. Reuses existing actualPaid semantics, including partial CRM deposits and undated confirmed installments; not a receipt-date cashflow metric. No fabricated receipt dates or historical cash deltas.
+- Frontend-only aggregation of already authorized state. No new API, business writes, auth/RLS, collection or backup changes. Synthetic calculations/rendering and release gates are recorded in the operations ledger; production employee-session UI remains separately unverified.
+
 ## 2026-09-30 Confirmation-only template editor
 
 - Simplify template presentation to the existing pre[buildup].confirm field, keeping buildup selection/copy/edit and VIEWER read-only behavior. Remove TM, before-meeting reminder and post-meeting tabs from this editor only. Preserve all stored templates and existing task/sequence behavior; no source reset or automatic-message trigger change.

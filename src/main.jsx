@@ -6149,6 +6149,9 @@ function IntegratedPerformanceView() {
   const contractAmountTotal = customerType === "신규" ? contractPerformance.newAmount : customerType === "기존" ? contractPerformance.existingAmount : contractPerformance.amount;
   const spend = customerType === "기존" ? null : roasSpend;
   const contractRoas = customerType === "신규" ? contractPerformance.newRoas : customerType === "기존" ? contractPerformance.existingRoas : contractPerformance.totalRoas;
+  // Same contract-date cohort as contract ROAS; confirmed receipts to date, not due amounts.
+  const contractPaidTotal = contract.reduce((sum, lead) => sum + Number(actualPaid(lead)), 0);
+  const receivedRoas = roasSpend > 0 ? Math.round(contractPaidTotal / roasSpend * 100) : null;
   const targetFactor = period.mode === "month" ? 1 : period.mode === "year" ? 12 : period.mode === "day" ? 1 / 30 : null;
   const effectiveTargetFactor = customerType === "기존" ? null : targetFactor;
   const conversionTarget = customerType === "기존" ? null : TARGET.conv;
@@ -6473,7 +6476,18 @@ function IntegratedPerformanceView() {
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2 px-1">
                 {s.id === "marketing" && <p className="text-[11px] font-bold text-slate-500">총 마케팅비 <span className="ml-1 text-sm font-black tabular-nums text-sky-700">{fmtK(roasSpend)}원</span> <DailyDelta current={roasSpend} previous={previousSpend} unit="원" lowerIsBetter /></p>}
-                {s.id === "contract" && <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-bold text-slate-500"><p>총 계약액 <span className="ml-1 text-sm font-black tabular-nums text-emerald-700">{fmtK(contractAmountTotal)}원</span> <DailyDelta current={contractAmountTotal} previous={amountBefore} unit="원" /></p><p>ROAS <span className="ml-1 text-sm font-black tabular-nums text-indigo-700">{contractRoas == null ? "-" : contractRoas.toLocaleString() + "%"}</span> <DailyDelta current={divide(contractAmountTotal, roasSpend, 100)} previous={divide(amountBefore, previousSpend, 100)} unit="%" /></p></div>}
+                {s.id === "contract" && <div className="w-full space-y-2 text-xs font-bold text-slate-600" data-testid="contract-roas-summary">
+                  <p>총 계약액 <span className="ml-1 text-sm font-black tabular-nums text-emerald-700">{fmtK(contractAmountTotal)}원</span> <DailyDelta current={contractAmountTotal} previous={amountBefore} unit="원" /></p>
+                  <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1" title={`계약금액 ${contractAmountTotal.toLocaleString()}원 ÷ 광고비 ${roasSpend == null ? "미확인" : roasSpend.toLocaleString() + "원"} × 100`}>
+                    <span>계약금액 기준 ROAS</span>
+                    <span className="whitespace-nowrap"><strong className="text-sm tabular-nums text-indigo-700">{contractRoas == null ? "—" : contractRoas.toLocaleString() + "%"}</strong> <DailyDelta current={divide(contractAmountTotal, roasSpend, 100)} previous={divide(amountBefore, previousSpend, 100)} unit="%" /></span>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1" title={`확인 입금액 ${contractPaidTotal.toLocaleString()}원 ÷ 광고비 ${roasSpend == null ? "미확인" : roasSpend.toLocaleString() + "원"} × 100. 부분 입금은 받은 금액만 포함하며 미입금 회차는 제외합니다.`}>
+                    <span>실입금 기준 ROAS</span>
+                    <strong className="text-sm tabular-nums text-emerald-700">{receivedRoas == null ? "—" : receivedRoas.toLocaleString() + "%"}</strong>
+                  </div>
+                  <p className="text-[11px] font-medium leading-relaxed text-slate-500">선택 기간 계약 기준 · 누적 확인 입금 {fmtK(contractPaidTotal)}원<br />두 ROAS 모두 같은 기간 광고비로 계산{!(roasSpend > 0) ? " · 광고비 0원 또는 미확인: 산출 불가" : ""}</p>
+                </div>}
                 <button type="button" onClick={() => go(s.go)} className="group ml-auto flex items-center justify-end gap-1 text-[11px] font-bold text-slate-400 hover:text-indigo-600">단계 전체 화면 <ChevronRight size={12} className="transition-transform group-hover:translate-x-0.5" /></button>
               </div>
               </div>
