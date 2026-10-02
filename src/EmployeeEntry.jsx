@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { employeeAuth, employeeHeaders, employeeRequest, masterAliasRequest, scopedEmployeeStorage } from './employeeSession.js';
+import { employeeAuth, employeeSession, employeeHeaders, employeeRequest, masterAliasRequest, scopedEmployeeStorage } from './employeeSession.js';
+import { boundedAuthOperation, loginErrorMessage } from './data/authTransport.js';
 import { consumeMasterSetupToken, isMasterLoginAlias, isPlausibleEmail } from './data/masterLoginAlias.js';
 import { freshEntryUrl, isChunkLoadError, recoverChunkLoad } from './data/chunkRecovery.js';
 import './styles.css';
@@ -16,17 +17,24 @@ function EmployeeEntry() {
   const [busy, setBusy] = useState(false);
   const [LoadedApp, setLoadedApp] = useState(null);
   const [appLoadFailed, setAppLoadFailed] = useState(false);
+  const [sessionStalled, setSessionStalled] = useState(false);
+  const submitting = useRef(false);
+  const checkAccess = useRef(() => {});
   useEffect(() => {
-    let alive = true, currentUser = '', checking = false;
+    let alive = true, currentUser = '', checking = false, queued = false, generation = 0;
     const check = async () => {
-      if (checking) return;
+      if (!alive) return;
+      if (checking) { queued = true; return; }
       checking = true;
+      const version = generation;
       let loadingApp = false;
       try {
-        const { data } = await employeeAuth.auth.getSession();
-        if (!data.session) { if (alive) { setLoadedApp(null); setMessage('승인된 직원 이메일로 로그인하세요.'); } return; }
+        const { data, error } = await employeeSession();
+        if (error) throw error;
+        if (!alive || version !== generation) return;
+        if (!data.session) { if (alive) { setLoadedApp(null); if (!submitting.current) setMessage('승인된 직원 이메일로 로그인하세요.'); } return; }
         const access = await applyEmployeeMenuPolicy(await employeeRequest('session'));
-        if (!alive) return;
+        if (!alive || version !== generation) return;
         const identity = `${access.userId}:${access.role}:${access.scope || 'all'}:${(access.menuPages || []).join(',')}`;
         if (currentUser && currentUser !== identity) { location.reload(); return; }
         currentUser = identity;
@@ -41,8 +49,9 @@ function EmployeeEntry() {
         };
         loadingApp = true;
         const { default: App } = await import('./main.jsx');
-        if (alive) { setAppLoadFailed(false); setLoadedApp(() => App); setMessage(''); }
+        if (alive && version === generation) { setSessionStalled(false); setAppLoadFailed(false); setLoadedApp(() => App); setMessage(''); }
       } catch (error) {
+        if (!alive || version !== generation) return;
         if (alive && loadingApp && isChunkLoadError(error)) {
           setLoadedApp(null);
           setAppLoadFailed(true);
@@ -50,37 +59,42 @@ function EmployeeEntry() {
           recoverChunkLoad(error, { storage: window.sessionStorage, location: window.location, online: window.navigator.onLine !== false });
           return;
         }
-        if (alive) { setLoadedApp(null); setMessage(error.message === 'employee_approval_required' ? '이메일 인증 후 관리자 승인이 필요합니다.' : `로그인 확인 실패: ${error.message}`); }
-      } finally { checking = false; }
+        if (alive) { setLoadedApp(null); setSessionStalled(error.message === 'auth_session_timeout'); setMessage(error.message === 'employee_approval_required' ? '이메일 인증 후 관리자 승인이 필요합니다.' : `로그인 확인 실패: ${loginErrorMessage(error)}`); }
+      } finally { checking = false; if (queued && alive) { queued = false; setTimeout(check, 0); } }
     };
+    checkAccess.current = check;
     check();
     const { data: listener } = employeeAuth.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_OUT') { if (currentUser) location.reload(); else { setLoadedApp(null); setMessage('로그아웃되었습니다.'); } }
+      if (event === 'SIGNED_OUT') { generation++; if (currentUser) location.reload(); else { setLoadedApp(null); setMessage('로그아웃되었습니다.'); } }
       else setTimeout(check, 0);
     });
     const timer = setInterval(check, 60_000);
     const focus = () => check();
     window.addEventListener('focus', focus);
-    return () => { alive = false; clearInterval(timer); listener.subscription.unsubscribe(); window.removeEventListener('focus', focus); };
+    return () => { alive = false; checkAccess.current = () => {}; clearInterval(timer); listener.subscription.unsubscribe(); window.removeEventListener('focus', focus); };
   }, []);
 
   async function submit(signup) {
+    if (submitting.current || sessionStalled) return;
     const masterAlias = isMasterLoginAlias(loginId);
     if (masterAlias) {
       if (password.length < 12) { setMessage('MASTER 비밀번호는 12자 이상이어야 합니다.'); return; }
       setBusy(true);
+      submitting.current = true;
       try {
-        await masterAliasRequest(masterSetupToken ? 'bootstrap' : 'login', password, masterSetupToken);
+        await boundedAuthOperation(masterAliasRequest(masterSetupToken ? 'bootstrap' : 'login', password, masterSetupToken));
         if (masterSetupToken) {
           window.sessionStorage.removeItem(MASTER_SETUP_STORAGE_KEY);
           setMasterSetupToken('');
         }
         setPassword('');
         setMessage('MASTER 권한 확인 중…');
+        checkAccess.current();
       } catch (error) {
         const messages = { invalid_credentials: 'MASTER 계정 또는 비밀번호를 확인하세요.', invalid_setup_link: 'MASTER 최초 설정 링크가 만료되었거나 올바르지 않습니다.', choose_new_password: '예전 MASTER 비밀번호는 노출 이력이 있어 재사용할 수 없습니다. 새 비밀번호를 정하세요.', master_already_configured: 'MASTER 최초 설정이 이미 끝났습니다. 일반 로그인으로 다시 접속하세요.' };
-        setMessage(messages[error.message] || `MASTER 로그인 실패: ${error.message}`);
-      } finally { setBusy(false); }
+        setSessionStalled(error.message === 'auth_session_timeout');
+        setMessage(messages[error.message] || `MASTER 로그인 실패: ${loginErrorMessage(error)}`);
+      } finally { submitting.current = false; setBusy(false); }
       return;
     }
     const email = String(loginId || '').trim().toLowerCase();
@@ -90,14 +104,16 @@ function EmployeeEntry() {
       return;
     }
     setBusy(true);
+    submitting.current = true;
     try {
       const credentials = { email, password };
-      const result = signup ? await employeeAuth.auth.signUp({ ...credentials, options: { emailRedirectTo: location.origin + import.meta.env.BASE_URL } }) : await employeeAuth.auth.signInWithPassword(credentials);
+      const result = await boundedAuthOperation(signup ? employeeAuth.auth.signUp({ ...credentials, options: { emailRedirectTo: location.origin + import.meta.env.BASE_URL } }) : employeeAuth.auth.signInWithPassword(credentials));
       if (result.error) throw result.error;
       setPassword('');
       setMessage(signup ? '직원 이메일의 인증 링크를 누르세요. 가입만으로 접근 권한이 생기지는 않습니다.' : '권한 확인 중…');
-    } catch (error) { setMessage(error.message); }
-    finally { setBusy(false); }
+      if (result.data?.session) checkAccess.current();
+    } catch (error) { setSessionStalled(error.message === 'auth_session_timeout'); setMessage(loginErrorMessage(error)); }
+    finally { submitting.current = false; setBusy(false); }
   }
   if (LoadedApp) return <LoadedApp />;
   return <div className="min-h-screen bg-slate-900 flex items-center justify-center p-5"><form className="bg-white rounded-md p-7 max-w-md w-full space-y-4" onSubmit={(e) => { e.preventDefault(); submit(false); }}>
@@ -105,10 +121,11 @@ function EmployeeEntry() {
     <p className="text-sm text-slate-600">MASTER는 이메일 인증 없이 계정명과 비밀번호로 접속합니다. 일반 직원만 승인된 이메일을 사용합니다.</p>
     <label className="block text-sm">계정명 또는 이메일<input className="block w-full border rounded p-2 mt-1" type="text" autoCapitalize="none" autoComplete="username" required value={loginId} onChange={(e) => setLoginId(e.target.value)} /></label>
     <label className="block text-sm">비밀번호<input className="block w-full border rounded p-2 mt-1" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} /></label>
-    <button disabled={busy} className="bg-blue-600 text-white rounded p-2 w-full">{busy ? '확인 중…' : (isMasterLoginAlias(loginId) && masterSetupToken ? 'MASTER 최초 설정' : '로그인')}</button>
-    {!isMasterLoginAlias(loginId) && <button type="button" disabled={busy || !isPlausibleEmail(loginId) || password.length < 12} className="border rounded p-2 w-full disabled:opacity-40" onClick={() => submit(true)}>처음 사용 · 이메일 인증 (비밀번호 12자 이상)</button>}
+    <button disabled={busy || sessionStalled} className="bg-blue-600 text-white rounded p-2 w-full">{busy ? '확인 중…' : (isMasterLoginAlias(loginId) && masterSetupToken ? 'MASTER 최초 설정' : '로그인')}</button>
+    {!isMasterLoginAlias(loginId) && <details><summary className="text-xs text-slate-600 cursor-pointer">처음 사용하는 직원만 · 계정 등록</summary><p className="text-xs text-slate-600 my-2">이미 계정을 만든 직원은 위 로그인 버튼을 사용하세요. 다시 등록해도 비밀번호는 바뀌지 않습니다.</p><button type="button" disabled={busy || sessionStalled || !isPlausibleEmail(loginId) || password.length < 12} className="border rounded p-2 w-full disabled:opacity-40" onClick={() => submit(true)}>처음 사용 · 이메일 인증 (비밀번호 12자 이상)</button></details>}
     {isMasterLoginAlias(loginId) && masterSetupToken && <p className="text-xs text-amber-700">일회용 최초 설정 링크입니다. 새 비밀번호를 정하면 이 링크는 다시 사용할 수 없습니다.</p>}
     <p className="text-xs text-slate-600" role="status">{message}</p>
+    {sessionStalled && <button type="button" className="border rounded p-2 w-full" onClick={() => window.location.replace(freshEntryUrl(window.location.href))}>로그인 화면 다시 불러오기</button>}
     {appLoadFailed && <button type="button" className="border border-blue-300 text-blue-700 rounded p-2 w-full" onClick={() => window.location.replace(freshEntryUrl(window.location.href))}>최신 화면 다시 불러오기</button>}
     <button type="button" className="text-xs underline" onClick={() => employeeAuth.auth.signOut({ scope: 'local' })}>현재 로그인 해제</button>
   </form></div>;

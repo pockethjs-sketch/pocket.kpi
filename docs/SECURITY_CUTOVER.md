@@ -180,6 +180,8 @@ The helper is now wired to the domain handler. Auth.getUser verifies sessions an
 
 ## Release gates
 
+- 2026-10-02 login resilience: Auth transport aborts after 20 seconds (including response body); SDK operations have a 30-second watchdog with reload recovery for stuck locks. No automatic signup/password/mutation retries. Successful sign-in explicitly rechecks server membership; overlapping checks are queued and sign-out invalidates stale results. Registration is separated from existing-account login. Authentication, membership, menu policy, cache isolation, and unsaved journals remain unchanged. Tests use synthetic credentials only; actual EJH password login is not claimed as verified.
+
 - Old app token + anon key, no session, unapproved user, expired session: no CRM read or write.
 - Approved user: only authorized organization and role; revoked membership immediately denied.
 - Apps Script/old deployment/proxy paths cannot bypass checks.

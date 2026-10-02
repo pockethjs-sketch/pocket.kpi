@@ -1,20 +1,26 @@
 import { createClient } from '@supabase/supabase-js';
+import { boundedAuthOperation, createAuthFetch } from './data/authTransport.js';
+
+const authFetch = createAuthFetch();
 
 export const SUPABASE_URL = 'https://ilnklntqkdbbtzzbhqrl.supabase.co';
 // This key is intentionally public. Every business request still requires a verified employee session.
 export const PUBLISHABLE_KEY = 'sb_publishable_5ZOv7q88mKDVjefos5I3FA_ZxKGM3d7';
 export const employeeAuth = createClient(SUPABASE_URL, PUBLISHABLE_KEY, {
+  global: { fetch: authFetch },
   auth: { storage: window.sessionStorage, storageKey: 'pocket-kpi-employee-session', persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
 });
 
+export const employeeSession = () => boundedAuthOperation(employeeAuth.auth.getSession());
+
 export async function employeeHeaders() {
-  const { data, error } = await employeeAuth.auth.getSession();
+  const { data, error } = await employeeSession();
   if (error || !data.session?.access_token) throw new Error('login_required');
   return { Authorization: `Bearer ${data.session.access_token}`, apikey: PUBLISHABLE_KEY };
 }
 
 export async function employeeRequest(action, body) {
-  const response = await fetch(`${SUPABASE_URL}/functions/v1/kpi-domain-api?action=${encodeURIComponent(action)}`, {
+  const response = await (action === 'session' ? authFetch : fetch)(`${SUPABASE_URL}/functions/v1/kpi-domain-api?action=${encodeURIComponent(action)}`, {
     method: body ? 'POST' : 'GET', cache: 'no-store',
     headers: { ...await employeeHeaders(), 'Content-Type': 'application/json' },
     ...(body ? { body: JSON.stringify({ ...body, action }) } : {}),
@@ -25,7 +31,7 @@ export async function employeeRequest(action, body) {
 }
 
 export async function masterAliasRequest(action, password, bootstrapToken = '') {
-  const response = await fetch(`${SUPABASE_URL}/functions/v1/kpi-master-auth`, {
+  const response = await authFetch(`${SUPABASE_URL}/functions/v1/kpi-master-auth`, {
     method: 'POST', cache: 'no-store',
     headers: { apikey: PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
     body: JSON.stringify({ action, password, ...(bootstrapToken ? { bootstrapToken } : {}) }),
