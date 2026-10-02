@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useExcelExport } from './ExcelExport.jsx';
+import { excelTable } from './data/excelTable.js';
 import { filterNotionReceivables, NOTION_RECEIVABLE_STAGES, notionReceivableStageCounts, notionReceivableSummary, notionSourceUrl } from './data/notionReceivables.js';
 import ReceivablesTable, { NOTION_RECEIVABLE_COLUMNS, ReceivableCompany, ReceivableStatus, ReceivableTag } from './ReceivablesTable.jsx';
 
@@ -41,6 +43,7 @@ export default function NotionReceivables() {
   const stageCounts = useMemo(() => notionReceivableStageCounts(rows), [rows]);
   const visible = useMemo(() => filterNotionReceivables(rows, { query, stage: stage === 'all' ? '' : stage, requestStatus, paymentStatus }), [rows, query, stage, requestStatus, paymentStatus]);
   const shown = visible.slice(0, visibleLimit);
+  useExcelExport(() => [excelTable('노션 선잔금 미납', ['계약일', '업체', '프리 담당', '선금 원문', '잔금 원문', '프로젝트', '특이사항', '요청 상태', '입금 상태'], visible.map(row => [row.contract_date || '', row.company || '', row.freelancer || '', row.deposit_text || '', row.balance_text || '', row.projects_text || '', row.notes || '', row.request_status || '', row.payment_status || '']), `노션 이관 자료 · 단계 ${stage} · 검색 ${query || '없음'} · 요청 ${requestStatus || '전체'} · 입금 ${paymentStatus || '전체'} · 최근 반영 ${formatTime(latestImportedAt)} · 상단 기간 무관 · 원장과 합산하지 않음${status === 'error' ? ' · 갱신 실패로 마지막 정상 조회본' : ''}`)], status === 'ready' || rows.length > 0);
   const requestOptions = [...new Set(rows.map((row) => row.request_status).filter(Boolean))].sort();
   const paymentOptions = [...new Set(rows.map((row) => row.payment_status).filter(Boolean))].sort();
   const stages = [{ id: 'all', label: '전체', count: summary.count }, ...NOTION_RECEIVABLE_STAGES.map((item) => ({ ...item, count: stageCounts[item.id] }))];

@@ -19,7 +19,7 @@ test('actual catalog preserves price/target fields and disables viewer editing w
   let writes = 0;
   const box = ({ children }) => React.createElement('div', null, children);
   for (const role of ['VIEWER', 'OWNER']) {
-    const context = vm.createContext({ React, useState: () => ['catalog', () => {}], useApp: () => ({ db: fixture, up: () => { writes++; }, period: {}, openLead: () => {} }), window: { kpiEmployeeAccess: { role } }, SecTitle: box, Package: box, Plus: box, Trash2: box, Card: box, Fld: box, Inp: props => React.createElement('input', { ...props, onChange: props.onChange }), Btn: box, DangerBtn: box });
+    const context = vm.createContext({ React, useExcelExport() {}, useState: () => ['catalog', () => {}], useApp: () => ({ db: fixture, up: () => { writes++; }, period: {}, openLead: () => {} }), window: { kpiEmployeeAccess: { role } }, SecTitle: box, Package: box, Plus: box, Trash2: box, Card: box, Fld: box, Inp: props => React.createElement('input', { ...props, onChange: props.onChange }), Btn: box, DangerBtn: box });
     vm.runInContext(compiled.code + '\nglobalThis.Subject = ProductsView;', context);
     const html = renderToStaticMarkup(React.createElement(context.Subject));
     assert.ok(html.includes('1,230,000'));
@@ -90,7 +90,7 @@ test('Korean timezone boundaries, invalid dates, all-time and unknown amounts st
 test('production component renders count table, data-quality notice and no conversion or inflated category revenue', async () => {
   const source = readFileSync(new URL('../src/ProductSalesOverview.jsx', import.meta.url), 'utf8');
   const compiled = await transformWithOxc(source, 'ProductSalesOverview.jsx', { jsx: { runtime: 'classic' } });
-  const code = compiled.code.replace(/from ["']react["']/g, `from '${import.meta.resolve('react')}'`).replace('./data/productSales.js', new URL('../src/data/productSales.js', import.meta.url).href);
+  const code = compiled.code.replace(/from ["']react["']/g, `from '${import.meta.resolve('react')}'`).replace('./data/productSales.js', new URL('../src/data/productSales.js', import.meta.url).href).replace(/import \{ useExcelExport \} from ["']\.\/ExcelExport.jsx["'];/, 'const useExcelExport = () => {};').replace('./data/excelTable.js', new URL('../src/data/excelTable.js', import.meta.url).href);
   const Component = (await import('data:text/javascript;base64,' + Buffer.from(code).toString('base64'))).default;
   const html = renderToStaticMarkup(React.createElement(Component, { leads: [lead('a'), lead('b', { ctype: '기존', buildup: '정부지원A' }), lead('missing', { contractAt: '' })], products, range, periodLabel: '2026년 9월' }));
   for (const text of ['빌드업별 판매 현황', '판매 계약', '계약 목록', '2건', '계약일 미확인 1건', '₩2,200,000', '지원사업 관리', '신규', '기존']) {

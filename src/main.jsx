@@ -1,4 +1,6 @@
 import "./styles.css";
+import { ExcelExportProvider, ExcelExportButton, useExcelExport } from './ExcelExport.jsx';
+import { excelTable } from './data/excelTable.js';
 // This module is imported only after server-verified employee authorization.
 if (!window.kpiEmployeeAccess?.userId) throw new Error('employee_login_required');
 const localStorage = window.kpiEmployeeStorage;
@@ -1298,6 +1300,11 @@ import {
    상수 · 스타일
    ============================================================ */
 const BUILDUPS = ["지원사업 관리", "투자유치", "브랜딩 관리", "AX 개발", "포켓비즈"];
+const exportLeadTable = (name, leads, scope = '', dateOf = meetingDoneDate) => excelTable(name,
+  ['업체명', '유입일', '미팅일', '계약일', '유입 채널', '영업담당', 'TM 담당', '신규·기존', '빌드업', '상태', '계약금액 (원)', '확인 입금액 (원)', '미수금 (원)'],
+  leads.map(l => { const amount = l.contractAmount || paySum(l) || 0; return [l.company || '', l.createdAt || '', dateOf(l) || l.premeetingAt || l.bookedAt || '', l.contractAt || '', l.channel || '', l.salesOwner || '', l.tmOwner || '', l.ctype || '신규', [l.buildup, ...(l.buildups || [])].filter((x, i, a) => x && a.indexOf(x) === i).join(', '), l.status || '', amount, actualPaid(l), Math.max(0, amount - actualPaid(l))]; }), scope);
+const exportPaymentTable = (leads, scope = '') => excelTable('결제 회차', ['업체명', '구분', '금액 (원)', '입금 완료', '실제 입금일', '예정일', '메모'],
+  leads.flatMap(l => payRows(l).map(p => [l.company || '', p.label || '', p.amount ?? null, isPayDone(p), p.paidAt || '', p.dueAt || '', p.memo || ''])), scope);
 const BSTYLE = {
   "지원사업 관리": { chip: "bg-sky-50 text-sky-700 border-sky-200", dot: "bg-sky-500", text: "text-sky-600", bar: "bg-sky-500" },
   "투자유치": { chip: "bg-emerald-50 text-emerald-700 border-emerald-200", dot: "bg-emerald-500", text: "text-emerald-600", bar: "bg-emerald-500" },
@@ -3091,6 +3098,7 @@ function LeadsView() {
   const [fBuild, setFBuild] = useState("전체"); const [mine, setMine] = useState(false);
   const [fScore, setFScore] = useState("전체");
   const [sheetOnly, setSheetOnly] = useState(true);
+  useExcelExport(() => [exportLeadTable('유입 DB', leads, `유입일 기준 · 상태 ${fStatus} · 빌드업 ${fBuild} · 검색 ${q || '없음'} · 본인 담당 ${mine ? '예' : '아니오'} · CRM만 ${sheetOnly ? '예' : '아니오'}`), excelTable('유입 DB 상세', ['업체명', '담당자', '전화번호', '매출 구간', 'CRM 상태', '메모'], leads.map(l => [l.company || '', l.contact || '', String(l.phone || ''), l.crmSheet?.annualSales || '', l.crmSheet?.detailLabel || '', l.memo || '']))]);
   const [addOpen, setAddOpen] = useState(false);
   const [chOpen, setChOpen] = useState(false);
   const renameCh = (id, v) => up((d) => { const c = d.channels.find((x) => x.id === id); if (!c) return; const o = c.name; c.name = v; d.leads.forEach((x) => { if (x.channel === o) x.channel = v; }); d.contents.forEach((ct) => { if (ct.channel === o) ct.channel = v; }); d.creatives.forEach((cr) => { if (cr.channel === o) cr.channel = v; }); });
@@ -3348,6 +3356,7 @@ function QualityBreakdownTip({ quality, leads, children }) {
 
 function TmManagementView() {
   const { db, period, up, toast } = useApp();
+  useExcelExport(() => [excelTable('일별 DB 품질', ['유입일', '전체', '상', '중', '하', '드랍', '미평가', '프리미팅 전환', '미처리', '진행', '재연락', '종료'], groups.map(g => [g.date, g.total, g.quality['상'], g.quality['중'], g.quality['하'], g.quality['드랍기업'], g.quality['미평가'], g.converted, g.untouched, g.progress, g.recall, g.closed])), exportLeadTable('대상 기업', leads, 'CRM 유입일 기준')]);
   const [crmSyncBusy, setCrmSyncBusy] = useState(false);
   const [lastManualSync, setLastManualSync] = useState(() => {
     try { return Number(localStorage.getItem("crm:lastTmQualityManualSync")) || 0; } catch (e) { return 0; }
@@ -3779,6 +3788,7 @@ function DealsView() {
   const [contractApplyingId, setContractApplyingId] = useState("");
   const [contractLogOpen, setContractLogOpen] = useState(false);
   const [dealsTab, setDealsTab] = useState('companies');
+  useExcelExport(() => [exportLeadTable('프리미팅 기업', pool, `화면 미팅일 기준 · 담당 ${repF} · 구분 ${ctF} · 빌드업 ${buF} · 입금 ${payF} · 날짜 ${dateF} · 주차 ${weekF} · 미작성만 ${todoOnly} · 미진단만 ${unDiag}`, baseDate), exportPaymentTable(pool)], dealsTab === 'companies');
   const [contractLogQuery, setContractLogQuery] = useState("");
   const contractReviewRunning = useRef(false);
   const [contractAutoSync, setContractAutoSync] = useState(null);
@@ -4828,6 +4838,7 @@ function TemplatesView() {
   const readOnly = currentAccount?.serverRole === 'VIEWER';
   const [b, setB] = useState(BUILDUPS[0]);
   const confirmation = db.templates?.pre?.[b]?.confirm || "";
+  useExcelExport(() => [excelTable('확정 직후 안내', ['빌드업', '회의 확정 안내 문구'], [[b, confirmation]], '선택 빌드업 문구 · 기간 무관')]);
   return (
     <div className="space-y-4">
       <SecTitle icon={MessageSquareText} title="메시지 · 스크립트" sub="빌드업별 확정 직후 안내 문구를 편집하고 복사합니다." />
@@ -4888,6 +4899,7 @@ function MarketingView() {
       scN: sc.length, avg, hiPct: sc.length ? Math.round(hi / sc.length * 100) : null, qcpa: avg ? cpa / (avg / 100) : 0 };
   });
   const shownRows = rows;
+  useExcelExport(() => [excelTable('마케팅 채널 분석', ['채널', '광고비 (원)', '리드', '딜', '계약', '매출 (원)', 'CPA (원)', 'DB 평균점수', '보정 CPA (원)', 'CAC (원)', 'ROAS (%)'], shownRows.map(x => [x.ch, x.spend, x.leads, x.deals, x.contract, x.revenue, x.cpa, x.avg, x.qcpa, x.cac, x.roas == null ? null : x.roas * 100]), '유입일 코호트 기준')]);
   const T = shownRows.reduce((a, x) => { ["spend", "leads", "deals", "contract", "revenue"].forEach((k) => a[k] += x[k]); return a; }, { spend: 0, leads: 0, deals: 0, contract: 0, revenue: 0 });
   const roasT = T.spend ? T.revenue / T.spend : 0;
   const shownNames = new Set(shownRows.map((x) => x.ch));
@@ -5047,6 +5059,9 @@ function MarketingPlatformDetail({ kind }) {
     }));
   })();
   const periodDailyRows = dailyRows.filter((x) => inR(x.date, pRange(period)));
+  useExcelExport(() => [excelTable(isMeta ? 'META 일별 광고' : 'NAVER GOOGLE 일별 광고',
+    ['날짜', '매체', '광고비 (원)', '노출', '클릭', 'CRM 문의', '매체 문의전환', '잠재고객 광고비 (원)', '포켓 트래픽비 (원)', '빌더진 트래픽비 (원)'],
+    (isMeta ? periodDailyRows.map(x => ({ ...x, platform: 'META' })) : periodDailyRows.flatMap(x => ['NAVER', 'GOOGLE'].filter(key => x[key]).map(key => ({ ...x[key], date: x.date, platform: key })))).map(x => [x.date, x.platform, x.spend ?? null, x.impressions ?? null, x.clicks ?? null, x.crm ?? null, x.media ?? null, x.leadSpend ?? null, x.pocketTrafficSpend ?? null, x.builderTrafficSpend ?? null]), '선택 기간의 일별 원천 전체 · 표의 31행 제한 미적용')]);
   const selectedDailyRows = [...periodDailyRows].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 31);
   const dailySum = (getter) => periodDailyRows.reduce((sum, row) => sum + (Number(getter(row)) || 0), 0);
   const dailyDays = periodDailyRows.length;
@@ -5605,6 +5620,7 @@ function PocketBizView() {
   const [planOpen, setPlanOpen] = useState(false);
   const salesUsers = users.filter((u) => dutyOf(u.team) === "sales").map((u) => u.name);
   const subs = db.bizSubs; const mrr = subs.filter(isBizActive).reduce((a, s) => a + (s.mrr || 0), 0);
+  useExcelExport(() => [excelTable('포켓비즈 구독', ['업체', '플랜', '월 반복매출 (원)', '담당', '상태', '활성 구독'], subs.map(s => [s.company || '', s.plan || '', s.mrr ?? null, s.builder || '', s.status || '', isBizActive(s)]), '전체 구독 현황 · 상단 기간 무관')]);
   const genRec = async (s) => {
     const pr = db.prompts.find((p) => p.hook === "pocketbiz.recommend"); if (!pr) { toast("추천 프롬프트가 없습니다"); return; }
     setAiBusy(s.id);
@@ -5975,6 +5991,7 @@ function PromptsView() {
 function ProductsView() {
   const { db, up, period, openLead } = useApp();
   const [tab, setTab] = useState("sales");
+  useExcelExport(() => [excelTable('상품 가격표', ['빌드업', '세부 상품', '가격 (원)', '월 목표 (건)', '단위', '담당 R&R', '소요기간', '설명'], db.products.flatMap(p => (p.items || []).map(it => [p.name || '', it.name || '', it.price ?? null, it.mTarget ?? null, it.unit || '', p.rr || '', p.duration || '', it.note || ''])), '상품 설정값 · 기간 무관')], tab === 'catalog');
   const readOnly = window.kpiEmployeeAccess?.role === "VIEWER";
   const updateProduct = (id, change) => up((d) => { const p = d.products.find((x) => x.id === id); if (p) change(p); });
   return <div className="space-y-4">
@@ -6164,6 +6181,7 @@ function IntegratedPerformanceView() {
   const leadCost = spend != null && cohort.length ? Math.round(spend / cohort.length) : null;
   const preCost = spend != null && pre.length ? Math.round(spend / pre.length) : null;
   const contractCost = spend != null && contract.length ? Math.round(spend / contract.length) : null;
+useExcelExport(() => [excelTable('통합 성과', ['지표', '값', '단위'], [['유입 DB', cohort.length, '건'], ['프리미팅', pre.length, '건'], ['계약', contract.length, '건'], ['광고비', spend, '원'], ['계약금액', contractAmountTotal, '원'], ['확인 입금금액', contractPaidTotal, '원'], ['계약 기준 ROAS', contractRoas, '%'], ['입금 기준 ROAS', receivedRoas, '%'], ['리드당 비용', leadCost, '원'], ['프리미팅당 비용', preCost, '원'], ['계약당 비용', contractCost, '원']], `고객구분 ${customerType} · 각 지표의 화면 귀속일 기준 · 입금은 선택 계약의 현재 누적`), exportLeadTable('유입 DB', cohort), exportLeadTable('프리미팅', pre), exportLeadTable('계약 기업', contract), excelTable('데일리 회의', ['날짜', '회의내용'], dailyMeetingRecords(db.marketingLogs || []).map(x => [x.date || '', dailyMeetingContent(x)]), '화면과 동일한 전체 기간 회의 기록')]);
   const comparisonWindow = dailyComparisonWindow(r, todayISO(), period.mode === "day");
   const comparisonRows = (range) => {
     const leads = db.leads.filter(matchesCustomerType);
@@ -6667,6 +6685,7 @@ function MarketingHubView() {
     };
   }).filter((x) => x.rows.length || (x.spend || 0) > 0 || x.rev > 0).sort((a, b) => b.rows.length - a.rows.length || b.rev - a.rev);
   const channelRows = hubRawRows;
+  useExcelExport(() => [excelTable('채널별 성과', ['채널', '광고비 (원)', '유입 DB', 'CPL (원)', '프리미팅 완료', '입금 기업', 'CAC (원)', '계약금액 (원)', 'ROAS (%)'], channelRows.map(x => [x.name, x.spend, x.rows.length, x.cpl, x.meetings.length, x.paidCompanies.length, x.cac, x.rev, x.roas]), '유입·전환·입금 기업=유입일 기준 / 계약액·ROAS=계약일 기준'), exportLeadTable('유입 기업', leads)]);
   const totalCpl = spend != null && leads.length ? Math.round(spend / leads.length) : null;
   const totalCac = spend != null && paid.length ? Math.round(spend / paid.length) : null;
   const totalRoas = contractPerformance.totalRoas;
@@ -6959,6 +6978,7 @@ function PremeetingHubView() {
   done.forEach((l) => { const k = l.salesOwner || "미배정"; ownerMap[k] = (ownerMap[k] || 0) + 1; });
   const ownerRows = Object.entries(ownerMap).sort((a, b) => b[1] - a[1]);
   const ownerDone = done.filter((l) => ownerFilter === "all" || (l.salesOwner || "미배정") === ownerFilter);
+  useExcelExport(() => [exportLeadTable('진행한 프리미팅', ownerDone, `미팅 완료일 기준 · 담당 ${ownerFilter}`), exportLeadTable('계약 기업', contractedSorted, '선택 기간 계약일 기준 · 담당자 필터는 미팅 목록에만 적용')]);
   const recentDone = [...ownerDone]
     .sort((a, b) => meetingDoneDate(b).localeCompare(meetingDoneDate(a)))
     .slice(0, 10);
@@ -7090,6 +7110,7 @@ function ContractDateHubView() {
   const [metricOpen, setMetricOpen] = useState(null);
   const [buildupOpen, setBuildupOpen] = useState(null);
   const [contractView, setContractView] = useState("owner");
+  useExcelExport(() => [exportLeadTable('계약일 기준 성과', contractRows, `계약일 기준 · 검색 ${contractSearch || '없음'} · 담당 ${contractOwner} · 구분 ${contractCustomerType}`)], contractView !== 'monthly');
   const [contractSearch, setContractSearch] = useState("");
   const [contractOwner, setContractOwner] = useState("all");
   const [contractCustomerType, setContractCustomerType] = useState("전체");
@@ -7523,6 +7544,13 @@ function SupportGrantListView({ loading }) {
   const [scope, setScope] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [selected, setSelected] = useState(null);
+  useExcelExport(() => {
+    if (loading) return [];
+    if (tab === 'grants') return [excelTable('지원사업', ['사업명', '분류', '지역', '마감일', '조건', '메모'], visibleGrants.map(g => [g.title || '', g.category || '', g.region || '', g.deadline || '', g.condition || '', g.memo || '']), `검색 ${query || '없음'} · 저장본 기준 · 기간 무관`)];
+    if (tab === 'schedules') return [excelTable('지원사업 일정', ['날짜', '업체', '사업명'], visibleSchedules.map(s => [s.date || '', companyById.get(String(s.companyId))?.name || '', grantById.get(String(s.grantId))?.title || '']), '검색 적용 · 기간 무관')];
+    if (tab === 'logs') return [excelTable('지원사업 로그', ['시각', '작업', '내용'], visibleLogs.map(l => [l.time || '', l.action || '', l.detail || '']), '검색 적용 · 기간 무관')];
+    return [excelTable('지원사업 고객 배정', ['업체', '지역', '사업명', '진행상태'], visibleAssignments.map(x => [x.company.name || '', x.company.region || '', x.grant?.title || '', statusLabel(x.result || x.status)]), `검색 ${query || '없음'} · 배정 ${scope} · 상태 ${statusFilter} · 기간 무관`)];
+  });
   const board = db.supportBoard || {};
   const companies = Array.isArray(board.companies) ? board.companies : [];
   const grants = Array.isArray(board.grants) ? board.grants : [];
@@ -7775,6 +7803,11 @@ function LtvExpansionView() {
   const [paymentEditor, setPaymentEditor] = useState(null);
   const [ledgerTab, setLedgerTab] = useState("ledger");
   const [paymentLogMonth, setPaymentLogMonth] = useState(todayISO().slice(0, 7));
+  useExcelExport(() => {
+    if (ledgerTab === 'log') return [excelTable('잔금 변경 로그', ['시각', '업체', '작업', '구분', '금액 (원)', '예정일', '입금일', '담당'], visiblePaymentLogs.map(l => [l.at || '', l.company || '', l.action || '', l.label || '', l.amount ?? null, l.dueAt || '', l.paidAt || '', l.actor || '']), `${paymentLogMonth} 변경 로그 기준 · 상단 기간 무관`)];
+    const scope = `운영 원장 · 단계 ${ledgerStage} · 분류 ${categoryFilter} · 담당 ${ledgerOwner} · 상태 ${ledgerStatus} · 입금 ${ledgerPaymentState} · 검색 ${ledgerQuery || '없음'} · 등록 ${ledgerAddedFrom || '처음'}~${ledgerAddedTo || '현재'} · 상단 기간 무관`;
+    return [excelTable('운영 잔금 원장', ['계약일', '업체', '프리 담당', '가이드', '프로젝트', '계약금액 (원)', '확인 입금액 (원)', '미회수 (원)', '상태', '입금 상태', '특이사항'], rows.map(({ lead: l }) => [l.contractAt || '', l.company || '', preOwnerOf(l), guideOwnerOf(l), projectLabelsOf(l).join(', '), contractValue(l), actualPaid(l), balanceOf(l), statusOf(l), paymentStateOf(l), noteOf(l)]), scope), exportPaymentTable(rows.map(x => x.lead), scope)];
+  }, sourceTab === 'ledger' && ledgerTab !== 'add');
   const emptyQuickPayment = () => ({ leadId: "", project: "", kind: "balance", label: "잔금", amount: "", dueAt: "", paidAt: "", method: "", memo: "" });
   const [quickPayment, setQuickPayment] = useState(emptyQuickPayment);
   const projectSyncStarted = useRef(false);
@@ -8523,6 +8556,7 @@ function LtvExpansionView() {
 
 function BalanceManagementView() {
   const { db, up, period, go, openLead } = useApp();
+  useExcelExport(() => [excelTable('잔금 구버전', ['업체', '담당', '계약일', '계약금액 (원)', '입금 (원)', '잔금 (원)', '다음 예정일', '분류'], filtered.map(x => [x.l.company || '', x.l.salesOwner || '', x.l.contractAt || '', x.amount, x.paid, x.remain, x.next?.dueAt || '', x.type || '']), '화면 필터 적용 · 과거 미수 계약 포함')]);
   const [filter, setFilter] = useState("high");
   const [query, setQuery] = useState("");
   const [dueMode, setDueMode] = useState("all");
@@ -8778,6 +8812,7 @@ function BalanceManagementView() {
 
 function RevisionNotesView() {
   const { db, up, toast, users } = useApp();
+  useExcelExport(() => [excelTable('수정사항', ['등록일', '화면', '제목', '내용', '우선순위', '담당', '상태'], shown.map(x => [x.createdAt || '', x.page || '', x.title || '', x.detail || '', x.priority || '', x.assignedTo || '', x.status || '']), '상태 필터 적용 · 기간 무관')]);
   const [filter, setFilter] = useState("전체");
   const [draft, setDraft] = useState({ page: "", title: "", detail: "", priority: "보통", assignedTo: "" });
   const notes = db.revisionNotes || [];
@@ -9493,7 +9528,7 @@ export default function App() {
   const Cur = ['accessControl','settings'].includes(effectiveView) ? EmployeeAdministration : (VIEWS[effectiveView] || IntegratedPerformanceView);
   const activeSection = permittedSections.find((section) => section.home === effectiveView || section.items.some((item) => item.id === effectiveView)) || permittedSections[0];
   return (
-    <Ctx.Provider value={ctx}>
+    <ExcelExportProvider><Ctx.Provider value={ctx}>
       <style>{`*{font-family:'Pretendard Variable','Pretendard',sans-serif;} @keyframes pcToast{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}`}</style>
       <div className="min-h-screen bg-slate-50 flex">
         <aside className={"flex flex-col shrink-0 bg-slate-900 text-slate-300 sticky top-0 h-screen overflow-y-auto overflow-x-hidden transition-all duration-200 " + (navOpen ? "w-60" : "w-16")}>
@@ -9576,6 +9611,7 @@ export default function App() {
                 <Search size={13} className="absolute left-2.5 top-2.5 text-slate-300" />
                 <Inp value={qDraft} onChange={(e) => setQDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && qDraft.trim()) { if (!canAccess("leads")) { toast("유입 DB 접근 권한이 없습니다"); return; } setGlobalQ(qDraft.trim()); setQDraft(""); setView("leads"); } }} placeholder="유입 DB 통합 검색 (Enter)" className="pl-8" />
               </div>}
+              <ExcelExportButton title={AUTH_PAGE_GROUPS.flatMap(g => g.pages).find(p => p.id === effectiveView)?.label || effectiveView} periodLabel={pLabel(period)} allowed={canAccess(effectiveView) && !['settings', 'accessControl', 'schema', 'otherHub'].includes(effectiveView)} toast={toast} />
             </div>
           </header>
           <main className={"flex-1 w-full " + (view === "deals" ? "p-2 lg:p-4 max-w-none mx-0" : "p-4 lg:p-7 max-w-screen-2xl mx-auto")}>
@@ -9586,7 +9622,7 @@ export default function App() {
       </div>
       <LeadModal />
       {toastMsg && <div className="fixed bottom-5 left-1/2 -translate-x-1/2" style={{ zIndex: 60 }}><div className="bg-slate-900 text-white text-sm font-medium px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-2" style={{ animation: "pcToast .18s ease-out" }}><Check size={13} className="text-emerald-400 shrink-0" />{toastMsg}</div></div>}
-    </Ctx.Provider>
+    </Ctx.Provider></ExcelExportProvider>
   );
 }
 

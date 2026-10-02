@@ -1,5 +1,12 @@
 # Employee authentication cutover — 2026-09-18
 
+## 2026-10-02 Section Excel export
+
+- Upper-right XLSX download snapshots explicit columns from the currently mounted, authorized view and its filtered data. No whole-state serialization, credential/storage reads, additional API requests, source mutations, backend/auth/RLS changes or upload destinations. Existing menu presentation is not a new server-side authorization boundary.
+- Local exports contain business data in ordinary unencrypted files; recipients must be controlled by the operator. Current screen/period semantics and exceptional period-independent views are recorded in workbook scope labels. Paginated previews export all filtered rows; Notion imported receivables remain separate from the operational ledger.
+- Lazy browser-only OOXML writer preserves exact numeric values, dates and text identifiers, freezes headers and adds filters. Text is inline literal, never a formula or external hyperlink. Limits fail explicitly rather than truncate. No dependency added.
+- 259 unit tests and build/security gates pass. Isolated browser QA with synthetic fixtures covers 26 download/view combinations, filter/tab isolation, full 35-row lists and no download-triggered API calls. Independent XLSX reopen and ZIP checks pass; npm audit reports zero vulnerabilities. Deployment status is tracked in PROJECT_STATE; no production customer/session data was read for QA.
+
 ## 2026-10-02 Channel ROAS drilldown
 
 - Marketing hub channel/total ROAS opens a read-only company breakdown from already employee-authorized CRM state. Uses the same contract-date selection and amount helper as the table; shows exact contract amounts, source channel, type/date/owner and ad denominator. Unknown/zero spend remains non-computable, with rows still available.

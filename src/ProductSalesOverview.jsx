@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useExcelExport } from './ExcelExport.jsx';
+import { excelTable } from './data/excelTable.js';
 import { summarizeProductSales } from './data/productSales.js';
 
 const count = value => Number(value).toLocaleString('ko-KR');
@@ -11,6 +13,7 @@ export default function ProductSalesOverview({ leads = [], products = [], range,
   useEffect(() => { setSelected('전체'); setLimit(30); }, [range?.[0], range?.[1], type]);
   const selectedGroup = summary.groups.find(group => group.name === selected);
   const rows = selected === '계약일 미확인' ? summary.undated : selected === '금액 미확인' ? summary.missingAmount : selectedGroup?.rows || summary.rows;
+  useExcelExport(() => [excelTable('빌드업 판매 수', ['빌드업', '계약 수', '신규', '기존', '미구분'], summary.groups.map(g => [g.name, g.count, g.newCount, g.existingCount, g.otherCount]), `${periodLabel} · ${type} · 복수 빌드업 계약은 각 빌드업에 중복 포함`), excelTable('판매 계약 목록', ['계약일', '업체', '구분', '담당자', '빌드업', '계약 전체금액 (원)', '분류 확인'], rows.map(r => [r.date || '', r.lead.company || '', r.type || '', r.lead.salesOwner || '', r.groups.join(', '), r.amount ?? null, r.unmapped.join(', ')]), `${selected} · 계약 전체 금액이며 빌드업별 배분액이 아님`)]);
   const select = name => { setSelected(name); setLimit(30); };
   const max = Math.max(1, ...summary.groups.map(group => group.count));
   return <section aria-label="빌드업 판매 현황" className="space-y-4">

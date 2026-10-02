@@ -5,6 +5,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { transformWithOxc } from 'vite';
 import { contractAmount, contractBasisEvents, summarizeContractBasis } from '../src/data/contractBasis.js';
+import { excelTable } from '../src/data/excelTable.js';
 
 async function compile(file, names, dependencies) {
   const source = readFileSync(new URL('../src/' + file, import.meta.url), 'utf8').replace(/^import .*;\r?\n/gm, '').replaceAll('export default ', '').replaceAll('export function ', 'function ');
@@ -12,9 +13,10 @@ async function compile(file, names, dependencies) {
   return new Function(...Object.keys(dependencies), code + '\nreturn {' + names.join(',') + '};')(...Object.values(dependencies));
 }
 const { ContractOwnerSheet, ContractCustomerTypeLabel } = await compile('ContractOwnerSheet.jsx', ['ContractOwnerSheet', 'ContractCustomerTypeLabel'], { React, Fragment: React.Fragment });
-let states = [], cursor = 0;
+let states = [], cursor = 0, exportFactory;
 const { ContractBasisView } = await compile('ContractBasisView.jsx', ['ContractBasisView'], {
   React, ContractOwnerSheet, ContractCustomerTypeLabel, contractAmount, contractBasisEvents, summarizeContractBasis,
+  excelTable, useExcelExport: factory => { exportFactory = factory; },
   useState: initial => { const index = cursor++; if (states[index] === undefined) states[index] = initial; return [states[index], value => { states[index] = value; }]; },
   useEffect() {}, useMemo: fn => fn(),
 });
@@ -32,6 +34,8 @@ test('receipt owner sheet labels and totals show actual selected receipts, not f
   assert.doesNotMatch(html, /₩25,000,000|₩15,000,000/);
   assert.match(html, /입금일 미상 1건/);
   assert.match(html, /2026-09-07/);
+  assert.equal(exportFactory()[0].rows[0][5], 10000000);
+  assert.equal(exportFactory()[1].rows[0][0], '2026-09-07');
 });
 
 test('meeting owner sheet shifts display to August without rewriting the record', () => {

@@ -1,4 +1,6 @@
 import React, {useEffect,useMemo,useState} from 'react';
+import { useExcelExport } from './ExcelExport.jsx';
+import { excelTable } from './data/excelTable.js';
 import ContractOwnerSheet from './ContractOwnerSheet.jsx';
 import {buildMonthlyPerformance,historyMoney,monthDifference} from './contract-performance.mjs';
 const fetchHistory=()=>window.crmFetchContractHistory();
@@ -23,6 +25,7 @@ export default function ContractMonthlyPerformance({leads,period,customerType,va
     return total(b)-total(a)||a.localeCompare(b,'ko');
   });
   const detail=all.find(m=>m.month===selected);
+  useExcelExport(() => [excelTable('월별 계약 성과', ['월', '담당', '계약 수', '계약금액 (원)', '출처'], months.flatMap(m => Object.entries(m.owners).map(([owner, value]) => [m.month, owner, value.count ?? null, value.amount ?? null, m.source === 'sheet' ? '과거 계약 시트' : 'CRM'])), `${year}년 · ${customerType} · 비교 연도 기준`), ...(detail ? [excelTable('선택 월 계약', ['업체', '담당', '채널', '프로그램', '계약금액 (원)', '구분'], detail.rows.map(r => detail.source === 'sheet' ? [r.company || '', r.owner || '', r.channel || '', r.program || '', r.contract_amount ?? null, r.customer_type || '구분 미상'] : [r.company || '', r.salesOwner || '', r.channel || '', r.buildup || '', valueOf(r), r.ctype || '신규']), selected)] : [])], status !== 'loading');
   const format=value=>metric==='amount'?historyMoney(value):value===null||value===undefined?'—':value+'건';
   const groups=detail?[...new Set(detail.rows.map(r=>detail.source==='sheet'?r.owner:r.salesOwner||'미배정'))].map(owner=>({owner,rows:detail.rows.filter(r=>(detail.source==='sheet'?r.owner:r.salesOwner||'미배정')===owner).map(r=>detail.source==='sheet'?{
     id:r.source_cell,company:r.company,channel:r.channel,grade:r.grade,buildup:r.program,contractAmount:r.contract_amount,ctype:r.customer_type||'구분 미상',sourceRange:r.source_range,

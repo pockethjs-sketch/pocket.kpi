@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { transformWithOxc } from 'vite';
 import * as Icons from 'lucide-react';
 import * as domain from '../src/data/notionReceivables.js';
+import { excelTable } from '../src/data/excelTable.js';
 const icons = Object.fromEntries(['AlignLeft', 'CalendarDays', 'Circle', 'CircleChevronDown', 'FileText', 'List', 'LoaderCircle', 'Type', 'ExternalLink', 'RefreshCw', 'Archive', 'Pencil', 'Trash2', 'Plus'].map(name => [name, Icons[name]]));
 
 async function compile(source, exports, dependencies) {
@@ -21,9 +22,10 @@ const records = Array.from({ length: 35 }, (_, index) => ({
   notes: '첫 번째 확인사항\n두 번째 확인사항', request_status: '완료', payment_status: index ? '입금전' : '입금완료',
   source_page_reference: index ? 'javascript:alert(1)' : 'https://www.notion.so/synthetic',
 }));
-let states, cursor, fetchResult;
+let states, cursor, fetchResult, exportFactory;
 const { NotionReceivables } = await compile(source('NotionReceivables.jsx'), ['NotionReceivables'], {
   React, ...table, ...domain,
+  excelTable, useExcelExport: factory => { exportFactory = factory; },
   useState: initial => { const index = cursor++; if (states[index] === undefined) states[index] = initial; return [states[index], value => { states[index] = typeof value === 'function' ? value(states[index]) : value; }]; },
   useEffect() {}, useMemo: fn => fn(),
   window: { crmFetchNotionReceivables: async () => { if (fetchResult instanceof Error) throw fetchResult; return fetchResult; } },
@@ -40,6 +42,8 @@ function find(predicate) { return elements(tree(), predicate)[0]; }
 
 test('Notion table exposes all ten reference columns and full multiline text without expanding a row', () => {
   reset(); const rendered = html();
+  assert.equal(exportFactory()[0].rows.length, 35, 'export includes rows behind More');
+  assert.equal(exportFactory()[0].rows[0][3], records[0].deposit_text);
   assert.equal((rendered.match(/scope="col"/g) || []).length, 10);
   assert.deepEqual(table.NOTION_RECEIVABLE_COLUMNS.map(column => column.label), ['계약진행일', '업체', '프리', '가이드', '선금 금액', '잔금금액', '프로젝트', '특이사항', '상태', '입금']);
   assert.match(rendered, /첫 번째 확인사항\n두 번째 확인사항/);

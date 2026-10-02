@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useExcelExport } from './ExcelExport.jsx';
+import { excelTable } from './data/excelTable.js';
 import { RefreshCw, Search, ArrowRight } from 'lucide-react';
 import { syncActivityRows, filterSyncActivity, syncChanges, formatSyncValue } from './data/syncActivity.mjs';
 
@@ -28,6 +30,7 @@ export default function RecentSyncActivity({ loadLogs, leads = [], openLead, rel
   const filtered = useMemo(() => filterSyncActivity(rows, { days, source, result, query, now: checkedAt || new Date().toISOString() }), [rows, days, source, result, query, checkedAt]);
   const leadById = useMemo(() => new Map(leads.map(l => [String(l.id), l])), [leads]);
   const companies = new Set(filtered.map(row => String(row.leadId))).size;
+  useExcelExport(() => [excelTable('최근 동기화', ['시각 (한국시간)', '업체', '출처', '반영 구분', '내용', '변경 전후'], filtered.map(r => [timeLabel(r), r.company || '', r.sourceType === 'sheet' ? '계약 시트' : 'CRM 프리미팅', r.resultType === 'created' ? '기업 생성' : r.resultType === 'updated' ? '정보 수정' : '구분 기록 없음', r.detail || r.action || '', syncChanges(r).map(c => `${c.label}: ${formatSyncValue(c.key, c.before)} → ${formatSyncValue(c.key, c.after)}`).join('\n')]), `동기화 시각 기준 · ${days === 'all' ? '전체' : '최근 ' + days + '일'} · 출처 ${source} · 반영 ${result} · 검색 ${query || '없음'} · 상단 기간 무관`)], loaded);
 
   return <section aria-label="최근 동기화 내역" className="space-y-3">
     <div className="rounded-md border border-slate-200 bg-white p-4">

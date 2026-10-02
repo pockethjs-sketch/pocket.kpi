@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useExcelExport } from './ExcelExport.jsx';
+import { excelTable } from './data/excelTable.js';
 import ContractOwnerSheet, { ContractCustomerTypeLabel } from './ContractOwnerSheet.jsx';
 import { contractAmount, contractBasisEvents, summarizeContractBasis } from './data/contractBasis.js';
 
@@ -39,6 +41,11 @@ export default function ContractBasisView({ leads, basis, range, periodLabel, op
   const description = isPayment
     ? '실제 입금일 기준 · 해당 기간 받은 선금·중도금·잔금만 합산 · 계약 총액 아님'
     : '최초 CRM 프리미팅일(없으면 저장된 프리미팅일) 기준 · 현재 확정 계약액 · 계약일 원본 유지';
+  useExcelExport(() => [
+    excelTable(basisLabel, ['업체', '담당자', '신규·기존', '채널', '프로그램', `${amountLabel} (원)`], rows.map(r => [r.company || '', ownerOf(r), r.ctype || '신규', channelOf(r.channel), programOf(r), r.basisAmount]), `${view === 'monthly' && month ? month : periodLabel} · ${description} · 구분 ${type} · 담당 ${owner} · 검색 ${search || '없음'}`),
+    excelTable('날짜별 근거', ['날짜', '업체', '구분', '금액 (원)'], events.map(e => [e.date || '', e.lead.company || '', e.payment?.label || basisLabel, e.amount]), description),
+    ...(view === 'monthly' ? [excelTable('월별 비교', ['월', '업체 수', '건수', `${amountLabel} (원)`], months.map(m => [m.month, m.count, m.events, m.amount]), `전체 저장 월 · 구분 ${type} · 담당 ${owner} · 검색 ${search || '없음'}`)] : []),
+  ]);
   return <section className="rounded-lg border border-slate-200 bg-white" aria-label={basisLabel + ' 계약 성과'}>
     <div className="space-y-3 border-b border-slate-100 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
