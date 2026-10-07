@@ -36,7 +36,9 @@ async function verify(req: Request, raw: string) {
 }
 
 function rows(value: any) {
-  return Array.isArray(value) ? value : (value?.query || value?.data || value?.results || value?.rows || []);
+  const result = Array.isArray(value) ? value : (value?.query ?? value?.data ?? value?.results ?? value?.rows);
+  if (!Array.isArray(result)) throw new Error('crm_response_invalid');
+  return result;
 }
 function recordId(row: any, type: "LEAD" | "MEETING", index: number) {
   const candidates = type === "LEAD"
@@ -102,10 +104,27 @@ Deno.serve(async (req) => {
       });
       if (error) throw new Error(`raw_upsert_${error.code}`);
     }
-    await supabase.from("crm_sync_runs").update({ status: "COMPLETED", lead_count: leadRows.length, meeting_count: meetingRows.length, completed_at: new Date().toISOString() }).eq("id", run.id);
-    return json({ ok: true, start, end, leads: leadRows, meetings: meetingRows, fetchedAt: new Date().toISOString(), syncRunId: run.id, readBackend: "supabase-edge" });
+    // Catch up previously collected but unapplied rows even when today's feed is empty.
+    // Keep the daily CRM request window unchanged; this reconciliation reads Supabase only.
+    const { data: inflow, error: inflowError } = await supabase.rpc("kpi_reconcile_crm_inflow", {
+      p_organization_id: organizationId,
+      p_start: start < "2026-09-30" ? start : "2026-09-30",
+      p_end: end,
+      p_dry_run: false,
+    });
+    if (inflowError) throw new Error("inflow_reconcile_failed");
+    if (!inflow?.ok || inflow.blocked > 0) throw new Error("inflow_identity_blocked");
+    const completedAt = new Date().toISOString();
+    const { error: completeError } = await supabase.from("crm_sync_runs").update({
+      status: "COMPLETED", lead_count: leadRows.length, meeting_count: meetingRows.length,
+      completed_at: completedAt, inflow_completed_at: completedAt, inflow_result: inflow,
+    }).eq("id", run.id);
+    if (completeError) throw new Error("sync_completion_failed");
+    return json({ ok: true, start, end, leads: leadRows, meetings: meetingRows, inflow, fetchedAt: completedAt, syncRunId: run.id, readBackend: "supabase-edge" });
   } catch (error) {
-    const message = String(error instanceof Error ? error.message : error);
+    const detail = String(error instanceof Error ? error.message : error);
+    const message = /^(crm_http_\d+_\d+|raw_upsert_[a-zA-Z0-9]+|crm_response_invalid|inflow_reconcile_failed|inflow_identity_blocked|sync_completion_failed)$/.test(detail)
+      ? detail : "crm_sync_internal_error";
     await supabase.from("crm_sync_runs").update({ status: "FAILED", error_code: message.slice(0, 200), completed_at: new Date().toISOString() }).eq("id", run.id);
     return json({ error: "crm_sync_failed", message }, 502);
   }
