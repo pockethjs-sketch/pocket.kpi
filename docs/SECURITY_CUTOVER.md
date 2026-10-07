@@ -1,5 +1,12 @@
 # Employee authentication cutover — 2026-09-18
 
+## 2026-10-07 Approved card presentation release (deployment pending)
+
+- User explicitly requested deployment without further desktop/browser interaction after stopping Computer Use. Final post-Tailwind browser regression is unverified; this is a disclosed user-directed release, not a visual-QA pass.
+- Promote the approved bright blue presentation only: semantic library icons, quiet card borders, local SUIT font with OFL license, existing tables/navigation/controls preserved, dark receivables retained. Move comparison/ROAS explanations to bottom notes. Replace the misleading Sheets connection badge with the existing Supabase operation state; unknown/pending/error never become healthy. No new API call or claim of service-wide uptime.
+- No synthetic fixture, preview routing, fake employee session, disabled network or fake save state is included in the release. Existing authenticated startup, menu permissions, storage, calculations, background collection and backup remain unchanged. Remove the obsolete separate Sheet sync button only; existing combined manual synchronization remains.
+- Dependency audit reports 0 vulnerabilities. Automated verification and public deployment asset checks are recorded below/operations ledger; production customer payloads and actual employee credentials are not used for verification.
+
 ## 2026-10-07 Approved build dependency upgrade (local, release pending)
 
 - User approved resolving the audit blocker and deploying the reviewed design. Upgraded Tailwind and its official PostCSS adapter to pinned 4.3.3, and source-map-js to a compatible patched release. The install audit reports 0 vulnerabilities (previously 8); no audit suppression or force bypass.

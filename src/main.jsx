@@ -1,3 +1,6 @@
+import { MetricIcon, StageIcon } from "./components/MetricIcon.jsx";
+import { connectionPresentation } from "./data/connectionPresentation.js";
+import "./design.css";
 import "./styles.css";
 import { ExcelExportProvider, ExcelExportButton, useExcelExport } from './ExcelExport.jsx';
 import { excelTable } from './data/excelTable.js';
@@ -2569,9 +2572,9 @@ const Sel = ({ value, onChange, options, className, disabled }) => (
   </select>
 );
 const Fld = ({ label, children }) => <label className="block"><span className="block text-xs font-semibold text-slate-500 mb-1">{label}</span>{children}</label>;
-const Card = ({ children, cls = "" }) => <div className={"bg-white rounded-xl border border-slate-200 shadow-sm " + cls}>{children}</div>;
+const Card = ({ children, cls = "" }) => <div className={"kpi-card bg-white rounded-xl border border-slate-200 shadow-sm " + cls}>{children}</div>;
 const SecTitle = ({ icon: I, title, right }) => (
-  <div className="flex items-start justify-between gap-3 mb-5 flex-wrap">
+  <div className="kpi-section-title flex items-start justify-between gap-3 mb-5 flex-wrap">
     <div className="flex items-start gap-3">
       {I && <div className="w-9 h-9 rounded-xl bg-slate-900 text-white flex items-center justify-center shrink-0 shadow-sm"><I size={16} /></div>}
       <div>
@@ -2661,9 +2664,9 @@ const MetricCalcTip = ({ tip }) => !tip ? null : (
   </span>
 );
 const StatBig = ({ label, value, unit, prev, cur, sub, accent = "border-indigo-500", prevLabel, tooltip }) => (
-  <Card cls={"group relative p-4 border-l-4 " + accent}>
+  <Card cls={"kpi-stat group relative p-4 border-l-4 " + accent}>
     <p className="flex items-center gap-1.5 text-xs text-slate-400 font-semibold">
-      <span>{label}</span>{tooltip && <span aria-hidden="true" className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-[9px] font-black text-slate-500">i</span>}
+      <MetricIcon label={label} /><span>{label}</span>{tooltip && <span aria-hidden="true" className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-[9px] font-black text-slate-500">i</span>}
     </p>
     <div className="flex items-end gap-1.5 mt-1 flex-wrap">
       <span className="text-2xl font-extrabold tabular-nums text-slate-900 leading-none">{value}</span>
@@ -4288,7 +4291,7 @@ function DealsView() {
         </div>
         <div className="flex flex-wrap gap-2 pb-2">
           <Btn size="xs" disabled={crmSyncBusy || contractReviewBusy} onClick={refreshTodayPremeetings}><RefreshCw size={12} className={crmSyncBusy ? 'animate-spin' : ''}/>{crmSyncBusy ? '프리미팅 저장 중…' : '프리미팅 동기화'}</Btn>
-          <Btn size="xs" disabled={contractReviewBusy || crmSyncBusy} onClick={() => refreshContractReview(true)}><RefreshCw size={12} className={contractReviewBusy ? 'animate-spin' : ''}/>{contractReviewBusy ? '시트 확인 중…' : '시트 동기화'}</Btn>
+
         </div>
       </div>
       {(contractReviewError || syncSchedule?.statusError || syncSchedule?.daily?.ok === false || (syncSchedule && syncSchedule.triggerCount !== 1)) && <p role="alert" className="text-xs font-semibold text-red-600">{contractReviewError ? (contractReviewError === 'remote_save_timeout' ? '미저장 입력의 서버 반영 대기 · 계약 시트 조회 전 중단됨' : '계약 시트 조회 실패 · 다시 동기화해 주세요') : syncSchedule?.statusError ? '자동 갱신 상태 조회 실패' : syncSchedule?.daily?.ok === false ? '최근 자동 갱신 실패 · 수동 동기화로 확인해 주세요' : '서버 자동 갱신 설정 확인 필요'}</p>}
@@ -4335,6 +4338,7 @@ function DealsView() {
           </div>
         </button>
       )}
+      <div className="kpi-owner-build">
       <div className="flex items-center gap-1.5 flex-wrap">
         <span className="text-xs font-bold text-slate-500 mr-1 flex items-center gap-1"><User size={12} />영업자</span>
         {visibleRepNames.map((name) => (
@@ -4358,6 +4362,7 @@ function DealsView() {
           );
         })}
         {buF !== "전체" && <span className="text-xs text-slate-400 ml-1">· <b className="text-slate-600">{buF}</b> 빌드업만 · 누적 실입금 <b className="text-teal-600">{fmtWon(buStat(buF).paid)}</b></span>}
+      </div>
       </div>
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
         <StatBig label="계약 금액" value={fmtK(camount)} unit="원" accent="border-emerald-400" sub={won.length + "건 계약"}
@@ -6459,7 +6464,7 @@ useExcelExport(() => [excelTable('통합 성과', ['지표', '값', '단위'], [
     <div className="space-y-5">
       <SecTitle icon={Target} title="통합 성과 체크" sub={pLabel(period) + " 유입 DB 코호트가 마케팅 → 프리미팅 → 계약의 목표 전환과 비용 기준을 지키는지 확인합니다."} />
       <div className="flex flex-wrap items-center justify-between gap-2 -mt-2">
-        <div className="text-[11px] text-slate-500" title="현재 데이터의 유입일·미팅일·계약일로 재계산합니다. 과거 수정/삭제 전의 화면을 복원한 값은 아닙니다. 광고비는 하루 1회 갱신되며 최신 수집분을 사용합니다."><p>건수 증감·전환율·ROAS: 전일 대비 · {comparisonLabel}</p><p className="mt-1 text-slate-400">건당 비용: {monthCostLabel} · 광고비 일 1회 갱신</p></div>
+
         <div className="inline-flex items-center rounded-md border border-slate-200 bg-white p-0.5 shadow-sm" aria-label="고객 유형 필터">
           {["전체", "신규", "기존"].map((type) => (
             <button key={type} type="button" onClick={() => { setCustomerType(type); setMetricOpen(null); }}
@@ -6479,11 +6484,11 @@ useExcelExport(() => [excelTable('통합 성과', ['지표', '값', '단위'], [
                   </span>
                 </div>
               )}
-              <div className="relative overflow-hidden text-left rounded-3xl border border-slate-200 bg-slate-50/80 p-4 shadow-sm">
+              <div data-stage={s.id} className="kpi-stage-block relative overflow-hidden text-left rounded-3xl border border-slate-200 bg-slate-50/80 p-4 shadow-sm">
               <div className={"absolute inset-x-0 top-0 h-1 bg-gradient-to-r " + (s.tone === "sky" ? "from-sky-400 to-cyan-400" : s.tone === "indigo" ? "from-indigo-500 to-violet-500" : "from-emerald-400 to-teal-500")} />
               <div className="flex items-center justify-between gap-2 px-1 pt-1">
                 <div className="flex items-center gap-2.5">
-                  <span className={"w-10 h-10 rounded-2xl flex items-center justify-center text-sm font-black text-white shadow-sm bg-gradient-to-br " + (s.tone === "sky" ? "from-sky-500 to-cyan-500" : s.tone === "indigo" ? "from-indigo-500 to-violet-600" : "from-emerald-500 to-teal-600")}>{s.no}</span>
+                  <span className="kpi-stage-icon"><StageIcon stage={s.id} /><span className="kpi-stage-number">{s.no}</span></span>
                   <div><p className="text-[10px] font-bold tracking-widest text-slate-400">STAGE {s.no}</p><p className="text-lg font-extrabold text-slate-900">{s.title}</p></div>
                 </div>
                 <StateBadge state={s.state} />
@@ -6505,7 +6510,7 @@ useExcelExport(() => [excelTable('통합 성과', ['지표', '값', '단위'], [
                     <span>실입금 기준 ROAS</span>
                     <strong className="text-sm tabular-nums text-emerald-700">{receivedRoas == null ? "—" : receivedRoas.toLocaleString() + "%"}</strong>
                   </div>
-                  <p className="text-[11px] font-medium leading-relaxed text-slate-500">선택 기간 계약 기준 · 누적 확인 입금 {fmtK(contractPaidTotal)}원<br />두 ROAS 모두 같은 기간 광고비로 계산{!(roasSpend > 0) ? " · 광고비 0원 또는 미확인: 산출 불가" : ""}</p>
+
                 </div>}
                 <button type="button" onClick={() => go(s.go)} className="group ml-auto flex items-center justify-end gap-1 text-[11px] font-bold text-slate-400 hover:text-indigo-600">단계 전체 화면 <ChevronRight size={12} className="transition-transform group-hover:translate-x-0.5" /></button>
               </div>
@@ -6514,30 +6519,7 @@ useExcelExport(() => [excelTable('통합 성과', ['지표', '값', '단위'], [
           ))}
         </div>
       </div>
-      <Card cls="p-4 border-slate-200 bg-white/80">
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <p className="text-xs font-extrabold tracking-wide text-slate-600">판정 기준 <span className="ml-1 font-bold text-slate-400">· 신규 고객 기준</span></p>
-          <span className="px-2.5 py-1.5 rounded-[5px] bg-slate-100 text-[11px] text-slate-500">기간 광고비 <b className="text-slate-800 ml-1">{roasSpend > 0 ? costText(roasSpend) : "데이터 없음"}</b></span>
-        </div>
-        <div className="mt-3 grid gap-2 lg:grid-cols-3">
-          <div className="rounded-[5px] border border-slate-200 bg-white p-3">
-            <p className="text-[11px] font-extrabold text-slate-800">절대값 <span className="font-bold text-slate-400">· 월간 목표</span></p>
-            <p className="mt-1.5 text-xs font-bold leading-5 text-slate-600">유입 DB 500건 · 프리미팅 150건 · 계약 45건</p>
-            <p className="mt-1 text-[10px] leading-4 text-slate-400">연간은 월 목표의 12배, 일간은 월 목표의 1/30로 환산합니다.</p>
-          </div>
-          <div className="rounded-[5px] border border-slate-200 bg-white p-3">
-            <p className="text-[11px] font-extrabold text-slate-800">상대값 <span className="font-bold text-slate-400">· 단계 전환율</span></p>
-            <p className="mt-1.5 text-xs font-bold leading-5 text-slate-600">DB → 프리미팅 30% 이상 · 프리미팅 → 계약 30% 이상</p>
-            <p className="mt-1 text-[10px] leading-4 text-slate-400">현재 단계 도달 건수를 바로 이전 단계의 대상 건수로 나눕니다.</p>
-          </div>
-          <div className="rounded-[5px] border border-slate-200 bg-white p-3">
-            <p className="text-[11px] font-extrabold text-slate-800">목표비용 <span className="font-bold text-slate-400">· 단계당 비용</span></p>
-            <p className="mt-1.5 text-xs font-bold leading-5 text-slate-600">리드 5만원 이하 · 프리미팅 15만원 이하 · 계약 45만원 이하</p>
-            <p className="mt-1 text-[10px] leading-4 text-slate-400">선택 기간의 광고비를 각 단계 도달 건수로 나눕니다.</p>
-          </div>
-        </div>
-        {customerType === "기존" && <p className="mt-2 text-[10px] leading-4 text-amber-600">기존 고객은 신규 획득 목표의 판정 대상이 아니므로 기간 실적만 분리해 표시합니다.</p>}
-      </Card>
+
       <Card cls="p-0 overflow-hidden border-slate-200 bg-white">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3.5">
           <div className="flex items-center gap-3">
@@ -6577,6 +6559,36 @@ useExcelExport(() => [excelTable('통합 성과', ['지표', '값', '단위'], [
           </div>
         </div>
       </Card>
+      <section className="kpi-method-notes" aria-label="집계 기준 및 도움말">
+        <h3>집계 기준 · 데이터 안내</h3>
+        <div className="text-[11px] text-slate-500" title="현재 데이터의 유입일·미팅일·계약일로 재계산합니다. 과거 수정/삭제 전의 화면을 복원한 값은 아닙니다. 광고비는 하루 1회 갱신되며 최신 수집분을 사용합니다."><p>건수 증감·전환율·ROAS: 전일 대비 · {comparisonLabel}</p><p className="mt-1 text-slate-400">건당 비용: {monthCostLabel} · 광고비 일 1회 갱신</p></div>
+                  <p className="text-[11px] font-medium leading-relaxed text-slate-500">선택 기간 계약 기준 · 누적 확인 입금 {fmtK(contractPaidTotal)}원<br />두 ROAS 모두 같은 기간 광고비로 계산{!(roasSpend > 0) ? " · 광고비 0원 또는 미확인: 산출 불가" : ""}</p>
+      <Card cls="p-4 border-slate-200 bg-white/80">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <p className="text-xs font-extrabold tracking-wide text-slate-600">판정 기준 <span className="ml-1 font-bold text-slate-400">· 신규 고객 기준</span></p>
+          <span className="px-2.5 py-1.5 rounded-[5px] bg-slate-100 text-[11px] text-slate-500">기간 광고비 <b className="text-slate-800 ml-1">{roasSpend > 0 ? costText(roasSpend) : "데이터 없음"}</b></span>
+        </div>
+        <div className="mt-3 grid gap-2 lg:grid-cols-3">
+          <div className="rounded-[5px] border border-slate-200 bg-white p-3">
+            <p className="text-[11px] font-extrabold text-slate-800">절대값 <span className="font-bold text-slate-400">· 월간 목표</span></p>
+            <p className="mt-1.5 text-xs font-bold leading-5 text-slate-600">유입 DB 500건 · 프리미팅 150건 · 계약 45건</p>
+            <p className="mt-1 text-[10px] leading-4 text-slate-400">연간은 월 목표의 12배, 일간은 월 목표의 1/30로 환산합니다.</p>
+          </div>
+          <div className="rounded-[5px] border border-slate-200 bg-white p-3">
+            <p className="text-[11px] font-extrabold text-slate-800">상대값 <span className="font-bold text-slate-400">· 단계 전환율</span></p>
+            <p className="mt-1.5 text-xs font-bold leading-5 text-slate-600">DB → 프리미팅 30% 이상 · 프리미팅 → 계약 30% 이상</p>
+            <p className="mt-1 text-[10px] leading-4 text-slate-400">현재 단계 도달 건수를 바로 이전 단계의 대상 건수로 나눕니다.</p>
+          </div>
+          <div className="rounded-[5px] border border-slate-200 bg-white p-3">
+            <p className="text-[11px] font-extrabold text-slate-800">목표비용 <span className="font-bold text-slate-400">· 단계당 비용</span></p>
+            <p className="mt-1.5 text-xs font-bold leading-5 text-slate-600">리드 5만원 이하 · 프리미팅 15만원 이하 · 계약 45만원 이하</p>
+            <p className="mt-1 text-[10px] leading-4 text-slate-400">선택 기간의 광고비를 각 단계 도달 건수로 나눕니다.</p>
+          </div>
+        </div>
+        {customerType === "기존" && <p className="mt-2 text-[10px] leading-4 text-amber-600">기존 고객은 신규 획득 목표의 판정 대상이 아니므로 기간 실적만 분리해 표시합니다.</p>}
+      </Card>
+
+      </section>
       <Modal open={!!metricOpen} onClose={() => setMetricOpen(null)} wide title={metricTitle}>
         {metricStage && metricOpen && (
           <div className="space-y-4">
@@ -9313,16 +9325,12 @@ function DataConnectionFooter({ view, db, saveState }) {
   const { toast } = useApp();
   const pageSource = VIEW_DATA_SOURCES[view] || {};
   const links = [];
-  const sheetFailed = /실패|원격 확인 실패/.test(saveState || "");
+  const connection = connectionPresentation(saveState);
   links.push({
-    key: "sheet",
-    ok: !sheetFailed,
-    label: sheetFailed ? "구글시트 연결 확인 필요" : "구글시트 연동중",
-    source: "Google Sheets · 포켓 KPI 폴더",
-    data: pageSource.sheet || "이 화면에서 직접 입력·수정한 데이터",
-    detail: saveState || "상태 확인 중",
-    href: GOOGLE_SHEET_URL,
-    linkLabel: "원본 시트 열기"
+    key: "supabase",
+    ...connection,
+    source: "Supabase · 직원 인증 API",
+    data: "이 화면의 운영 데이터 · 마지막 조회·저장 결과 기준"
   });
   if (view === "ltvExpansion") links.push({
     key: "notion",
@@ -9622,7 +9630,7 @@ export default function App() {
               <ExcelExportButton title={AUTH_PAGE_GROUPS.flatMap(g => g.pages).find(p => p.id === effectiveView)?.label || effectiveView} periodLabel={pLabel(period)} allowed={canAccess(effectiveView) && !['settings', 'accessControl', 'schema', 'otherHub'].includes(effectiveView)} toast={toast} />
             </div>
           </header>
-          <main className={"flex-1 w-full " + (view === "deals" ? "p-2 lg:p-4 max-w-none mx-0" : "p-4 lg:p-7 max-w-screen-2xl mx-auto")}>
+          <main data-kpi-view={effectiveView} className={"flex-1 w-full " + (view === "deals" ? "p-2 lg:p-4 max-w-none mx-0" : "p-4 lg:p-7 max-w-screen-2xl mx-auto")}>
             <Cur />
             <DataConnectionFooter view={effectiveView} db={db} saveState={saveState} />
           </main>

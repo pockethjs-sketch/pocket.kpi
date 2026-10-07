@@ -1,0 +1,171 @@
+@font-face{font-family:'KPI SUIT';src:url('./assets/SUIT-Variable.woff2') format('woff2');font-weight:100 900;font-display:swap}
+/* Cosmetic overrides only: no display, grid-template, order, placement or content changes. */
+html[data-ui="precision"]{
+  --lp-bg:#f7f8fa;--lp-surface:#fff;--lp-surface-soft:#fafbfc;
+  --lp-border:#e6e9ef;--lp-border-soft:#f0f2f6;
+  --lp-text:#182338;--lp-text-body:#354359;--lp-muted:#66748b;--lp-subtle:#7d8ba0;
+  --lp-brand:#2563eb;--lp-brand-strong:#1d4ed8;--lp-brand-soft:#eff5ff;
+  --lp-radius-compact:5px;--lp-radius-control:7px;--lp-radius-card:10px;
+  --lp-shadow-card:none;
+}
+html[data-ui="precision"] body{font-family:'KPI SUIT',sans-serif!important;letter-spacing:-.025em}
+html[data-ui="precision"] #root .text-\[9px\],
+html[data-ui="precision"] #root .text-\[10px\]{font-size:11px!important;line-height:1.55!important}
+html[data-ui="precision"] #root .text-\[11px\]{font-size:12px!important;line-height:1.55!important}
+html[data-ui="precision"] #root .text-xs{font-size:13px!important;line-height:1.55!important}
+html[data-ui="precision"] #root .text-sm{font-size:15px!important;line-height:1.5!important}
+html[data-ui="precision"] #root .font-black{font-weight:800!important}
+html[data-ui="precision"] #root svg.lucide{stroke-width:1.7}
+html[data-ui="precision"] #root aside svg.lucide{width:17px;height:17px}
+html[data-ui="precision"] #root aside button.bg-indigo-600,
+html[data-ui="precision"] #root aside button.bg-indigo-600 *{color:#fff!important}
+html[data-ui="precision"] #root button{transition:background-color .15s,border-color .15s;letter-spacing:-.025em}
+html[data-ui="precision"] #root button:focus-visible{outline:2px solid #6095f5;outline-offset:2px}
+html[data-ui="precision"] #root table{font-size:14px;font-variant-numeric:tabular-nums;border-collapse:collapse}
+html[data-ui="precision"] #root thead{background:#f4f6f9!important}
+html[data-ui="precision"] #root th{font-size:12px!important;font-weight:650!important;color:#6e7d95;line-height:1.5;padding-top:12px;padding-bottom:12px}
+html[data-ui="precision"] #root td{font-size:14px;line-height:1.55;padding-top:12px;padding-bottom:12px;border-color:#edf0f5}
+html[data-ui="precision"] #root td.text-right{font-weight:650;font-variant-numeric:tabular-nums}
+html[data-ui="precision"] #root tbody tr:hover{background-color:#f1f6ff!important}
+html[data-ui="precision"] #root svg text{font-family:'KPI SUIT',sans-serif!important}
+html[data-ui="precision"] #root svg polyline{stroke-linejoin:round;stroke-linecap:round}
+/* Preserve semantic warning/success colors, dark receivables surfaces and every chart's data/axes. */
+html[data-ui="precision"] #root .receivables-table th,
+html[data-ui="precision"] #root .receivables-table td{color:inherit}
+html[data-ui="precision"] #root .receivables-table{border-collapse:separate}
+html[data-ui="precision"] #root .receivables-table thead{background:var(--rt-bg)!important}
+html[data-ui="precision"] #root .receivables-table tbody tr:hover{background:#252a32!important}
+html[data-ui="precision"] #root .receivables-table td{border-color:var(--rt-line)}
+/* Keep the two sticky contract header rows aligned with their original offsets. */
+html[data-ui="precision"] #root .contract-sheet table{border-collapse:separate}
+html[data-ui="precision"] #root .contract-sheet th,
+html[data-ui="precision"] #root .contract-sheet td{padding-top:4px;padding-bottom:4px;font-size:12px}
+html[data-ui="precision"] #root .contract-sheet .contract-sheet-company{padding:0}
+
+/* Selected Precision Workspace. Presentation only; data semantics remain unchanged. */
+html[data-ui="precision"]{--lp-bg:#f6f8fb;--lp-surface:#fff;--lp-border:#e5eaf2;--lp-border-soft:#edf1f6;--lp-text:#101d35;--lp-text-body:#354561;--lp-muted:#647694;--lp-subtle:#7889a3;--lp-radius-card:6px;--lp-radius-control:5px;--lp-shadow-card:none}
+html[data-ui="precision"] #root{font-weight:500}
+html[data-ui="precision"] #root .font-extrabold{font-weight:700}
+html[data-ui="precision"] #root .font-black{font-weight:750!important}
+html[data-ui="precision"] #root .text-sm{font-size:14px!important}
+html[data-ui="precision"] #root .text-xs{font-size:12px!important;line-height:1.45!important}
+html[data-ui="precision"] #root aside.bg-slate-900{background:#fff!important}
+html[data-ui="precision"] #root aside nav{padding:12px}
+html[data-ui="precision"] #root aside nav>div{margin-bottom:9px}
+html[data-ui="precision"] #root aside nav>div>button{min-height:43px;border-radius:6px!important;font-weight:650;font-size:14px!important}
+html[data-ui="precision"] #root aside nav>div>div{border-color:#e6edf7!important;margin-top:7px;padding-left:10px}
+html[data-ui="precision"] #root aside nav>div>div>button{min-height:34px;font-size:13px!important}
+html[data-ui="precision"] #root aside button.bg-indigo-600:hover{background:#1d4ed8!important;color:#fff!important}
+html[data-ui="precision"] #root header.sticky>div{min-height:66px;padding-top:10px!important;padding-bottom:10px!important}
+html[data-ui="precision"] #root main.flex-1{padding:24px!important;max-width:none}
+html[data-ui="precision"] #root .kpi-section-title{margin-bottom:22px;align-items:center;min-height:48px}
+html[data-ui="precision"] #root .kpi-section-title>div{align-items:center}
+html[data-ui="precision"] #root .kpi-section-title h2{font-size:23px;letter-spacing:-.035em;font-weight:750}
+html[data-ui="precision"] #root .kpi-section-title svg{width:19px;height:19px}
+html[data-ui="precision"] #root .kpi-card{box-shadow:none!important}
+html[data-ui="precision"] #root .kpi-stat{border:0!important;border-radius:0!important;background:transparent!important;padding:16px 22px}
+html[data-ui="precision"] #root .kpi-stat .text-2xl{font-size:30px;line-height:1.25;font-weight:750;letter-spacing:-.045em}
+html[data-ui="precision"] #root .kpi-stat>p:first-child{font-size:12px!important;font-weight:600}
+html[data-ui="precision"] #root .kpi-stat>p:nth-child(3){font-size:12px!important;margin-top:7px;line-height:1.5!important}
+html[data-ui="precision"] #root [data-kpi-view="deals"]>div>div[role="tablist"]{background:#fff}
+html[data-ui="precision"] #root #deals-panel-companies{background:#fff}
+html[data-ui="precision"] #root #deals-panel-companies>div{margin-top:0}
+html[data-ui="precision"] #root #deals-panel-companies>.kpi-card{border:0!important;border-radius:0!important}
+html[data-ui="precision"] #root #deals-panel-companies>.kpi-card:first-child{padding:18px 16px}
+html[data-ui="precision"] #root #deals-panel-companies>.flex{padding:7px 16px}
+html[data-ui="precision"] #root .kpi-owner-build{display:flex;align-items:center;flex-wrap:wrap;gap:16px 32px;padding:8px 16px 14px}
+html[data-ui="precision"] #root .kpi-owner-build>div+div{padding-left:28px;border-left:1px solid #e5eaf2}
+html[data-ui="precision"] #root .kpi-owner-build button{border-radius:5px!important;min-height:32px}
+html[data-ui="precision"] #root .kpi-owner-build button.bg-violet-600{background:#14213b!important;border-color:#14213b!important}
+html[data-ui="precision"] #root #deals-panel-companies>.flex button{border-radius:5px!important;min-height:32px}
+html[data-ui="precision"] #root #deals-panel-companies>.flex button.bg-violet-600{background:#14213b!important;border-color:#14213b!important}
+html[data-ui="precision"] #root #deals-panel-companies>.grid{gap:0;border-top:1px solid #e9edf4;border-bottom:1px solid #e9edf4;padding:16px 0;margin-top:10px;background:#fff}
+html[data-ui="precision"] #root #deals-panel-companies>.grid>*+*{border-left:1px solid #e8edf4}
+html[data-ui="precision"] #root #deals-panel-companies>.grid>.kpi-stat:not(:first-child){border-left:1px solid #e8edf4!important}
+html[data-ui="precision"] #root #deals-panel-companies>.grid .kpi-stat{height:100%;padding-top:0;padding-bottom:0}
+html[data-ui="precision"] #root #deals-panel-companies>.grid+.kpi-card>div.flex{padding-top:10px;padding-bottom:0;min-height:40px}
+html[data-ui="precision"] #root #deals-panel-companies>.grid+.kpi-card>div.flex button{border-radius:5px!important}
+html[data-ui="precision"] #root #deals-panel-companies>.grid+.kpi-card>div.flex button.bg-indigo-600{background:#13213b!important;border-color:#13213b!important}
+html[data-ui="precision"] #root #deals-panel-companies .overflow-x-auto{margin-left:0;margin-right:0}
+html[data-ui="precision"] #root #deals-panel-companies table{table-layout:fixed;background:#fff}
+html[data-ui="precision"] #root #deals-panel-companies th{height:44px;font-size:12px!important;font-weight:600!important;padding-top:10px;padding-bottom:10px;background:#f3f6fa;color:#70819e;border-top:1px solid #e8edf4;border-bottom:1px solid #e8edf4}
+html[data-ui="precision"] #root #deals-panel-companies td{height:58px;padding-top:8px;padding-bottom:8px;font-size:13px!important;border-bottom:1px solid #edf1f6;vertical-align:middle}
+html[data-ui="precision"] #root #deals-panel-companies tbody tr{background:#fff!important}
+html[data-ui="precision"] #root #deals-panel-companies tbody tr:hover{background:#f5f8fe!important}
+html[data-ui="precision"] #root #deals-panel-companies td:first-child{border-left:0!important}
+html[data-ui="precision"] #root #deals-panel-companies td:first-child>.relative{border:0!important;background:transparent!important;height:25px}
+html[data-ui="precision"] #root #deals-panel-companies td:first-child>.mt-1{display:inline-flex;background:transparent!important;color:#2563eb!important;font-size:10px!important}
+html[data-ui="precision"] #root #deals-panel-companies td select{background:#fff;border-color:#e7edf4!important;min-height:32px;padding:4px 6px;font-size:13px!important;color:#354561}
+html[data-ui="precision"] #root #deals-panel-companies td:nth-child(2) .font-bold{font-size:15px!important;font-weight:700;color:#17243c}
+html[data-ui="precision"] #root #deals-panel-companies td:nth-child(8) button{font-size:14px!important;font-weight:650}
+html[data-ui="precision"] #root #deals-panel-companies td .text-slate-400{color:#6b7c94!important}
+html[data-ui="precision"] #root #deals-panel-companies td:nth-child(8){font-variant-numeric:tabular-nums;color:#13213b}
+html[data-ui="precision"] #root #deals-panel-companies td button{font-size:12px!important;min-height:28px}
+html[data-ui="precision"] #root [data-kpi-view="performanceCheck"] .relative.overflow-hidden.text-left{background:#fff!important;border-radius:7px!important;padding:24px;box-shadow:none!important}
+html[data-ui="precision"] #root [data-kpi-view="performanceCheck"] [class*="bg-gradient"]{background-image:none!important;background-color:#2563eb}
+html[data-ui="precision"] #root [data-kpi-view="performanceCheck"] .absolute.inset-x-0.top-0{display:none}
+html[data-ui="precision"] #root [data-kpi-view="performanceCheck"] .space-y-2.mt-4>button{border:0!important;border-bottom:1px solid #edf1f6!important;border-radius:0!important;box-shadow:none!important;background:#fff!important;padding:20px 2px}
+html[data-ui="precision"] #root [data-kpi-view="performanceCheck"] .flex.flex-wrap.justify-between.-mt-2{justify-content:flex-end}
+.kpi-method-notes{margin-top:36px!important;padding:24px 0 8px;border-top:1px solid #e5eaf2;color:#71819b}
+.kpi-method-notes>h3{font-size:12px;font-weight:650;margin:0 0 10px}
+.kpi-method-notes>div,.kpi-method-notes>p{font-size:12px;line-height:1.7}
+html[data-ui="precision"] #root .kpi-method-notes>.kpi-card{border:0;background:transparent!important;padding:14px 0}
+html[data-ui="precision"] #root .kpi-method-notes .grid>div{border:0;background:transparent!important;padding-left:0}
+.kpi-connection-footer{display:flex;flex-wrap:wrap;align-items:center;gap:10px 20px;padding:20px 0 80px;margin-top:24px;border-top:1px solid #e5eaf2;font-size:12px;color:#73829b}
+.kpi-connection-label{display:flex;align-items:center;gap:7px;color:#536582}
+.kpi-connection-label strong{font-weight:600;color:#687792}
+.kpi-connection-detail{flex-basis:100%;font-size:11px;color:#8490a5}
+@media(max-width:1100px){html[data-ui="precision"] #root main.flex-1{padding:20px!important}html[data-ui="precision"] #root #deals-panel-companies>.grid>*{padding:12px 0}html[data-ui="precision"] #root #deals-panel-companies>.grid>*:nth-child(odd){border-left:0}}
+@media(max-width:640px){html[data-ui="precision"] #root aside.bg-slate-900{width:64px!important}html[data-ui="precision"] #root main.flex-1{padding:16px!important}html[data-ui="precision"] #root .kpi-section-title h2{font-size:20px}html[data-ui="precision"] #root .kpi-stat .text-2xl{font-size:24px}}
+
+/* Isolated local visual experiment. Blue is the brand; card tint identifies
+   a metric family, never whether its result passed a target. */
+html[data-ui="precision"] #root .kpi-block-icon,
+html[data-ui="precision"] #root .kpi-stage-icon {
+  display:inline-flex; flex:none; align-items:center; justify-content:center;
+  color:#2563eb; background:#edf4ff; border:1px solid #d8e6fb;
+  box-shadow:inset 0 1px 0 #ffffff; border-radius:9px;
+}
+html[data-ui="precision"] #root .kpi-block-icon { width:32px; height:32px; margin-right:3px; }
+html[data-ui="precision"] #root .kpi-block-icon[data-tone="slate"] { color:#51647e; background:#f1f5f9; border-color:#dfe7f0; }
+html[data-ui="precision"] #root .kpi-block-icon[data-tone="indigo"] { color:#5365ad; background:#f0f2fc; border-color:#dfe4f5; }
+html[data-ui="precision"] #root .kpi-block-icon[data-tone="teal"] { color:#15776e; background:#edf8f5; border-color:#d7ece6; }
+html[data-ui="precision"] #root .kpi-block-icon[data-tone="amber"] { color:#966619; background:#fff8eb; border-color:#f0e4c9; }
+html[data-ui="precision"] #root .kpi-stat {
+  border:1px solid #e0e7f0!important; border-radius:10px!important;
+  padding:18px 20px; background:#fff!important;
+  box-shadow:0 2px 4px #182b4805!important;
+}
+html[data-ui="precision"] #root .kpi-stat>p:first-child { color:#53657e!important; gap:8px; margin-bottom:13px; min-height:32px; }
+html[data-ui="precision"] #root .kpi-stat>p:nth-child(3) { color:#708099!important; }
+html[data-ui="precision"] #root #deals-panel-companies>.grid {
+  gap:12px; padding:16px; border:0; background:#f6f8fb;
+}
+html[data-ui="precision"] #root #deals-panel-companies>.grid>*+* { border-left:0; }
+html[data-ui="precision"] #root #deals-panel-companies>.grid .kpi-stat { padding:18px 20px; }
+html[data-ui="precision"] #root [data-kpi-view="performanceCheck"] .kpi-stage-block {
+  --stage-ink:#2563eb; --stage-fill:#edf4ff; --stage-line:#d8e6fb;
+  border:1px solid #dce5f1!important; border-radius:12px!important;
+  box-shadow:0 2px 5px #1e3a5f04!important; background:#fff!important;
+  padding:22px!important;
+}
+html[data-ui="precision"] #root .kpi-stage-block[data-stage="pre"] { --stage-ink:#5365ad; --stage-fill:#f0f2fc; --stage-line:#dfe4f5; }
+html[data-ui="precision"] #root .kpi-stage-block[data-stage="contract"] { --stage-ink:#15776e; --stage-fill:#edf8f5; --stage-line:#d7ece6; }
+html[data-ui="precision"] #root .kpi-stage-icon { width:46px; height:46px; border-radius:12px; color:var(--stage-ink); background:var(--stage-fill); border-color:var(--stage-line); }
+html[data-ui="precision"] #root .kpi-stage-number { display:none; }
+html[data-ui="precision"] #root .kpi-stage-block>.flex:first-of-type { padding-bottom:16px; border-bottom:1px solid #edf1f6; }
+html[data-ui="precision"] #root .kpi-stage-block .space-y-2.mt-4 { margin-top:16px; }
+html[data-ui="precision"] #root [data-kpi-view="performanceCheck"] .kpi-stage-block .space-y-2.mt-4>button {
+  border:1px solid #e6ebf2!important; border-radius:8px!important;
+  padding:15px 13px!important; background:#fff!important;
+  transition:background .15s,border-color .15s;
+}
+html[data-ui="precision"] #root [data-kpi-view="performanceCheck"] .kpi-stage-block .space-y-2.mt-4>button:hover { background:#f8faff!important; border-color:#b8cdea!important; }
+html[data-ui="precision"] #root .kpi-stage-block button:focus-visible,
+html[data-ui="precision"] #root button:has(>.kpi-stat):focus-visible { outline:2px solid #2563eb; outline-offset:3px; }
+
+@media(max-width:640px) { html[data-ui="precision"] #root .kpi-stat { padding:14px!important; } }
+
+/* Keep marketing tables aligned despite the global type scale. */
+html[data-ui="precision"] #root .marketing-hub-table th { font-size:10px!important; padding-top:8px; padding-bottom:8px; line-height:16px!important; }
+html[data-ui="precision"] #root .marketing-hub-table td { height:40px; font-size:12px!important; padding-top:8px; padding-bottom:8px; line-height:18px!important; }

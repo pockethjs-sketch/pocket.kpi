@@ -53,10 +53,13 @@ test('unpaid, CRM zero-deposit and empty payment schedules never turn planned am
   }
 });
 
-test('rendered main footer distinguishes both ratios, amounts, cohort basis and unavailable spend', async () => {
+test('rendered ROAS summary and bottom notes distinguish both ratios, amounts, cohort basis and unavailable spend', async () => {
   const a = source.indexOf('{s.id === "contract" && <div', start);
   const footer = source.slice(a, source.indexOf('\n                <button', a));
-  const { code } = await transformWithOxc(`function Footer(){ return <section>${footer}</section> }`, 'Footer.jsx', { jsx: { runtime: 'classic' } });
+  const notesStart = source.indexOf('<section className="kpi-method-notes"', start);
+  const basisNote = source.slice(notesStart).split(/\r?\n/).find(line => line.includes('선택 기간 계약 기준 · 누적 확인 입금'));
+  assert.ok(notesStart > a && basisNote, 'ROAS explanation remains in the requested bottom notes section');
+  const { code } = await transformWithOxc(`function Footer(){ return <section>${footer}<aside>${basisNote}</aside></section> }`, 'Footer.jsx', { jsx: { runtime: 'classic' } });
   const render = (spend) => {
     const metrics = run('전체', spend);
     const scope = { React, ...metrics, roasSpend: spend, s: { id: 'contract' }, amountBefore: null, previousSpend: null, DailyDelta: () => null, fmtK: n => n.toLocaleString('ko-KR'), divide: (a,b) => b > 0 ? a / b * 100 : null };
