@@ -1,5 +1,17 @@
 # Employee authentication cutover — 2026-09-18
 
+## 2026-10-07 Approved build dependency upgrade (local, release pending)
+
+- User approved resolving the audit blocker and deploying the reviewed design. Upgraded Tailwind and its official PostCSS adapter to pinned 4.3.3, and source-map-js to a compatible patched release. The install audit reports 0 vulnerabilities (previously 8); no audit suppression or force bypass.
+- Explicit source scanning is limited to src/index. Preserve legacy ring/shadow/placeholder/border/cursor defaults for visual compatibility. Existing employee authentication, API requests, business calculations and data are unchanged. 271 tests, security lint, build and build-contract pass locally. Browser regression and production deployment are separate subsequent gates.
+
+## 2026-10-07 Marketing overview labels and table consistency (local only)
+
+- Deployment explicitly deferred by the user after the full dependency audit returned 8 pre-existing issues (6 high, 2 moderate). No audit bypass, forced dependency upgrade, commit, push or deployment. Operating presentation fixes remain local and separate from the isolated card-design preview.
+- Add explicit inflow-date basis beside paid-company card/header and distinguish current confirmed receipts from receipt-date reporting. Existing cohort, actualPaid, contract-date ROAS, exports and handlers are unchanged.
+- Explain monthly target colors, ungraded existing-customer ROAS and separate channel ROAS 100% threshold. Missing results are neutral; total channel ROAS uses the same color threshold as channel rows. Standardize only these two tables to 12px body text and 40px rows.
+- No production data/API/auth/session/RLS/sync/backup change, no new requests. 271 tests, security lint, production build and build-contract checks passed. Browser visual recheck was interrupted by changing desktop/window state; not claimed verified. No deployment or dependency change.
+
 ## 2026-10-07 CRM inflow recovery / server promotion deployed
 
 - Root cause: the daily Apps Script premeeting path collected raw newarrivals through `kpi-crm-sync`, but consumed only meetings. Operational lead promotion was browser-only; removing tab-entry auto refresh on September 30 left no unattended inflow writer. Raw collection COMPLETED therefore did not mean operational CRM updated.

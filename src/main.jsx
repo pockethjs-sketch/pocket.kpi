@@ -6832,7 +6832,7 @@ function MarketingHubView() {
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
         <button className="text-left" onClick={() => go("leads")}><StatBig label="유입 DB" value={leads.length} unit="건" accent="border-sky-500" sub={totalCpl == null ? "아직 데이터가 없다" : "CPL " + fmtK(totalCpl) + "원"} /></button>
         <button className="text-left" onClick={() => go("premeetingHub")}><StatBig label="프리미팅" value={periodMeetings.length} unit="건" accent="border-indigo-500" sub="선택 기간 기업 수 · 통합 성과와 동일 기준" /></button>
-        <StatBig label="결제 기업" value={paid.length} unit="개사" accent="border-emerald-500" sub={"유입 대비 " + pct(paid.length, leads.length) + "%"} />
+        <StatBig label="결제 기업 (유입일 기준)" value={paid.length} unit="개사" accent="border-emerald-500" sub={"선택 기간 유입 기업 중 입금 확인 · 유입 대비 " + pct(paid.length, leads.length) + "%"} />
         <Card cls="border-l-4 border-rose-500 p-4">
           <p className="text-xs font-semibold text-slate-400">ROAS · 계약액 기준</p>
           <div className="mt-2 space-y-1.5">
@@ -6854,7 +6854,7 @@ function MarketingHubView() {
           {trendMetrics.map((metric) => <MiniTrend key={metric.key} metric={metric} />)}
         </div>
         <div className="overflow-x-auto border-t border-slate-100">
-          <table className="w-full min-w-[760px] text-xs">
+          <table className="marketing-hub-table w-full min-w-[760px] text-xs" aria-label="월별 마케팅 성과">
             <thead><tr className="bg-slate-50 text-[10px] text-slate-400">
               <th className="px-4 py-2 text-left">월</th><th className="px-3 py-2 text-right">유입 DB</th><th className="px-3 py-2 text-right">프리미팅</th><th className="px-3 py-2 text-right">CPL</th><th className="px-4 py-2 text-right">신규 ROAS</th><th className="px-4 py-2 text-right">기존 ROAS</th>
             </tr></thead>
@@ -6864,25 +6864,29 @@ function MarketingHubView() {
                   <td className="px-4 py-2.5 font-bold text-slate-700">{x.month}{i === 0 && <span className="ml-2 text-[9px] text-indigo-600">최신</span>}</td>
                   <td className={"px-3 py-2.5 text-right font-extrabold tabular-nums " + (x.leads >= monthlyLeadGoal ? "text-emerald-700" : "text-rose-600")}>{x.leads.toLocaleString()}건</td>
                   <td className={"px-3 py-2.5 text-right font-extrabold tabular-nums " + (x.meetings >= monthlyMeetingGoal ? "text-emerald-700" : "text-rose-600")}>{x.meetings.toLocaleString()}건</td>
-                  <td className={"px-3 py-2.5 text-right font-bold tabular-nums " + (x.cpl != null && x.cpl <= 50000 ? "text-emerald-700" : "text-rose-600")}>{x.cpl == null ? "-" : fmtK(x.cpl) + "원"}</td>
-                  <td className={"px-4 py-2.5 text-right font-extrabold tabular-nums " + (x.newRoas != null && x.newRoas >= monthlyRoasGoal ? "text-emerald-700" : "text-rose-600")}>{x.newRoas == null ? "-" : x.newRoas.toLocaleString() + "%"}</td>
-                  <td className="px-4 py-2.5 text-right font-extrabold tabular-nums text-violet-700">{x.existingRoas == null ? "-" : x.existingRoas.toLocaleString() + "%"}</td>
+                  <td className={"px-3 py-2.5 text-right font-bold tabular-nums " + (x.cpl == null ? "text-slate-500" : x.cpl <= 50000 ? "text-emerald-700" : "text-rose-600")}>{x.cpl == null ? "-" : fmtK(x.cpl) + "원"}</td>
+                  <td className={"px-4 py-2.5 text-right font-extrabold tabular-nums " + (x.newRoas == null ? "text-slate-500" : x.newRoas >= monthlyRoasGoal ? "text-emerald-700" : "text-rose-600")}>{x.newRoas == null ? "-" : x.newRoas.toLocaleString() + "%"}</td>
+                  <td className={"px-4 py-2.5 text-right font-extrabold tabular-nums " + (x.existingRoas == null ? "text-slate-500" : "text-violet-700")}>{x.existingRoas == null ? "-" : x.existingRoas.toLocaleString() + "%"}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       </Card>
+      <div className="marketing-hub-legend" aria-label="월별 표 색상 기준">
+        <p><span className="text-emerald-700">초록: 목표 충족</span> · <span className="text-rose-600">빨강: 목표 미달</span> · <span className="text-violet-700">보라: 기존 ROAS 구분색 (목표 판정 없음)</span> · 회색 —: 산출 불가</p>
+        <p>월 목표: 유입 DB {monthlyLeadGoal.toLocaleString()}건 이상 · 프리미팅 {monthlyMeetingGoal.toLocaleString()}건 이상 · CPL 5만원 이하 · 신규 ROAS {monthlyRoasGoal.toLocaleString()}% 이상. 진행 중인 월도 월 전체 목표와 비교합니다.</p>
+      </div>
       <Card>
         <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-3 flex-wrap">
           <div>
             <p className="text-sm font-extrabold text-slate-900">성과 흐름</p>
-            <p className="text-[10px] text-slate-400 mt-1">유입·입금 업체는 유입일, 계약액·ROAS는 계약일 기준입니다. ROAS는 통합 성과와 같은 계약액 ÷ 광고비입니다.</p>
+            <p className="text-[10px] text-slate-400 mt-1">유입·프리 전환·결제 기업은 들어온 유입일 기준, 계약액·ROAS는 계약일 기준입니다. 결제 기업은 해당 유입 기업 중 현재까지 입금이 확인된 곳이며, 입금일 기준이 아닙니다.</p>
           </div>
           <Btn size="xs" kind="ghost" onClick={() => go("marketing")}>전체 분석 <ExternalLink size={11} /></Btn>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1080px] text-sm">
+          <table className="marketing-hub-table w-full min-w-[1080px] text-xs" aria-label="채널별 성과 흐름">
             <thead>
               <tr className="border-y border-slate-100 bg-slate-50 text-[10px] text-slate-400">
                 <th className="px-4 py-2.5 text-left font-semibold">채널</th>
@@ -6891,7 +6895,7 @@ function MarketingHubView() {
                 <th className="px-3 py-2.5 text-right font-semibold">CPL</th>
                 <th className="px-3 py-2.5 text-right font-semibold">프리 전환</th>
                 <th className="px-3 py-2.5 text-right font-semibold">DB→프리</th>
-                <th className="px-3 py-2.5 text-right font-semibold">결제 기업</th>
+                <th className="px-3 py-2.5 text-right font-semibold">결제 기업 <span className="whitespace-nowrap font-normal">(유입일 기준)</span></th>
                 <th className="px-3 py-2.5 text-right font-semibold">DB→결제</th>
                 <th className="px-3 py-2.5 text-right font-semibold">CAC</th>
                 <th className="px-3 py-2.5 text-right font-semibold">계약액</th>
@@ -6929,13 +6933,17 @@ function MarketingHubView() {
                   <td className="px-3 py-3 text-right text-xs font-bold text-emerald-300 tabular-nums">{pct(paid.length, leads.length)}%</td>
                   <td className="px-3 py-3 text-right text-xs font-bold tabular-nums">{totalCac == null ? "-" : fmtK(totalCac) + "원"}</td>
                   <td className="px-3 py-3 text-right text-sm font-black text-teal-300 tabular-nums">{fmtK(contractPerformance.amount)}원</td>
-                  <td className="px-4 py-3 text-right text-sm font-black text-rose-300 tabular-nums"><button type="button" aria-label="전체 ROAS 계산 기업 보기" title="전체 ROAS 계산에 포함된 기업·계약금액 보기" className="min-h-8 rounded px-1 underline decoration-dotted underline-offset-4 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white" onClick={() => setRoasChannel("전체")}>{totalRoas == null ? "-" : totalRoas + "%"}</button></td>
+                  <td className={"px-4 py-3 text-right text-sm font-black tabular-nums " + (totalRoas == null ? "text-white" : totalRoas >= 100 ? "text-emerald-300" : "text-rose-300")}><button type="button" aria-label="전체 ROAS 계산 기업 보기" title="전체 ROAS 계산에 포함된 기업·계약금액 보기" className="min-h-8 rounded px-1 underline decoration-dotted underline-offset-4 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white" onClick={() => setRoasChannel("전체")}>{totalRoas == null ? "-" : totalRoas + "%"}</button></td>
                 </tr>
               </tfoot>
             )}
           </table>
         </div>
       </Card>
+      <div className="marketing-hub-legend" aria-label="채널 표 색상 기준">
+        <p>열 색상은 지표 구분용이며 좋고 나쁨을 뜻하지 않습니다. ROAS만 초록 100% 이상 · 빨강 100% 미만 · 회색 — 산출 불가로 표시합니다.</p>
+        <p>채널 표의 100%는 계약액과 광고비가 같다는 뜻이며 이익률·손익분기점이 아닙니다. 위 월별 표는 별도 월 목표와 비교합니다.</p>
+      </div>
       <Modal open={roasChannel != null} onClose={() => setRoasChannel(null)} wide title={(roasChannel || "전체") + " ROAS · 계산 기업"}>
         {roasChannel != null && <ChannelRoasDetails rows={roasDetailRows} spend={roasDetailSpend} roas={roasDetailSummary.totalRoas} channel={roasChannel} periodLabel={pLabel(period)} onOpenLead={id => { setRoasChannel(null); openLead(id); }} />}
       </Modal>

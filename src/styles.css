@@ -1,6 +1,23 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss" source(none);
+@source "./";
+@source "../index.html";
+
+/* Preserve v3 defaults while moving off the vulnerable build dependency tree. */
+@theme {
+  --default-ring-width: 3px;
+  --default-ring-color: #3b82f6;
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --blur-sm: 4px;
+}
+@layer base {
+  *, ::after, ::before, ::backdrop, ::file-selector-button { border-color: #e5e7eb; }
+  input::placeholder, textarea::placeholder { color: #9ca3af; opacity: 1; }
+  button:not(:disabled), [role="button"]:not(:disabled) { cursor: pointer; }
+}
+@utility outline-none {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
 
 :root{
     --lp-bg:#f2f4f6;
@@ -205,3 +222,11 @@
 .contract-sheet-total { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 13px 16px; border-top: 2px solid #737c87; background: #fff; font-size: 14px; font-weight: 800; }
 .contract-sheet-total-count { margin-left: 10px; font-size: 13px; font-weight: 600; color: #475569; }
 .contract-sheet-total strong { font-size: 20px; color: #b42318; font-variant-numeric: tabular-nums; }
+
+/* Marketing overview: monthly and channel tables share one compact type/row scale. */
+#root .marketing-hub-table { font-size:12px; line-height:18px; }
+#root .marketing-hub-table th { padding-top:8px; padding-bottom:8px; font-size:10px!important; line-height:16px; }
+#root .marketing-hub-table td { height:40px; padding-top:8px; padding-bottom:8px; font-size:12px!important; line-height:18px; font-weight:700; }
+#root .marketing-hub-table td button { min-height:24px; padding-top:0; padding-bottom:0; font-size:inherit; line-height:18px; }
+.marketing-hub-legend { padding:0 16px; font-size:11px; line-height:1.7; color:#64748b; }
+.marketing-hub-legend p+p { margin-top:2px; }
