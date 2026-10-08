@@ -6,21 +6,22 @@ import { stripTypeScriptTypes } from 'node:module';
 import { createHmac } from 'node:crypto';
 import { authorizeEmployee, canEmployeeAct, mutationPermission } from '../supabase/functions/_shared/employee-access.mjs';
 import * as scopeAccess from '../supabase/functions/_shared/premeeting-access.mjs';
+import * as receivablesAccess from '../supabase/functions/_shared/receivables-access.mjs';
 const domain = readFileSync(new URL('../supabase/functions/kpi-domain-api/index.ts', import.meta.url), 'utf8');
 const gs = readFileSync(new URL('../../pocket-kpi-deploy/Code.gs', import.meta.url), 'utf8');
-function handler(role, user = true, scope = 'all') {
+function handler(role, user = true, scope = 'all', grant = null, current = null) {
   let callback, writes = 0;
   const member = { organization_id: 'org', user_id: 'user', role, state: 'ACTIVE', archived_at: null, access_scope: scope };
   const client = {
     auth: { getUser: async () => user ? { data: { user: { id: 'user', role: 'authenticated', email_confirmed_at: '2026-09-18' } } } : { error: {} } },
     rpc: async (name) => { if (name !== 'kpi_claim_employee_invitation') writes++; return { data: { ok: true } }; },
     from: (table) => {
-      const query = { select: () => query, eq: () => query, maybeSingle: async () => ({ data: member }) };
-      assert.equal(table, 'organization_memberships'); return query;
+      const query = { select: () => query, eq: () => query, maybeSingle: async () => ({ data: table === 'organization_memberships' ? member : table === 'employee_write_grants' ? grant : current }) };
+      assert.ok(['organization_memberships','employee_write_grants','app_current_state'].includes(table)); return query;
     },
   };
   const source = stripTypeScriptTypes(domain.replace(/^import .*;\r?\n/gm, ''), { mode: 'transform' });
-  vm.runInNewContext(source, { createClient: () => client, authorizeEmployee, canEmployeeAct, mutationPermission, ...scopeAccess,
+  vm.runInNewContext(source, { createClient: () => client, authorizeEmployee, canEmployeeAct, mutationPermission, ...scopeAccess, ...receivablesAccess,
     URL, Request, Response, TextEncoder, AbortSignal, crypto: globalThis.crypto,
     Deno: { env: { get: (key) => key === 'KPI_ORGANIZATION_ID' ? 'org' : 'test-only' }, serve: (fn) => { callback = fn; } } });
   return { call: (action, body = {}) => callback(new Request('https://example.invalid', { method: 'POST', headers: { authorization: 'Bearer synthetic-session', 'content-type': 'application/json' }, body: JSON.stringify({ action, ...body }) })), writes: () => writes };
@@ -51,6 +52,29 @@ test('authorized session and normal patch commit preserve contract', async () =>
   assert.equal((await h.call('session')).status, 200);
   const response = await h.call('mutation', { mutationId: 'test', baseRevision: 'a', nextRevision: 'b', mutation: { collections: { leads: { patches: [] } } } });
   assert.equal(response.status, 200); assert.equal((await response.json()).primary, 'supabase'); assert.equal(h.writes(), 1);
+});
+
+test('supplemental VIEWER grant allows only current eligible record patches', async () => {
+  const grant = { profile: 'premeeting_receivables', enabled: true };
+  const current = { primary_revision: 'a', state_snapshot: { leads: [{ id: 'l1', status: '계약 완료' }] } };
+  const h = handler('VIEWER', true, 'all', grant, current);
+  const session = await (await h.call('session')).json();
+  assert.equal(session.role, 'VIEWER');
+  assert.deepEqual(session.writePages, ['deals','ltvExpansion']);
+  assert.equal(session.scope, undefined); // Do not expose the undeployed invitation scope.
+  const mutation = { schemaVersion: 3, origin: 'user', collections: { leads: { idField: 'id', upsert: [], remove: [], patches: [{ id: 'l1', ops: [{ op: 'set', path: ['vendorNote'], value: 'synthetic edit' }] }] } } };
+  const body = { mutationId: 'synthetic', baseRevision: 'a', nextRevision: 'b', mutation };
+  assert.equal((await h.call('mutation', body)).status, 200);
+  assert.equal(h.writes(), 1);
+  for (const action of ['employees','crm_refresh']) assert.equal((await h.call(action)).status, 403);
+  assert.equal((await h.call('sheet_bridge', { sheetAction: 'contract_auto_sync' })).status, 403);
+  assert.equal((await h.call('mutation', { ...body, baseRevision: 'stale' })).status, 409);
+  assert.equal((await h.call('mutation', { ...body, mutation: { ...mutation, documents: { settings: {} } } })).status, 403);
+  assert.equal(h.writes(), 1);
+  for (const g of [null, { ...grant, enabled: false }, { ...grant, profile: 'unknown' }]) {
+    const revoked = handler('VIEWER', true, 'all', g, current);
+    assert.equal((await revoked.call('mutation', body)).status, 403); assert.equal(revoked.writes(), 0);
+  }
 });
 test('Apps Script rejects public tokens; HMAC validates exact content and timestamp', () => {
   const secret = 'synthetic-private-server-secret';

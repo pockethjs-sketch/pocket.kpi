@@ -1,6 +1,15 @@
 # Employee authentication cutover — 2026-09-18
 
-## 2026-10-07 Approved card presentation release (deployment pending)
+## 2026-10-08 Two-page supplemental editing (validated locally; activation pending)
+
+- User authorized the existing two-menu employee to edit premeeting companies and receivables. Keep ACTIVE/VIEWER membership, direct-table RLS, invitations, other staff and administrator permissions unchanged. Add a server-only per-organization/user grant; each mutation revalidates the active membership, grant, current revision, eligible existing lead and allowed fields before the existing atomic commit.
+- Only existing premeeting/contract records can be edited: contract/payment amounts and dates, receipt checks, owners, notes, classifications and related append-only activity. Whole-record creation/deletion, source identifiers, unrelated collections/documents, administration and collection triggers remain denied. Grant is not a global EDITOR promotion. Existing read scope is unchanged; menu restriction is not a new API read-isolation guarantee.
+- Keep undeployed `access_scope` invitation changes inactive; runtime queries now match production columns. Do not apply the previously rejected common membership/RLS migration.
+- Limited frontend saves journal explicit edits rather than display migrations. Failed journals stay account-isolated until ACK; no automatic cleanup/recovery claim. Show prominent save state, distinguish pending from confirmed success. Synthetic handler/storage authorization tests plus 279 tests, security lint/build checks passed; npm audit reports 0 vulnerabilities. Actual employee browser save/recovery remains unverified.
+
+## 2026-10-07 Approved card presentation release (deployed)
+
+- Deployed `d95c0e5f0d196231ddab162744af45ed78912cd1`, Actions `37578206880`: build and deployment success. 274 tests, security lint, build contract and full audit (0 vulnerabilities) passed. Public HTML/9 assets/license return200; actual CI entry/main filenames verified. Six assets match local SHA-256; two JS files match after asset-name normalization. Base CSS differs only in tiny platform floating-point LAB color conversion, not selector coverage. Final browser QA remains unverified per explicit user direction.
 
 - User explicitly requested deployment without further desktop/browser interaction after stopping Computer Use. Final post-Tailwind browser regression is unverified; this is a disclosed user-directed release, not a visual-QA pass.
 - Promote the approved bright blue presentation only: semantic library icons, quiet card borders, local SUIT font with OFL license, existing tables/navigation/controls preserved, dark receivables retained. Move comparison/ROAS explanations to bottom notes. Replace the misleading Sheets connection badge with the existing Supabase operation state; unknown/pending/error never become healthy. No new API call or claim of service-wide uptime.

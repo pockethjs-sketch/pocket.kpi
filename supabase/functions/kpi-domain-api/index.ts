@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { authorizeEmployee, canEmployeeAct, mutationPermission } from "../_shared/employee-access.mjs";
 import { canAccessAction, isPremeetingOnly, isPremeetingLead, premeetingDocuments, validatePremeetingMutation } from "../_shared/premeeting-access.mjs";
+import { RECEIVABLES_WRITE_PROFILE, RECEIVABLES_WRITE_PAGES, validateReceivablesMutation } from "../_shared/receivables-access.mjs";
 
 const ALLOWED_ORIGINS = new Set([
   "https://pockethjs-sketch.github.io",
@@ -123,7 +124,7 @@ Deno.serve(async (req) => {
     findMembership: async (org: string, userId: string, verifiedEmail: string) => {
       const claim = await supabase.rpc("kpi_claim_employee_invitation", { p_organization_id: org, p_user_id: userId, p_verified_email: verifiedEmail });
       if (claim.error) return { error: claim.error };
-      return supabase.from("organization_memberships").select("organization_id,user_id,role,state,archived_at,access_scope")
+      return supabase.from("organization_memberships").select("organization_id,user_id,role,state,archived_at")
         .eq("organization_id", org).eq("user_id", userId).maybeSingle();
     },
   });
@@ -135,20 +136,34 @@ Deno.serve(async (req) => {
   const readActions = new Set(["session", "meta", "bootstrap", "crm", "marketing", "contract_history", "support_board", "notion_receivables"]);
   const permission = action === "employees" ? "admin" : action === "mutation" ? mutationPermission(body.mutation)
     : readActions.has(action) || (action === "sheet_bridge" && ["contract_changes", "daily_sync_status", "health", "marketing_status"].includes(body.sheetAction)) ? "read" : "write";
-  if (!canEmployeeAct(access, permission)) return reply(req, { error: "permission_denied" }, 403);
+  // Consult the current server-owned grant on each write/session. JWT claims and
+  // browser-selected pages cannot grant access. VIEWER remains VIEWER in DB RLS.
+  let writeProfile = '';
+  if (access.role === 'VIEWER' && (action === 'session' || (action === 'mutation' && permission === 'write'))) {
+    try {
+      const { data: grant, error } = await supabase.from('employee_write_grants').select('profile,enabled')
+        .eq('organization_id', organizationId).eq('user_id', access.userId).maybeSingle();
+      if (error) return reply(req, { error: 'write_grant_unavailable' }, 503);
+      if (grant?.enabled && grant.profile === RECEIVABLES_WRITE_PROFILE) writeProfile = grant.profile;
+    } catch { return reply(req, { error: 'write_grant_unavailable' }, 503); }
+  }
+  const scopedWrite = action === 'mutation' && permission === 'write' && writeProfile === RECEIVABLES_WRITE_PROFILE;
+  if (!canEmployeeAct(access, permission) && !scopedWrite) return reply(req, { error: "permission_denied" }, 403);
   if (!canAccessAction(access, action, body)) return reply(req, { error: "page_scope_denied" }, 403);
-  if (action === "session") return reply(req, { ok: true, userId: access.userId, organizationId, role: access.role, scope: access.scope });
+  if (action === "session") return reply(req, { ok: true, userId: access.userId, organizationId, role: access.role,
+    ...(isPremeetingOnly(access) ? { scope: access.scope } : {}),
+    ...(writeProfile ? { writeProfile, writePages: RECEIVABLES_WRITE_PAGES, menuPages: RECEIVABLES_WRITE_PAGES } : {}) });
   if (action === "employees") {
     if (req.method === "POST") {
       const email = String(body.email || "").trim().toLowerCase();
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !["EDITOR", "VIEWER", "ADMIN"].includes(body.role)) return reply(req, { error: "invalid_employee" }, 400);
       const scope = body.scope || 'all';
-      if (!['all','premeeting'].includes(scope) || (scope === 'premeeting' && body.role === 'ADMIN')) return reply(req, { error: 'invalid_employee_scope' }, 400);
-      const { error } = await supabase.from("employee_invitations").insert({ organization_id: organizationId, email, role: body.role, access_scope: scope, approved_by: access.userId });
+      if (scope !== 'all') return reply(req, { error: 'employee_scope_not_deployed' }, 400);
+      const { error } = await supabase.from("employee_invitations").insert({ organization_id: organizationId, email, role: body.role, approved_by: access.userId });
       if (error) return reply(req, { error: error.code === "23505" ? "employee_already_approved" : "employee_approval_failed" }, 400);
       return reply(req, { ok: true });
     }
-    const { data, error } = await supabase.from("employee_invitations").select("email,role,access_scope,claimed_user_id,created_at").eq("organization_id", organizationId);
+    const { data, error } = await supabase.from("employee_invitations").select("email,role,claimed_user_id,created_at").eq("organization_id", organizationId);
     return error ? reply(req, { error: "employees_read_failed" }, 500) : reply(req, { ok: true, employees: data });
   }
   if (action === "sheet_bridge") {
@@ -313,6 +328,14 @@ Deno.serve(async (req) => {
     if (req.method !== "POST") return reply(req, { error: "method_not_allowed" }, 405);
     const required = ["mutationId", "baseRevision", "nextRevision", "mutation"];
     if (required.some((key) => !body[key])) return reply(req, { error: "missing_mutation_fields" }, 400);
+    if (scopedWrite) {
+      const { data: current, error } = await supabase.from('app_current_state').select('primary_revision,state_snapshot')
+        .eq('organization_id', organizationId).maybeSingle();
+      if (error || !current?.state_snapshot) return reply(req, { error: 'scope_read_failed' }, 503);
+      if (current.primary_revision !== body.baseRevision) return reply(req, { error: 'revision_conflict' }, 409);
+      if (!validateReceivablesMutation(body.mutation, current.state_snapshot)) return reply(req, { error: 'page_scope_denied' }, 403);
+      // Revision validation is repeated atomically by commit_primary_mutation.
+    }
     if (isPremeetingOnly(access)) {
       const [{ data: rows, error: readError }, { data: docs, error: docError }] = await Promise.all([
         readScopeLeads(supabase, organizationId, true),

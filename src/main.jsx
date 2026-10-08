@@ -26,6 +26,8 @@ import { paymentRows, paymentScheduleSum, paymentTotalAmount, syncPaymentSchedul
 import { buildDailyMeetingRecord, dailyMeetingContent, dailyMeetingRecords } from "./data/dailyMeetingLog.js";
 import { preparePremeetingState } from './data/premeetingState.js';
 import { syncDataAndContracts, manualSyncError } from "./data/manualSync.js";
+import { RECEIVABLES_WRITE_PROFILE, validateReceivablesMutation } from '../supabase/functions/_shared/receivables-access.mjs';
+const isScopedReceivablesWriter = () => window.kpiEmployeeAccess?.writeProfile === RECEIVABLES_WRITE_PROFILE;
 
 /* ===== 운영 데이터 연동 설정 =====
      Supabase 화면별 API가 읽기·쓰기를 담당합니다.
@@ -594,15 +596,25 @@ import { syncDataAndContracts, manualSyncError } from "./data/manualSync.js";
   function crmPrepareStateMutation(nextValue, options) {
     var previousValue = window.crmOptimisticRemoteValue || window.crmLastRemoteValue;
     if (!previousValue) throw new Error('remote_baseline_missing');
+    var scopedPendingIds = [];
+    if (isScopedReceivablesWriter()) {
+      // Only explicit edits journaled by up(), never display migrations/advertising
+      // refreshes. Preserve old failed journals; an invalid one fails, not disappears.
+      previousValue = window.crmLastRemoteValue;
+      var replay = crmConsumePendingMutations(JSON.parse(previousValue));
+      nextValue = JSON.stringify(replay.state);
+      scopedPendingIds = replay.ids;
+      options = { ...replay.saveOptions, origin: 'user' };
+    }
     var mutation = crmBuildMutation(previousValue, nextValue, options || {});
     if (!mutation.changedCount) {
       try { if (!(window.crmPendingDbMutations || []).length) localStorage.removeItem(CRM_LOCAL_DIRTY_KEY); } catch (e) {}
-      return { unchanged: true };
+      return { unchanged: true, pendingMutationIds: scopedPendingIds };
     }
     var mutationId = crmNewMutationId('web');
     var optimisticState = crmApplyMutationLocal(JSON.parse(previousValue), mutation);
     window.crmOptimisticRemoteValue = JSON.stringify(optimisticState);
-    return { mutation: mutation, mutationId: mutationId };
+    return { mutation: mutation, mutationId: mutationId, pendingMutationIds: scopedPendingIds };
   }
   function crmPostPreparedMutationV3(prepared) {
     if (!prepared || prepared.unchanged) return Promise.resolve({ ok: true, unchanged: true, revision: window.crmRemoteRevision });
@@ -649,8 +661,8 @@ import { syncDataAndContracts, manualSyncError } from "./data/manualSync.js";
           window.crmPendingRemoteSaves = Math.max(0, Number(window.crmPendingRemoteSaves || 1) - 1);
           return Promise.reject(error);
         }
-        var pendingIds = (options.pendingMutationIds || []).map(String);
-        var journalPrepared = String(options.origin || 'user') === 'user' && options.reason !== 'pending_user_replay';
+        var pendingIds = [...(options.pendingMutationIds || []), ...(prepared.pendingMutationIds || [])].map(String);
+        var journalPrepared = !isScopedReceivablesWriter() && String(options.origin || 'user') === 'user' && options.reason !== 'pending_user_replay';
         if (prepared && prepared.unchanged) {
           crmAcknowledgePendingMutations(pendingIds);
           window.crmPendingRemoteSaves = Math.max(0, Number(window.crmPendingRemoteSaves || 1) - 1);
@@ -2519,6 +2531,7 @@ function useDB() {
           if (code.indexOf('revision_conflict') >= 0) setSaveState("동기화 충돌 · 새로고침 필요");
           else if (code.indexOf('storage_v2_not_deployed') >= 0 || code.indexOf('storage_v3_not_deployed') >= 0 || code.indexOf('upgrade_required') >= 0) setSaveState("저장 서버 최신 배포 필요 · 로컬 보관됨");
           else if (code.indexOf('remote_baseline_missing') >= 0) setSaveState("원격 로드 전 · 로컬 보관됨");
+          else if (/permission_denied|page_scope_denied/.test(code)) setSaveState("저장 권한 범위 확인 필요 · 로컬 보관됨");
           else setSaveState("원격 저장 실패 · 로컬 보관됨");
         }
       }, 700);
@@ -2527,8 +2540,18 @@ function useDB() {
   const up = (fn, options = {}) => setDb((prev) => {
     const next = typeof structuredClone === "function" ? structuredClone(prev) : JSON.parse(JSON.stringify(prev));
     fn(next);
+    if (isScopedReceivablesWriter()) {
+      const intent = crmBuildMutation(JSON.stringify(prev), JSON.stringify(next), { origin: 'user', reason: options.reason || 'user_edit', allowedLeadRemovals: options.allowedLeadRemovals || [] });
+      // Display preferences are local; never write the shared UI document.
+      if (Object.hasOwn(intent.documents, 'ui')) { delete intent.documents.ui; intent.changedCount--; }
+      if (intent.changedCount && !validateReceivablesMutation(intent, prev)) {
+        setSaveState('이 계정은 기존 프리미팅·잔금 항목만 수정할 수 있습니다');
+        return prev;
+      }
+      if (intent.changedCount) crmJournalMutation({ mutation: intent, mutationId: crmNewMutationId('edit') });
+    }
     latestDbRef.current = next;
-    if (window.crmRemoteStatePromise && (!window.crmRemoteApplied || !window.crmRemoteLoaded)) {
+    if (!isScopedReceivablesWriter() && window.crmRemoteStatePromise && (!window.crmRemoteApplied || !window.crmRemoteLoaded)) {
       try {
         const pendingMutation = crmBuildMutation(JSON.stringify(prev), JSON.stringify(next), {
           origin: "user",
@@ -8318,7 +8341,7 @@ function LtvExpansionView() {
       const target = draft.leads.find((item) => item.id === lead.id); if (!target) return;
       target[key] = value;
     });
-    toast(label + "을(를) 저장했습니다");
+    toast(label + " 변경 · 서버 저장 확인 중");
   };
   const setLeadArchived = (lead, archived) => {
     up((draft) => {
@@ -9438,7 +9461,15 @@ export default function App() {
   const [qDraft, setQDraft] = useState("");
   const [toastMsg, setToastMsg] = useState(null);
   const toastTimer = useRef(null);
-  const toast = (m) => { setToastMsg(m); clearTimeout(toastTimer.current); toastTimer.current = setTimeout(() => setToastMsg(null), 2200); };
+  const toast = (m) => { setToastMsg(isScopedReceivablesWriter() && /했습니다|기록했습니다|저장했습니다/.test(m) ? '변경 요청 · 서버 저장 여부는 상단 상태를 확인하세요' : m); clearTimeout(toastTimer.current); toastTimer.current = setTimeout(() => setToastMsg(null), 2200); };
+  const previousSaveState = useRef(saveState);
+  useEffect(() => {
+    if (isScopedReceivablesWriter() && previousSaveState.current === '저장 중…') {
+      if (saveState === '저장됨') setToastMsg('Supabase 저장 완료');
+      else if (/실패|권한|로컬 보관|수정할 수/.test(saveState)) setToastMsg(saveState);
+    }
+    previousSaveState.current = saveState;
+  }, [saveState]);
   const [sessionAccountId, setSessionAccountId] = useState(() => { try { return sessionStorage.getItem("pocketcrm:auth") || ""; } catch (e) { return ""; } });
   const [loginId, setLoginId] = useState("");
   const [loginPw, setLoginPw] = useState("");
@@ -9597,6 +9628,7 @@ export default function App() {
                 <User size={14} className="text-slate-400 shrink-0" />
                 <span className="text-xs font-extrabold text-slate-700">{currentAccount.displayName || currentAccount.username}</span>
                 <Chip cls={isMaster ? "bg-indigo-50 text-indigo-700 border-indigo-200" : "bg-slate-50 text-slate-600 border-slate-200"}>{currentAccount.role}</Chip>
+                {isScopedReceivablesWriter() && <span role="status" className="text-xs font-semibold text-slate-600">두 메뉴 수정 가능 · {saveState}</span>}
                 {isMaster && <button title="계정 생성" onClick={() => setView("settings")} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><Settings size={13} /></button>}
                 <button title="로그아웃" onClick={() => window.kpiSignOut()} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X size={13} /></button>
               </div>

@@ -35,7 +35,7 @@ function EmployeeEntry() {
         if (!data.session) { if (alive) { setLoadedApp(null); if (!submitting.current) setMessage('승인된 직원 이메일로 로그인하세요.'); } return; }
         const access = await applyEmployeeMenuPolicy(await employeeRequest('session'));
         if (!alive || version !== generation) return;
-        const identity = `${access.userId}:${access.role}:${access.scope || 'all'}:${(access.menuPages || []).join(',')}`;
+        const identity = `${access.userId}:${access.role}:${access.scope || 'all'}:${access.writeProfile || ''}:${(access.menuPages || []).join(',')}`;
         if (currentUser && currentUser !== identity) { location.reload(); return; }
         currentUser = identity;
         window.kpiEmployeeAccess = access;

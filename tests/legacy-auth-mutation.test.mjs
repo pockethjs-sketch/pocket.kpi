@@ -9,6 +9,7 @@ function runtime() {
   const calls = [];
   let fail = false;
   const scope = {
+    isScopedReceivablesWriter: () => false,
     window: { crmRemoteRevision: 'r1', crmRemoteLoaded: true, crmRemoteApplied: true,
       crmPendingDbMutations: [], crmSaveQueue: Promise.resolve() },
     localStorage: { getItem: k => values.get(k) ?? null, setItem: (k,v) => values.set(k,v), removeItem: k => values.delete(k) },
