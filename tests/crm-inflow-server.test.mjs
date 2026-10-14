@@ -7,12 +7,16 @@ import { webcrypto } from 'node:crypto';
 
 const source = readFileSync(new URL('../supabase/functions/kpi-crm-sync/index.ts', import.meta.url), 'utf8');
 const js = stripTypeScriptTypes(source.replace(/^import .*\r?\n/, ''));
-function harness({ leads = [], rpcError = false, blocked = false, completionError = false, invalid = false, rawError = false } = {}) {
+function harness({ leads = [], meetings = [], calendarMismatch = false, rpcError = false, blocked = false, completionError = false, invalid = false, rawError = false } = {}) {
   const calls = []; let handler;
+  let rawRows = [];
   const client = {
     from(table) { return {
       insert() { return { select() { return { single: async () => ({data:{id:'synthetic-run'},error:null}) }; } }; },
-      async upsert() { calls.push('raw'); return {error:rawError ? {code:'TEST'} : null}; },
+      async upsert(rows) { rawRows.push(...rows); calls.push('raw'); return {error:rawError ? {code:'TEST'} : null}; },
+      select() { const chain = { eq() { return chain; }, order() { return chain; }, async range() {
+        calls.push('calendar'); return { data: calendarMismatch ? [] : rawRows.filter(row => row.record_type === 'MEETING'), error: null };
+      } }; return chain; },
       update(value) { return { async eq() { calls.push(value.status); return {error:completionError && value.status==='COMPLETED' ? {code:'TEST'} : null}; } }; },
     }; },
     async rpc(name,args) {
@@ -24,17 +28,30 @@ function harness({ leads = [], rpcError = false, blocked = false, completionErro
   vm.runInNewContext(js, {
     TextEncoder, Response, crypto:webcrypto, createClient:()=>client,
     Deno:{env:{get:name=>({SUPABASE_SERVICE_ROLE_KEY:'synthetic-only',CRM_BEARER_TOKEN:'synthetic-provider',KPI_ORGANIZATION_ID:'synthetic-org',SUPABASE_URL:'https://example.invalid'})[name]},serve:fn=>{handler=fn;}},
-    fetch:async url=>new Response(JSON.stringify(url.includes('newarrivals') ? invalid ? {error:'bad'} : leads : [])),
+    fetch:async url=>new Response(JSON.stringify(url.includes('newarrivals') ? invalid ? {error:'bad'} : leads : meetings)),
   });
   return {calls, invoke:()=>handler(new Request('https://example.invalid',{method:'POST',headers:{authorization:'Bearer synthetic-only'},body:JSON.stringify({start:'2026-10-05',end:'2026-10-07'})})), handler};
 }
 test('server reconciles raw leads before recording collection success',async()=>{
   const h=harness({leads:[{client_no:1,proj_no:2,reg_dt:'2026-10-06T01:00:00Z'}]});
-  const r=await h.invoke(); assert.equal(r.status,200); assert.deepEqual(h.calls,['raw','promote','COMPLETED']);
+  const r=await h.invoke(); assert.equal(r.status,200); assert.deepEqual(h.calls,['raw','calendar','promote','COMPLETED']);
   assert.equal((await r.json()).inflow.added,1);
 });
 test('empty daily feed still reconciles the previously collected backlog',async()=>{
-  const h=harness(); assert.equal((await h.invoke()).status,200); assert.deepEqual(h.calls,['promote','COMPLETED']);
+  const h=harness(); assert.equal((await h.invoke()).status,200); assert.deepEqual(h.calls,['calendar','promote','COMPLETED']);
+});
+
+test('daily update separately verifies CRM premeeting schedules, not only inflow leads', async () => {
+  const h = harness({ meetings: [{ ms_no: 101, mr_type: 1, start_dt: '2026-10-07T10:00:00+09:00', mr_checked: 0 }] });
+  const response = await h.invoke();
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.calendar.verified, true);
+  assert.equal(body.calendar.collected, 1);
+  assert.equal(body.calendar.stored, 1);
+  const bad = harness({ calendarMismatch: true, meetings: [{ ms_no: 101, mr_type: 1, start_dt: '2026-10-07' }] });
+  assert.equal((await bad.invoke()).status, 502);
+  assert.ok(!bad.calls.includes('COMPLETED'));
 });
 for(const option of ['rpcError','blocked','completionError','invalid','rawError']) {
   test(`sync never reports success after ${option}`,async()=>{

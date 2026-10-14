@@ -83,6 +83,7 @@ Deno.serve(async (req) => {
   const headers = { authorization: `Bearer ${token}`, origin, referer: `${origin}/`, "x-requested-with": "XMLHttpRequest", accept: "application/json" };
   const leadUrl = `https://api.xn--9i1b674cwc38r6pa.com/crm/v3/projects/newarrivals/v2?keyword=&start_dt=${encodeURIComponent(start + "T00:00:00+09:00")}&end_dt=${encodeURIComponent(end + "T23:59:59+09:00")}&is_inquiry=true`;
   const meetingUrl = `https://api.xn--9i1b674cwc38r6pa.com/crm/v3/mr_schedules?offset=0&limit=1000&state=1&page=schedule&start_dt=${encodeURIComponent(start + "T00:00:00+09:00")}&end_dt=${encodeURIComponent(end + "T23:59:59+09:00")}`;
+  let calendar: any = null;
   try {
     const [leadResponse, meetingResponse] = await Promise.all([fetch(leadUrl, { headers }), fetch(meetingUrl, { headers })]);
     if (!leadResponse.ok || !meetingResponse.ok) throw new Error(`crm_http_${leadResponse.status}_${meetingResponse.status}`);
@@ -104,6 +105,21 @@ Deno.serve(async (req) => {
       });
       if (error) throw new Error(`raw_upsert_${error.code}`);
     }
+    // Verify calendar persistence independently of inflow/lead projection.
+    const expectedMeetings = new Set(rawRows.filter(row => row.record_type === 'MEETING').map(row => row.external_id + ':' + row.source_hash));
+    const storedMeetings = new Set<string>();
+    for (let offset = 0; ; offset += 500) {
+      const result = await supabase.from('crm_raw_records').select('external_id,source_hash')
+        .eq('organization_id', organizationId).eq('sync_run_id', run.id).eq('record_type', 'MEETING')
+        .order('id').range(offset, offset + 499);
+      if (result.error) throw new Error('calendar_verify_failed');
+      for (const row of result.data || []) storedMeetings.add(row.external_id + ':' + row.source_hash);
+      if ((result.data || []).length < 500) break;
+      if (offset >= 49500) throw new Error('calendar_verify_failed');
+    }
+    if (expectedMeetings.size !== storedMeetings.size || [...expectedMeetings].some(key => !storedMeetings.has(key))) throw new Error('calendar_storage_mismatch');
+    calendar = { verified: true, source: 'crm_raw_records', collected: expectedMeetings.size, stored: storedMeetings.size,
+      start, end, completedAt: new Date().toISOString() };
     // Catch up previously collected but unapplied rows even when today's feed is empty.
     // Keep the daily CRM request window unchanged; this reconciliation reads Supabase only.
     const { data: inflow, error: inflowError } = await supabase.rpc("kpi_reconcile_crm_inflow", {
@@ -117,15 +133,15 @@ Deno.serve(async (req) => {
     const completedAt = new Date().toISOString();
     const { error: completeError } = await supabase.from("crm_sync_runs").update({
       status: "COMPLETED", lead_count: leadRows.length, meeting_count: meetingRows.length,
-      completed_at: completedAt, inflow_completed_at: completedAt, inflow_result: inflow,
+      completed_at: completedAt, inflow_completed_at: completedAt, inflow_result: { ...inflow, calendar },
     }).eq("id", run.id);
     if (completeError) throw new Error("sync_completion_failed");
-    return json({ ok: true, start, end, leads: leadRows, meetings: meetingRows, inflow, fetchedAt: completedAt, syncRunId: run.id, readBackend: "supabase-edge" });
+    return json({ ok: true, start, end, leads: leadRows, meetings: meetingRows, inflow, calendar, fetchedAt: completedAt, syncRunId: run.id, readBackend: "supabase-edge" });
   } catch (error) {
     const detail = String(error instanceof Error ? error.message : error);
-    const message = /^(crm_http_\d+_\d+|raw_upsert_[a-zA-Z0-9]+|crm_response_invalid|inflow_reconcile_failed|inflow_identity_blocked|sync_completion_failed)$/.test(detail)
+    const message = /^(crm_http_\d+_\d+|raw_upsert_[a-zA-Z0-9]+|crm_response_invalid|inflow_reconcile_failed|inflow_identity_blocked|sync_completion_failed|calendar_verify_failed|calendar_storage_mismatch)$/.test(detail)
       ? detail : "crm_sync_internal_error";
-    await supabase.from("crm_sync_runs").update({ status: "FAILED", error_code: message.slice(0, 200), completed_at: new Date().toISOString() }).eq("id", run.id);
+    await supabase.from("crm_sync_runs").update({ status: "FAILED", error_code: message.slice(0, 200), completed_at: new Date().toISOString(), ...(calendar ? { inflow_result: { calendar } } : {}) }).eq("id", run.id);
     return json({ error: "crm_sync_failed", message }, 502);
   }
 });
