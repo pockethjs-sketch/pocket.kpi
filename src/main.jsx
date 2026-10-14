@@ -1,6 +1,7 @@
 import { MetricIcon, StageIcon } from "./components/MetricIcon.jsx";
 import { connectionPresentation } from "./data/connectionPresentation.js";
 import { leadDisplayName } from "./data/leadDisplayName.js";
+import { calendarActivityLeads } from "./data/calendarActivity.js";
 import "./design.css";
 import "./styles.css";
 import { ExcelExportProvider, ExcelExportButton, useExcelExport } from './ExcelExport.jsx';
@@ -291,6 +292,9 @@ const isScopedReceivablesWriter = () => window.kpiEmployeeAccess?.writeProfile =
     });
     var unchanged = !!(localStateText && cachedRevision && !localDirty && meta.revision && cachedRevision === meta.revision);
     if (unchanged) {
+      var calendarPayload = await crmFetchDomainAction('crm', { timeoutMs: 25000 });
+      window.crmCalendarSchedules = calendarPayload.calendar;
+      window.crmCalendarError = calendarPayload.calendarError || '';
       await marketingPromise;
       window.crmRemoteLoaded = true; window.crmRemoteError = '';
       window.crmLastRemoteValue = localStateText; window.crmOptimisticRemoteValue = localStateText;
@@ -303,6 +307,8 @@ const isScopedReceivablesWriter = () => window.kpiEmployeeAccess?.writeProfile =
       marketingPromise
     ]);
     var assembled = Object.assign({}, results[0].documents || {}, { leads: results[1].leads || [] });
+    window.crmCalendarSchedules = results[1].calendar;
+    window.crmCalendarError = results[1].calendarError || '';
     assembled.adSpend = window.sheetMarketingSpend || {};
     assembled.adDaily = window.sheetMarketingDaily || { META: [], NAVER: [], GOOGLE: [] };
     assembled.adSpendMeta = window.sheetMarketingMeta || {};
@@ -6351,7 +6357,9 @@ useExcelExport(() => [excelTable('통합 성과', ['지표', '값', '단위'], [
         ? String(period.end || todayISO()).slice(0, 7)
         : (cohort.map((lead) => String(lead.createdAt || "").slice(0, 7)).sort().slice(-1)[0] || todayISO().slice(0, 7));
   const selectedDailyMonth = period.mode === "month" || period.mode === "day" ? defaultDailyMonth : dailyChartMonth || defaultDailyMonth;
-  const dailyCounts = dailyStageActivity(db.leads.filter(matchesCustomerType), metricStage?.id || "marketing", selectedDailyMonth, todayISO(), period.mode === "day" ? null : r);
+  const calendarReady = Array.isArray(window.crmCalendarSchedules);
+  const dailySource = metricStage?.id === "pre" ? calendarActivityLeads(window.crmCalendarSchedules, db.leads) : db.leads;
+  const dailyCounts = dailyStageActivity(dailySource.filter(matchesCustomerType), metricStage?.id || "marketing", selectedDailyMonth, todayISO(), period.mode === "day" ? null : r);
   const weekdayCounts = weekdayActivity(dailyCounts);
   const selectedActivityDay = weekdayCounts.find((day) => day.date === dailyChartDate) || [...weekdayCounts].reverse().find((day) => day.count > 0) || weekdayCounts[weekdayCounts.length - 1];
   const dailyMetricLabel = metricStage?.id === "pre" ? "프리미팅" : metricStage?.id === "contract" ? "계약" : "유입 DB";
@@ -6636,7 +6644,7 @@ useExcelExport(() => [excelTable('통합 성과', ['지표', '값', '단위'], [
                     {period.mode === "day" && <p className="mt-2 text-[11px] text-amber-700">상단 목표 판정은 선택한 하루 기준이고, 아래 그래프는 해당 월 전체 일별 실적입니다.</p>}
                     {period.mode === "range" && <p className="mt-2 text-[11px] text-amber-700">선택 기간 밖의 날짜는 0건으로 표시됩니다.</p>}
                     {metricStage.id === "pre" && <div className="mt-3 flex flex-wrap gap-3 text-[11px]"><span className="font-bold text-indigo-600">━ CRM 프리미팅 일정 전체</span><span className="text-slate-400">오늘까지 · 방문 체크·영업 단계 무관 · CRM 일정 ID별 집계 · 수동 등록 제외 · 그래프는 주말 제외</span><span className="text-slate-500">주말 포함 전체 {dailyCounts.reduce((sum, day) => sum + day.count, 0)}건</span></div>}
-                    <DailyActivityChart days={weekdayCounts} stage={metricStage.id} label={selectedDailyMonth + " " + dailyMetricLabel} selectedDate={selectedActivityDay?.date} onSelect={setDailyChartDate} />
+                    {metricStage.id === 'pre' && !calendarReady ? <p className="py-8 text-center text-sm text-rose-600">CRM 일정 조회 미완료 · 새로고침이 필요합니다. 0건으로 집계하지 않습니다.</p> : <DailyActivityChart days={weekdayCounts} stage={metricStage.id} label={selectedDailyMonth + " " + dailyMetricLabel} selectedDate={selectedActivityDay?.date} onSelect={setDailyChartDate} />}
                     {metricStage.id === "marketing" && <LeadRevenueQuality leads={dailyCounts.flatMap(day => day.entries.map(entry => entry.lead))} label={selectedDailyMonth + (period.mode === "range" ? " 선택 범위" : " 월 전체") + " · " + customerType} dayLeads={selectedActivityDay?.entries.map(entry => entry.lead) || []} dayLabel={selectedActivityDay?.date} />}
                     <p className="mt-2 text-[10px] text-slate-400">점이나 날짜를 누르면 해당 일자를 확인합니다. 현재 월은 오늘까지, 토·일은 제외합니다. 주말 실적은 삭제하지 않으며 월간 합계·전일 대비에는 포함됩니다.{metricStage.id === "pre" && " 월간 카드는 프리미팅 기업 수, 이 그래프는 날짜별 방문·일정 건수입니다. 방문 후 드랍된 업체의 방문 이력도 포함합니다."}</p>
                     {selectedActivityDay && <div className="mt-4 border-t border-slate-100 pt-3">

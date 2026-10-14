@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
+import { crmCalendar } from "../_shared/crm-calendar.mjs";
 import { authorizeEmployee, canEmployeeAct, mutationPermission } from "../_shared/employee-access.mjs";
 import { canAccessAction, isPremeetingOnly, isPremeetingLead, premeetingDocuments, validatePremeetingMutation } from "../_shared/premeeting-access.mjs";
 import { RECEIVABLES_WRITE_PROFILE, RECEIVABLES_WRITE_PAGES, validateReceivablesMutation } from "../_shared/receivables-access.mjs";
@@ -258,7 +259,19 @@ Deno.serve(async (req) => {
       .eq("organization_id", organizationId).is("archived_at", null).order("created_at", { ascending: true });
     if (error) return reply(req, { error: "crm_read_failed", code: error.code }, 500);
     const leads = (data || []).map(row => row.source_payload);
-    return reply(req, { ok: true, leads: isPremeetingOnly(access) ? leads.filter(isPremeetingLead) : leads, revision: data?.[0]?.projected_revision || "" });
+    const rawMeetings: any[] = [];
+    let calendarError = '';
+    for (let offset = 0; ; offset += 500) {
+      const result = await supabase.from('crm_raw_records').select('id,external_id,last_seen_at,payload')
+        .eq('organization_id', organizationId).eq('record_type', 'MEETING')
+        .order('id').range(offset, offset + 499);
+      if (result.error) { calendarError = 'crm_calendar_read_failed'; break; }
+      rawMeetings.push(...(result.data || []));
+      if ((result.data || []).length < 500) break;
+      if (offset >= 49500) { calendarError = 'crm_calendar_limit_exceeded'; break; }
+    }
+    return reply(req, { ok: true, leads, calendar: calendarError ? null : crmCalendar(rawMeetings), calendarError,
+      revision: data?.[0]?.projected_revision || "" });
   }
 
   if (action === "contract_history") {
