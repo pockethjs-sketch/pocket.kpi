@@ -1,5 +1,6 @@
 import { MetricIcon, StageIcon } from "./components/MetricIcon.jsx";
 import { connectionPresentation } from "./data/connectionPresentation.js";
+import { leadDisplayName } from "./data/leadDisplayName.js";
 import "./design.css";
 import "./styles.css";
 import { ExcelExportProvider, ExcelExportButton, useExcelExport } from './ExcelExport.jsx';
@@ -4503,7 +4504,7 @@ function DealsView() {
                     </td>
                     <td className="px-2 py-2 min-w-0">
                       <button onClick={() => openLead(l.id)} className="w-full min-w-0 text-left group">
-                        <p className="text-sm font-bold text-slate-800 truncate group-hover:text-indigo-600 group-hover:underline underline-offset-2">{l.company}</p>
+                        <p title={leadDisplayName(l)} className="text-sm font-bold text-slate-800 truncate group-hover:text-indigo-600 group-hover:underline underline-offset-2">{leadDisplayName(l)}</p>
                         <p className="text-xs text-slate-400 truncate w-full">{l.channel || "-"}</p>
                       </button>
                     </td>
