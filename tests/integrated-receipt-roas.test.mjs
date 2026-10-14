@@ -37,6 +37,8 @@ test('actual integrated card setup keeps 29 schedule rows rather than 21 unique 
   assert.deepEqual(result, { count: 29, details: 29 });
   assert.match(source, /id: "pre"[^\n]*count: preCount/);
   assert.match(source, /const preCost = spend != null && preCount > 0 \? Math.round\(spend \/ preCount\)/);
+  assert.match(source, /const metricReachedRows = metricStage \? reachedRowsForStage\(metricStage.id\) : \[\]/);
+  assert.ok(!source.includes('metricBaseIds.has(l.id)'));
 });
 
 test('main receipt ROAS uses confirmed money of the same contract cohort, without double counting legacy paid', () => {

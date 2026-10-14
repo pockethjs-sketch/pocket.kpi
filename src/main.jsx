@@ -6344,10 +6344,7 @@ useExcelExport(() => [excelTable('통합 성과', ['지표', '값', '단위'], [
   const metricStage = metricOpen ? stageDefs.find((s) => s.id === metricOpen.stageId) : null;
   const metricRows = metricStage ? rowsForStage(metricStage.id) : [];
   const metricBaseRows = metricStage ? baseRowsForStage(metricStage.id) : [];
-  const metricBaseIds = new Set(metricBaseRows.map((l) => l.id));
-  const metricReachedRows = metricStage && metricStage.id === "pre" ? pre : metricBaseRows.length ? reachedRowsForStage(metricStage.id).filter((l) => metricBaseIds.has(l.id)) : [];
-  const metricReachedIds = new Set(metricReachedRows.map((l) => l.id));
-  const metricMissedRows = metricStage && metricStage.id === "pre" ? [] : metricBaseRows.filter((l) => !metricReachedIds.has(l.id));
+  const metricReachedRows = metricStage ? reachedRowsForStage(metricStage.id) : [];
   const metricTitle = !metricStage ? "" : metricOpen.type === "abs" ? metricStage.title + " · 절대값" : metricOpen.type === "conv" ? metricStage.title + " · 상대값" : metricStage.title + " · 목표비용";
   const defaultDailyMonth = period.mode === "month" || period.mode === "day"
     ? period.y + "-" + pad(period.m)
@@ -6670,11 +6667,11 @@ useExcelExport(() => [excelTable('통합 성과', ['지표', '값', '단위'], [
                       <div><p className="text-xs font-bold text-slate-500">상대값 판정</p><p className="text-sm font-extrabold text-slate-800 mt-1">{metricStage.rateLabel}</p></div>
                       <div className="text-right"><p className="text-2xl font-black tabular-nums text-slate-900">{metricReachedRows.length} / {metricBaseRows.length} = {metricStage.rate == null ? "-" : metricStage.rate + "%"}</p><StateBadge state={metricStage.convState} /></div>
                     </div>
-                    <p className="text-xs text-slate-500 mt-2">{metricStage.id === "pre" ? "CRM 일정 건수 ÷ 같은 기간 유입 DB · 오늘까지 · 반복 일정 포함 · 고유기업 전환율과 구분" : "목표 전환율 30% 이상 · 도달 " + metricReachedRows.length + "건 / 미도달 " + metricMissedRows.length + "건"}</p>
+                    <p className="text-xs text-slate-500 mt-2">{metricStage.id === "pre" ? "CRM 일정 건수 ÷ 같은 기간 유입 DB · 오늘까지 · 반복 일정 포함 · 고유기업 전환율과 구분" : "기간 계약 기업 수 ÷ 오늘까지 CRM 프리미팅 일정 · 고유기업 코호트 전환율과 구분"}</p>
                   </div>
                   <div className="grid lg:grid-cols-2 gap-4">
                     <PopupLeadList title={metricStage.id === "pre" ? "CRM 프리미팅 일정" : "도달 기업"} rows={metricReachedRows} tone="text-emerald-600" />
-                    <PopupLeadList title={metricStage.id === "pre" ? "기간 유입 DB" : "미도달 기업"} rows={metricStage.id === "pre" ? metricBaseRows : metricMissedRows} tone={metricStage.id === "pre" ? "text-indigo-600" : "text-red-600"} />
+                    <PopupLeadList title={metricStage.id === "pre" ? "기간 유입 DB (분모)" : "CRM 프리미팅 일정 (분모)"} rows={metricBaseRows} tone="text-indigo-600" />
                   </div>
                 </>
               )
