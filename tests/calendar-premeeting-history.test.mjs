@@ -25,9 +25,10 @@ test("contract month filtering considers every stored CRM meeting date", () => {
   assert.match(source, /crmMeetingDates\(lead\)\.filter\(\(date\) => inR\(date, range\)\)/);
 });
 
-test("performance premeeting count uses the same population as premeeting companies", () => {
+test("performance premeeting count uses the same CRM schedule rows as its graph", () => {
   assert.match(source, /const isPremeetingCompanyInRange = \(lead, range\)/);
   const sharedCountUses = source.match(/isPremeetingCompanyInRange\(l, r\)/g) || [];
-  assert.ok(sharedCountUses.length >= 2, "premeeting companies and performance views must share the predicate");
-  assert.match(source, /const pre = db\.leads\.filter\(\(l\) => isPremeetingCompanyInRange\(l, r\) && matchesCustomerType\(l\)\)/);
+  assert.ok(sharedCountUses.length >= 1, "company list retains its own company predicate");
+  assert.match(source, /const preEntries = calendarPeriodEntries\(window.crmCalendarSchedules, db.leads, r, todayISO\(\), customerType\)/);
+  assert.match(source, /count: preCount/);
 });

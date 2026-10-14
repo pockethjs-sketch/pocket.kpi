@@ -6,12 +6,13 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { transformWithOxc } from 'vite';
 import { contractRoasByType } from '../src/data/performanceMetrics.js';
 import { paymentRows } from '../src/data/paymentSchedule.js';
+import { calendarPeriodEntries } from '../src/data/calendarActivity.js';
 
 const source = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
 const start = source.indexOf('function IntegratedPerformanceView()');
 const setup = source.slice(source.indexOf('  const matchesCustomerType =', start), source.indexOf('  const targetFactor =', start));
 const paymentHelpers = source.slice(source.indexOf('const isPayDone ='), source.indexOf('const isBizActive ='));
-const calculate = new Function('db', 'r', 'period', 'customerType', 'marketingSpendForPeriod', 'inR', 'isPremeetingCompanyInRange', 'contractRoasByType', 'payRows', `${paymentHelpers}\n${setup}\nreturn {contractAmountTotal, contractRoas, contractPaidTotal, receivedRoas};`);
+const calculate = new Function('db', 'r', 'period', 'customerType', 'marketingSpendForPeriod', 'inR', 'isPremeetingCompanyInRange', 'contractRoasByType', 'payRows', 'calendarPeriodEntries', 'window', 'todayISO', `${paymentHelpers}\n${setup}\nreturn {contractAmountTotal, contractRoas, contractPaidTotal, receivedRoas};`);
 const inRange = (date, range) => !!date && (!range || date >= range[0] && date <= range[1]);
 const lead = (id, extra = {}) => ({ id, status: '계약 완료', contractAt: '2026-09-10', ctype: '신규', contractAmount: 1000, ...extra });
 const rows = [
@@ -22,7 +23,21 @@ const rows = [
   lead('other-month', { contractAt: '2026-08-10', payments: [{ amount: 1000, paidAt: '2026-09-10' }] }),
   lead('uncontracted', { status: '프리미팅 완료', paid: 9999 }),
 ];
-const run = (type = '전체', spend = 1000, range = ['2026-09-01', '2026-09-30'], leads = rows) => calculate({ leads }, range, {}, type, () => spend, inRange, () => false, contractRoasByType, paymentRows);
+const run = (type = '전체', spend = 1000, range = ['2026-09-01', '2026-09-30'], leads = rows) => calculate({ leads }, range, {}, type, () => spend, inRange, () => false, contractRoasByType, paymentRows, () => [], { crmCalendarSchedules: [] }, () => '2026-10-14');
+
+test('actual integrated card setup keeps 29 schedule rows rather than 21 unique companies', () => {
+  const calendar = Array.from({ length: 29 }, (_, i) => ({ msNo: i + 1, type: 1,
+    clientNo: i % 21, startAt: '2026-10-08T10:00:00+09:00', checked: i % 2 }));
+  const leads = Array.from({ length: 21 }, (_, i) => ({ id: 'crm-' + i, ctype: '신규' }));
+  const compute = new Function('db', 'r', 'period', 'customerType', 'marketingSpendForPeriod', 'inR',
+    'contractRoasByType', 'payRows', 'calendarPeriodEntries', 'window', 'todayISO',
+    `${paymentHelpers}\n${setup}\nreturn {count: preCount, details: pre.length};`);
+  const result = compute({ leads }, ['2026-10-01','2026-10-31'], {}, '전체', () => 2900000,
+    inRange, contractRoasByType, paymentRows, calendarPeriodEntries, { crmCalendarSchedules: calendar }, () => '2026-10-14');
+  assert.deepEqual(result, { count: 29, details: 29 });
+  assert.match(source, /id: "pre"[^\n]*count: preCount/);
+  assert.match(source, /const preCost = spend != null && preCount > 0 \? Math.round\(spend \/ preCount\)/);
+});
 
 test('main receipt ROAS uses confirmed money of the same contract cohort, without double counting legacy paid', () => {
   const before = JSON.stringify(rows);

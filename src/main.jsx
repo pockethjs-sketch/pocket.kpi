@@ -1,7 +1,7 @@
 import { MetricIcon, StageIcon } from "./components/MetricIcon.jsx";
 import { connectionPresentation } from "./data/connectionPresentation.js";
 import { leadDisplayName } from "./data/leadDisplayName.js";
-import { calendarActivityLeads } from "./data/calendarActivity.js";
+import { calendarActivityLeads, calendarPeriodEntries } from "./data/calendarActivity.js";
 import "./design.css";
 import "./styles.css";
 import { ExcelExportProvider, ExcelExportButton, useExcelExport } from './ExcelExport.jsx';
@@ -6193,9 +6193,9 @@ function IntegratedPerformanceView() {
   const TARGET = { conv: 30, leadMonth: 500, preMonth: 150, contractMonth: 45, leadCost: 50000, preCost: 150000, contractCost: 450000 };
   const matchesCustomerType = (l) => customerType === "전체" || (l.ctype || "신규") === customerType;
   const cohort = db.leads.filter((l) => inR(l.createdAt, r) && matchesCustomerType(l));
-  /* 프리미팅 기업 화면의 전체 업체와 동일하게 행당 1건 집계합니다.
-     참석 완료뿐 아니라 선택 기간에 잡힌 프리미팅 확정 일정도 포함합니다. */
-  const pre = db.leads.filter((l) => isPremeetingCompanyInRange(l, r) && matchesCustomerType(l));
+  const preEntries = calendarPeriodEntries(window.crmCalendarSchedules, db.leads, r, todayISO(), customerType);
+  const pre = (preEntries || []).map(entry => entry.lead);
+  const preCount = preEntries == null ? null : preEntries.length;
   const contract = db.leads.filter((l) => l.status === "계약 완료" && inR(l.contractAt, r) && matchesCustomerType(l));
   const roasSpend = marketingSpendForPeriod(db, period);
   const contractPerformance = contractRoasByType(db.leads, r, roasSpend);
@@ -6211,18 +6211,18 @@ function IntegratedPerformanceView() {
   const leadTarget = effectiveTargetFactor == null ? null : Math.ceil(TARGET.leadMonth * effectiveTargetFactor);
   const preTarget = effectiveTargetFactor == null ? null : Math.ceil(TARGET.preMonth * effectiveTargetFactor);
   const contractTarget = effectiveTargetFactor == null ? null : Math.ceil(TARGET.contractMonth * effectiveTargetFactor);
-  const preRate = cohort.length ? pct(pre.length, cohort.length) : null;
-  const contractRate = pre.length ? pct(contract.length, pre.length) : null;
+  const preRate = preCount != null && cohort.length ? pct(preCount, cohort.length) : null;
+  const contractRate = preCount > 0 ? pct(contract.length, preCount) : null;
   const leadCost = spend != null && cohort.length ? Math.round(spend / cohort.length) : null;
-  const preCost = spend != null && pre.length ? Math.round(spend / pre.length) : null;
+  const preCost = spend != null && preCount > 0 ? Math.round(spend / preCount) : null;
   const contractCost = spend != null && contract.length ? Math.round(spend / contract.length) : null;
-useExcelExport(() => [excelTable('통합 성과', ['지표', '값', '단위'], [['유입 DB', cohort.length, '건'], ['프리미팅', pre.length, '건'], ['계약', contract.length, '건'], ['광고비', spend, '원'], ['계약금액', contractAmountTotal, '원'], ['확인 입금금액', contractPaidTotal, '원'], ['계약 기준 ROAS', contractRoas, '%'], ['입금 기준 ROAS', receivedRoas, '%'], ['리드당 비용', leadCost, '원'], ['프리미팅당 비용', preCost, '원'], ['계약당 비용', contractCost, '원']], `고객구분 ${customerType} · 각 지표의 화면 귀속일 기준 · 입금은 선택 계약의 현재 누적`), exportLeadTable('유입 DB', cohort), exportLeadTable('프리미팅', pre), exportLeadTable('계약 기업', contract), excelTable('데일리 회의', ['날짜', '회의내용'], dailyMeetingRecords(db.marketingLogs || []).map(x => [x.date || '', dailyMeetingContent(x)]), '화면과 동일한 전체 기간 회의 기록')]);
+useExcelExport(() => [excelTable('통합 성과', ['지표', '값', '단위'], [['유입 DB', cohort.length, '건'], ['프리미팅', preCount, '건'], ['계약', contract.length, '건'], ['광고비', spend, '원'], ['계약금액', contractAmountTotal, '원'], ['확인 입금금액', contractPaidTotal, '원'], ['계약 기준 ROAS', contractRoas, '%'], ['입금 기준 ROAS', receivedRoas, '%'], ['리드당 비용', leadCost, '원'], ['프리미팅당 비용', preCost, '원'], ['계약당 비용', contractCost, '원']], `고객구분 ${customerType} · 각 지표의 화면 귀속일 기준 · 입금은 선택 계약의 현재 누적`), exportLeadTable('유입 DB', cohort), excelTable('프리미팅 일정', ['미팅일', 'CRM 일정 ID', '업체', '방문 체크'], (preEntries || []).map(entry => [entry.date, String(entry.meeting.msNo), entry.lead.company || '', entry.completed ? '완료' : '미확인']), '카드·그래프와 동일한 CRM 일정 · 오늘까지 · 주말 포함'), exportLeadTable('계약 기업', contract), excelTable('데일리 회의', ['날짜', '회의내용'], dailyMeetingRecords(db.marketingLogs || []).map(x => [x.date || '', dailyMeetingContent(x)]), '화면과 동일한 전체 기간 회의 기록')]);
   const comparisonWindow = dailyComparisonWindow(r, todayISO(), period.mode === "day");
   const comparisonRows = (range) => {
     const leads = db.leads.filter(matchesCustomerType);
     return {
       marketing: leads.filter(l => inR(l.createdAt, range)).length,
-      pre: leads.filter(l => isPremeetingCompanyInRange(l, range)).length,
+      pre: calendarPeriodEntries(window.crmCalendarSchedules, db.leads, range, todayISO(), customerType)?.length ?? null,
       contract: leads.filter(l => l.status === "계약 완료" && inR(l.contractAt, range)).length,
       amount: contractRoasByType(leads, range, null).amount,
     };
@@ -6253,7 +6253,7 @@ useExcelExport(() => [excelTable('통합 성과', ['지표', '값', '단위'], [
   const metricState = (actual, target, lowerIsBetter) => actual == null || target == null ? "na" : (lowerIsBetter ? actual <= target : actual >= target) ? "ok" : "bad";
   const stageDefs = [
     { id: "marketing", no: "1", title: "마케팅", count: cohort.length, countTarget: leadTarget, countLabel: "유입 DB", cost: leadCost, costTarget: TARGET.leadCost, costLabel: "리드당 비용", rate: null, rateLabel: "퍼널 시작점", tone: "sky", go: "marketingHub" },
-    { id: "pre", no: "2", title: "프리미팅", count: pre.length, countTarget: preTarget, countLabel: "프리미팅 수", cost: preCost, costTarget: TARGET.preCost, costLabel: "프리미팅당 비용", rate: preRate, rateLabel: "DB→프리미팅", tone: "indigo", go: "premeetingHub" },
+    { id: "pre", no: "2", title: "프리미팅", count: preCount, countTarget: preTarget, countLabel: "프리미팅 일정 수", cost: preCost, costTarget: TARGET.preCost, costLabel: "프리미팅당 비용", rate: preRate, rateLabel: "DB 대비 프리미팅 일정", tone: "indigo", go: "premeetingHub" },
     { id: "contract", no: "3", title: "계약", count: contract.length, countTarget: contractTarget, countLabel: "계약 수", cost: contractCost, costTarget: TARGET.contractCost, costLabel: "계약당 비용", rate: contractRate, rateLabel: "프리미팅→계약", tone: "emerald", go: "contractHub" },
   ].map((x) => {
     const absState = metricState(x.count, x.countTarget, false);
@@ -6330,12 +6330,12 @@ useExcelExport(() => [excelTable('통합 성과', ['지표', '값', '단위'], [
       return { kind: "divide", numerator: "구글시트 원본_메타광고·NAVER-GOOGLE의 선택 기간 광고비 합계", denominator: "CRM 유입 DB의 선택 기간 유입일 행 수" };
     }
     if (stageId === "pre") {
-      if (type === "abs") return { kind: "count", label: "집계 대상", text: "계약현황에서 프리미팅 참석일이 선택 기간에 포함된 고객사 행", note: "참석 후 드랍돼도 참석 이력은 유지합니다." };
-      if (type === "conv") return { kind: "divide", numerator: "계약현황의 선택 기간 프리미팅 참석일 행 수", denominator: "CRM 유입 DB의 선택 기간 유입일 행 수" };
-      return { kind: "divide", numerator: "구글시트 원본_메타광고·NAVER-GOOGLE의 선택 기간 광고비 합계", denominator: "계약현황의 선택 기간 프리미팅 참석일 행 수" };
+      if (type === "abs") return { kind: "count", label: "집계 대상", text: "CRM 원본의 프리미팅 일정 ID별 건수 · 선택 기간 미팅일 · 오늘까지", note: "방문 체크·현재 영업 단계 무관, 반복 일정 포함, 주말 포함. 그래프와 동일한 일정 원본입니다." };
+      if (type === "conv") return { kind: "divide", numerator: "CRM 선택 기간 프리미팅 일정 건수", denominator: "선택 기간 유입 DB 건수", note: "일정 건수 대비 비율이며 고유 기업의 코호트 전환율이 아닙니다." };
+      return { kind: "divide", numerator: "선택 기간 광고비 합계", denominator: "CRM 선택 기간 프리미팅 일정 건수" };
     }
     if (type === "abs") return { kind: "count", label: "집계 대상", text: "계약현황에서 상태가 계약 완료이고 계약일이 선택 기간에 포함된 고객사 행" };
-    if (type === "conv") return { kind: "divide", numerator: "계약현황의 선택 기간 계약 완료 행 수", denominator: "계약현황의 선택 기간 프리미팅 참석일 행 수" };
+    if (type === "conv") return { kind: "divide", numerator: "선택 기간 계약 완료 기업 수", denominator: "오늘까지 CRM 프리미팅 일정 건수", note: "일정 대비 계약 비율이며 고유기업의 코호트 전환율이 아닙니다." };
     return { kind: "divide", numerator: "구글시트 원본_메타광고·NAVER-GOOGLE의 선택 기간 광고비 합계", denominator: "계약현황의 선택 기간 계약 완료 행 수" };
   };
   const rowsForStage = (id) => id === "marketing" ? cohort : id === "pre" ? pre : contract;
@@ -6359,7 +6359,7 @@ useExcelExport(() => [excelTable('통합 성과', ['지표', '값', '단위'], [
   const selectedDailyMonth = period.mode === "month" || period.mode === "day" ? defaultDailyMonth : dailyChartMonth || defaultDailyMonth;
   const calendarReady = Array.isArray(window.crmCalendarSchedules);
   const dailySource = metricStage?.id === "pre" ? calendarActivityLeads(window.crmCalendarSchedules, db.leads) : db.leads;
-  const dailyCounts = dailyStageActivity(dailySource.filter(matchesCustomerType), metricStage?.id || "marketing", selectedDailyMonth, todayISO(), period.mode === "day" ? null : r);
+  const dailyCounts = dailyStageActivity(dailySource.filter(matchesCustomerType), metricStage?.id || "marketing", selectedDailyMonth, todayISO(), metricStage?.id === "pre" ? r : period.mode === "day" ? null : r);
   const weekdayCounts = weekdayActivity(dailyCounts);
   const selectedActivityDay = weekdayCounts.find((day) => day.date === dailyChartDate) || [...weekdayCounts].reverse().find((day) => day.count > 0) || weekdayCounts[weekdayCounts.length - 1];
   const dailyMetricLabel = metricStage?.id === "pre" ? "프리미팅" : metricStage?.id === "contract" ? "계약" : "유입 DB";
@@ -6455,10 +6455,10 @@ useExcelExport(() => [excelTable('통합 성과', ['지표', '값', '단위'], [
         <span className={"text-xs font-extrabold tabular-nums " + (tone || "text-slate-500")}>{rows.length}건</span>
       </div>
       <div className="rounded-xl border border-slate-100 divide-y divide-slate-100 max-h-64 overflow-y-auto">
-        {rows.map((l) => (
-          <button key={l.id} onClick={() => { setMetricOpen(null); openLead(l.id); }} className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-indigo-50">
+        {rows.map((l, index) => (
+          <button key={l.crmMeetings?.[0]?.msNo || l.id || index} disabled={!l.id} onClick={() => { setMetricOpen(null); openLead(l.id); }} className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-indigo-50">
             <span className="text-sm font-bold text-slate-800 w-36 truncate">{l.company}</span>
-            <span className="text-xs text-slate-500 flex-1 truncate">{l.channel || "-"} · {l.buildup || "미지정"}</span>
+            <span className="text-xs text-slate-500 flex-1 truncate">{l.channel || "-"} · {l.crmMeetings?.[0]?.startAt || l.buildup || "미지정"}{!l.id ? " · 업체 기록 미연결" : ""}</span>
             <Chip cls={SSTYLE[l.status]}>{l.status}</Chip>
           </button>
         ))}
@@ -6526,8 +6526,8 @@ useExcelExport(() => [excelTable('통합 성과', ['지표', '값', '단위'], [
                 <StateBadge state={s.state} />
               </div>
               <div className="space-y-2 mt-4">
-                <Criterion title="절대값" label={s.countLabel} value={s.count + "건"} valueSuffix={s.countTarget == null ? null : "/ " + s.countTarget} delta={{ current: s.count, previous: countBefore(s.id, s.count), unit: "건", absolute: true }} target={customerType === "기존" ? "기존 고객 목표 미설정" : s.countTarget == null ? "월·연·일 기준에서 목표 산출" : "목표 " + s.countTarget + "건 이상"} state={s.absState} formula={formulaFor(s.id, "abs")} onClick={() => setMetricOpen({ stageId: s.id, type: "abs" })} />
-                <Criterion title="상대값" label={s.rateLabel} value={s.rate == null ? "-" : s.rate + "%"} delta={s.id === "marketing" ? null : { current: divide(s.count, s.id === "pre" ? cohort.length : pre.length, 100), previous: divide(countBefore(s.id, s.count), s.id === "pre" ? countBefore("marketing", cohort.length) : countBefore("pre", pre.length), 100), unit: "%" }} target={s.id === "marketing" ? "퍼널 시작 단계 · 이전 단계 없음" : customerType === "기존" ? "기존 고객 목표 미설정" : "목표 전환율 30% 이상"} state={s.convState} formula={formulaFor(s.id, "conv")} onClick={() => setMetricOpen({ stageId: s.id, type: "conv" })} />
+                <Criterion title="절대값" label={s.countLabel} value={s.count == null ? "조회 미확인" : s.count + "건"} valueSuffix={s.countTarget == null ? null : "/ " + s.countTarget} delta={{ current: s.count, previous: countBefore(s.id, s.count), unit: "건", absolute: true }} target={customerType === "기존" ? "기존 고객 목표 미설정" : s.countTarget == null ? "월·연·일 기준에서 목표 산출" : "목표 " + s.countTarget + "건 이상"} state={s.absState} formula={formulaFor(s.id, "abs")} onClick={() => setMetricOpen({ stageId: s.id, type: "abs" })} />
+                <Criterion title="상대값" label={s.rateLabel} value={s.rate == null ? "-" : s.rate + "%"} delta={s.id === "marketing" ? null : { current: divide(s.count, s.id === "pre" ? cohort.length : preCount, 100), previous: divide(countBefore(s.id, s.count), s.id === "pre" ? countBefore("marketing", cohort.length) : countBefore("pre", preCount), 100), unit: "%" }} target={s.id === "marketing" ? "퍼널 시작 단계 · 이전 단계 없음" : customerType === "기존" ? "기존 고객 목표 미설정" : "목표 전환율 30% 이상"} state={s.convState} formula={formulaFor(s.id, "conv")} onClick={() => setMetricOpen({ stageId: s.id, type: "conv" })} />
                 <Criterion title="목표비용" label={s.costLabel} value={costText(s.cost)} delta={{ current: divide(spend, s.count), previous: costBefore(s.id, s.count), unit: "원", lowerIsBetter: true, comparisonName: monthCostLabel, prefix: "전월 " }} target={customerType === "기존" ? "광고비 귀속 대상 아님" : "목표 " + costText(s.costTarget) + " 이하"} state={s.costState} formula={formulaFor(s.id, "cost")} onClick={() => setMetricOpen({ stageId: s.id, type: "cost" })} />
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2 px-1">
@@ -6641,16 +6641,16 @@ useExcelExport(() => [excelTable('통합 성과', ['지표', '값', '단위'], [
                       </div>
                       {!['month', 'day'].includes(period.mode) && <Inp type="month" min={r?.[0]?.slice(0, 7)} max={r?.[1]?.slice(0, 7)} value={selectedDailyMonth} onChange={(event) => setDailyChartMonth(event.target.value)} aria-label="일별 실적 조회 월" className="w-36" />}
                     </div>
-                    {period.mode === "day" && <p className="mt-2 text-[11px] text-amber-700">상단 목표 판정은 선택한 하루 기준이고, 아래 그래프는 해당 월 전체 일별 실적입니다.</p>}
+                    {period.mode === "day" && <p className="mt-2 text-[11px] text-amber-700">{metricStage.id === "pre" ? "카드와 그래프 모두 선택한 하루 기준입니다. 다른 날짜는 집계에서 제외됩니다." : "상단 목표 판정은 선택한 하루 기준이고, 아래 그래프는 해당 월 전체 일별 실적입니다."}</p>}
                     {period.mode === "range" && <p className="mt-2 text-[11px] text-amber-700">선택 기간 밖의 날짜는 0건으로 표시됩니다.</p>}
                     {metricStage.id === "pre" && <div className="mt-3 flex flex-wrap gap-3 text-[11px]"><span className="font-bold text-indigo-600">━ CRM 프리미팅 일정 전체</span><span className="text-slate-400">오늘까지 · 방문 체크·영업 단계 무관 · CRM 일정 ID별 집계 · 수동 등록 제외 · 그래프는 주말 제외</span><span className="text-slate-500">주말 포함 전체 {dailyCounts.reduce((sum, day) => sum + day.count, 0)}건</span></div>}
                     {metricStage.id === 'pre' && !calendarReady ? <p className="py-8 text-center text-sm text-rose-600">CRM 일정 조회 미완료 · 새로고침이 필요합니다. 0건으로 집계하지 않습니다.</p> : <DailyActivityChart days={weekdayCounts} stage={metricStage.id} label={selectedDailyMonth + " " + dailyMetricLabel} selectedDate={selectedActivityDay?.date} onSelect={setDailyChartDate} />}
                     {metricStage.id === "marketing" && <LeadRevenueQuality leads={dailyCounts.flatMap(day => day.entries.map(entry => entry.lead))} label={selectedDailyMonth + (period.mode === "range" ? " 선택 범위" : " 월 전체") + " · " + customerType} dayLeads={selectedActivityDay?.entries.map(entry => entry.lead) || []} dayLabel={selectedActivityDay?.date} />}
-                    <p className="mt-2 text-[10px] text-slate-400">점이나 날짜를 누르면 해당 일자를 확인합니다. 현재 월은 오늘까지, 토·일은 제외합니다. 주말 실적은 삭제하지 않으며 월간 합계·전일 대비에는 포함됩니다.{metricStage.id === "pre" && " 월간 카드는 프리미팅 기업 수, 이 그래프는 날짜별 방문·일정 건수입니다. 방문 후 드랍된 업체의 방문 이력도 포함합니다."}</p>
+                    <p className="mt-2 text-[10px] text-slate-400">점이나 날짜를 누르면 해당 일자를 확인합니다. 현재 월은 오늘까지, 토·일은 제외합니다. 주말 실적은 삭제하지 않으며 월간 합계·전일 대비에는 포함됩니다.{metricStage.id === "pre" && " 카드·그래프·비용·증감은 모두 CRM 일정 ID별 건수 기준입니다."}</p>
                     {selectedActivityDay && <div className="mt-4 border-t border-slate-100 pt-3">
                       {metricStage.id === "contract" ? <PopupLeadList title={selectedActivityDay.date + " 계약 기업"} rows={selectedActivityDay.entries.map((entry) => entry.lead)} detail="contract" tone="text-emerald-600" />
                         : metricStage.id === "pre" ? <div><p className="text-xs font-bold text-slate-700">{selectedActivityDay.date} · 방문 완료 {selectedActivityDay.completed}건 · 방문 미확인 {selectedActivityDay.unconfirmed}건</p><div className="mt-2 max-h-64 divide-y divide-slate-100 overflow-y-auto rounded-md border border-slate-200">
-                          {selectedActivityDay.entries.map(({ lead, completed }, index) => <button key={lead.id || index} type="button" onClick={() => { setMetricOpen(null); openLead(lead.id); }} className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-indigo-50"><span className="text-xs font-bold text-slate-800">{lead.company || "업체명 없음"}<span className="ml-2 font-normal text-slate-400">{lead.salesOwner || "담당 미정"}</span></span><span className={"shrink-0 text-[11px] font-bold " + (completed ? "text-indigo-600" : "text-slate-400")}>{completed ? "방문 완료" : "방문 미확인"}</span></button>)}
+                          {selectedActivityDay.entries.map(({ lead, meeting, completed }, index) => <button key={meeting.msNo || index} disabled={!lead.id} type="button" onClick={() => { setMetricOpen(null); openLead(lead.id); }} className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-indigo-50"><span className="text-xs font-bold text-slate-800">{lead.company || "업체명 없음"}<span className="ml-2 font-normal text-slate-400">{lead.salesOwner || "담당 미정"}{!lead.id ? " · 업체 기록 미연결" : ""}</span></span><span className={"shrink-0 text-[11px] font-bold " + (completed ? "text-indigo-600" : "text-slate-400")}>{completed ? "방문 완료" : "방문 미확인"}</span></button>)}
                           {!selectedActivityDay.count && <p className="p-4 text-center text-xs text-slate-400">이 날짜의 프리미팅 기록이 없습니다.</p>}
                         </div></div> : <p className="text-xs font-bold text-sky-700">{selectedActivityDay.date} · 유입 {selectedActivityDay.count}건</p>}
                     </div>}
@@ -6670,10 +6670,10 @@ useExcelExport(() => [excelTable('통합 성과', ['지표', '값', '단위'], [
                       <div><p className="text-xs font-bold text-slate-500">상대값 판정</p><p className="text-sm font-extrabold text-slate-800 mt-1">{metricStage.rateLabel}</p></div>
                       <div className="text-right"><p className="text-2xl font-black tabular-nums text-slate-900">{metricReachedRows.length} / {metricBaseRows.length} = {metricStage.rate == null ? "-" : metricStage.rate + "%"}</p><StateBadge state={metricStage.convState} /></div>
                     </div>
-                    <p className="text-xs text-slate-500 mt-2">{metricStage.id === "pre" ? "프리미팅 참석일이 저장된 행 ÷ 같은 기간 유입 DB · 행당 1건 · 목표 30% 이상" : "목표 전환율 30% 이상 · 도달 " + metricReachedRows.length + "건 / 미도달 " + metricMissedRows.length + "건"}</p>
+                    <p className="text-xs text-slate-500 mt-2">{metricStage.id === "pre" ? "CRM 일정 건수 ÷ 같은 기간 유입 DB · 오늘까지 · 반복 일정 포함 · 고유기업 전환율과 구분" : "목표 전환율 30% 이상 · 도달 " + metricReachedRows.length + "건 / 미도달 " + metricMissedRows.length + "건"}</p>
                   </div>
                   <div className="grid lg:grid-cols-2 gap-4">
-                    <PopupLeadList title={metricStage.id === "pre" ? "프리미팅 참석 고객" : "도달 기업"} rows={metricReachedRows} tone="text-emerald-600" />
+                    <PopupLeadList title={metricStage.id === "pre" ? "CRM 프리미팅 일정" : "도달 기업"} rows={metricReachedRows} tone="text-emerald-600" />
                     <PopupLeadList title={metricStage.id === "pre" ? "기간 유입 DB" : "미도달 기업"} rows={metricStage.id === "pre" ? metricBaseRows : metricMissedRows} tone={metricStage.id === "pre" ? "text-indigo-600" : "text-red-600"} />
                   </div>
                 </>
@@ -6709,15 +6709,16 @@ function MarketingHubView() {
   const [roasChannel, setRoasChannel] = useState(null);
   const r = pRange(period);
   const leads = db.leads.filter((l) => inR(l.createdAt, r));
-  const met = leads.filter(hasCompletedMeeting);
-  const periodMeetings = db.leads.filter((l) => isPremeetingCompanyInRange(l, r));
+  const hubCalendarEntries = calendarPeriodEntries(window.crmCalendarSchedules, db.leads, r, todayISO());
+  const periodMeetings = (hubCalendarEntries || []).map(entry => entry.lead);
+  const met = periodMeetings;
   const paid = leads.filter((l) => actualPaid(l) > 0);
   const spend = marketingSpendForPeriod(db, period);
   const contractPerformance = contractRoasByType(db.leads, r, spend);
-  const hubChannelNames = [...new Set([...db.channels.map((c) => c.name), ...db.leads.filter((l) => inR(l.createdAt, r) || (l.status === "계약 완료" && inR(l.contractAt, r))).map((l) => l.channel).filter(Boolean)].map(channelGroupName))];
+  const hubChannelNames = [...new Set([...db.channels.map((c) => c.name), ...db.leads.filter((l) => inR(l.createdAt, r) || (l.status === "계약 완료" && inR(l.contractAt, r))).map((l) => l.channel).filter(Boolean), ...periodMeetings.map(l => l.channel)].map(channelGroupName))];
   const hubRawRows = hubChannelNames.map((name) => {
     const rows = leads.filter((l) => channelGroupName(l.channel) === name);
-    const meetings = rows.filter(hasCompletedMeeting);
+    const meetings = periodMeetings.filter(lead => channelGroupName(lead.channel) === name);
     const paidCompanies = rows.filter((l) => actualPaid(l) > 0);
     const chSpend = marketingSpendForPeriod(db, period, name);
     const contracts = contractRoasByType(db.leads.filter((lead) => channelGroupName(lead.channel) === name), r, chSpend);
@@ -6727,9 +6728,9 @@ function MarketingHubView() {
       cac: chSpend != null && paidCompanies.length ? Math.round(chSpend / paidCompanies.length) : null,
       roas: contracts.totalRoas,
     };
-  }).filter((x) => x.rows.length || (x.spend || 0) > 0 || x.rev > 0).sort((a, b) => b.rows.length - a.rows.length || b.rev - a.rev);
+  }).filter((x) => x.rows.length || x.meetings.length || (x.spend || 0) > 0 || x.rev > 0).sort((a, b) => b.rows.length - a.rows.length || b.rev - a.rev);
   const channelRows = hubRawRows;
-  useExcelExport(() => [excelTable('채널별 성과', ['채널', '광고비 (원)', '유입 DB', 'CPL (원)', '프리미팅 완료', '입금 기업', 'CAC (원)', '계약금액 (원)', 'ROAS (%)'], channelRows.map(x => [x.name, x.spend, x.rows.length, x.cpl, x.meetings.length, x.paidCompanies.length, x.cac, x.rev, x.roas]), '유입·전환·입금 기업=유입일 기준 / 계약액·ROAS=계약일 기준'), exportLeadTable('유입 기업', leads)]);
+  useExcelExport(() => [excelTable('채널별 성과', ['채널', '광고비 (원)', '유입 DB', 'CPL (원)', 'CRM 프리미팅 일정', '입금 기업', 'CAC (원)', '계약금액 (원)', 'ROAS (%)'], channelRows.map(x => [x.name, x.spend, x.rows.length, x.cpl, x.meetings.length, x.paidCompanies.length, x.cac, x.rev, x.roas]), '프리미팅=CRM 일정일·오늘까지 / 유입·입금 기업=유입일 기준 / 계약액·ROAS=계약일 기준'), exportLeadTable('유입 기업', leads)]);
   const totalCpl = spend != null && leads.length ? Math.round(spend / leads.length) : null;
   const totalCac = spend != null && paid.length ? Math.round(spend / paid.length) : null;
   const totalRoas = contractPerformance.totalRoas;
@@ -6760,7 +6761,7 @@ function MarketingHubView() {
     const inflowRows = db.leads.filter((l) => (l.createdAt || "").startsWith(month));
     const [year, monthNumber] = month.split("-").map(Number);
     const monthRange = pRange({ mode: "month", y: year, m: monthNumber });
-    const meetingRows = db.leads.filter((l) => isPremeetingCompanyInRange(l, monthRange));
+    const meetingRows = calendarPeriodEntries(window.crmCalendarSchedules, db.leads, monthRange, todayISO());
     const rawMonthSpend = marketingSpendForMonth(db, month);
     const monthSpend = rawMonthSpend != null && rawMonthSpend > 50000 ? rawMonthSpend : null;
     const contracts = contractRoasByType(db.leads, monthRange, monthSpend);
@@ -6768,7 +6769,7 @@ function MarketingHubView() {
       month,
       label: Number(month.slice(5)) + "월",
       leads: inflowRows.length,
-      meetings: meetingRows.length,
+      meetings: meetingRows?.length ?? null,
       cpl: monthSpend > 0 && inflowRows.length ? Math.round(monthSpend / inflowRows.length) : null,
       roas: contracts.totalRoas,
       newRoas: contracts.newRoas,
@@ -6785,7 +6786,7 @@ function MarketingHubView() {
   const monthlyRoasGoal = marketingKpi.roasTarget || 500;
   const trendMetrics = [
     { key: "leads", label: "유입 DB", suffix: "건", goal: monthlyLeadGoal, color: "#0ea5e9", soft: "bg-sky-50", text: "text-sky-700", desc: "해당 월에 유입된 DB" },
-    { key: "meetings", label: "프리미팅", suffix: "건", goal: monthlyMeetingGoal, color: "#6366f1", soft: "bg-indigo-50", text: "text-indigo-700", desc: "해당 월 프리미팅 기업 수 · 통합 성과와 동일 기준" },
+    { key: "meetings", label: "프리미팅", suffix: "건", goal: monthlyMeetingGoal, color: "#6366f1", soft: "bg-indigo-50", text: "text-indigo-700", desc: "CRM 일정 ID별 건수 · 오늘까지 · 통합 성과와 동일 기준" },
     { key: "roas", label: "ROAS", suffix: "%", goal: monthlyRoasGoal, color: "#f43f5e", soft: "bg-rose-50", text: "text-rose-700", desc: "계약일 기준 신규·기존 계약액 ÷ 해당 월 전체 광고비" },
   ];
   const MiniTrend = ({ metric }) => {
@@ -6826,10 +6827,10 @@ function MarketingHubView() {
     const maxV = Math.max(1, metric.goal || 0, ...usable);
     const xAt = (i) => trendData.length <= 1 ? (L + R) / 2 : L + (R - L) * i / (trendData.length - 1);
     const yAt = (v) => B - ((v || 0) / maxV) * (B - T);
-    const path = usable.map((v, i) => (i ? "L" : "M") + xAt(i).toFixed(1) + "," + yAt(v).toFixed(1)).join(" ");
-    const current = usable[usable.length - 1] || 0;
-    const previous = usable.length > 1 ? usable[usable.length - 2] : null;
-    const delta = previous == null || previous === 0 ? null : Math.round((current - previous) / previous * 100);
+    const path = values.map((v, i) => v == null ? "" : (i && values[i - 1] != null ? "L" : "M") + xAt(i).toFixed(1) + "," + yAt(v).toFixed(1)).filter(Boolean).join(" ");
+    const current = values[values.length - 1] ?? null;
+    const previous = values.length > 1 ? values[values.length - 2] : null;
+    const delta = current == null || previous == null || previous === 0 ? null : Math.round((current - previous) / previous * 100);
     const targetY = yAt(metric.goal);
     const achieved = current >= metric.goal;
     return (
@@ -6838,12 +6839,12 @@ function MarketingHubView() {
           <div>
             <p className="text-[11px] font-bold text-slate-400">{metric.label}</p>
             <div className="flex items-baseline gap-1.5 mt-0.5">
-              <strong className="text-2xl font-black text-slate-900 tabular-nums">{current.toLocaleString()}</strong>
+              <strong className="text-2xl font-black text-slate-900 tabular-nums">{current == null ? "조회 미확인" : current.toLocaleString()}</strong>
               <span className="text-xs font-bold text-slate-400">{metric.suffix}</span>
               {delta != null && <span className={"text-[10px] font-extrabold " + (delta >= 0 ? "text-emerald-600" : "text-rose-600")}>{delta >= 0 ? "▲ " : "▼ "}{Math.abs(delta)}%</span>}
             </div>
           </div>
-          <span className={"px-2 py-1 rounded-full text-[10px] font-extrabold " + (achieved ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700")}>
+          <span className={"px-2 py-1 rounded-full text-[10px] font-extrabold " + (current == null ? "bg-slate-100 text-slate-500" : achieved ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700")}>
             목표 {metric.goal.toLocaleString()}{metric.suffix}
           </span>
         </div>
@@ -6857,9 +6858,9 @@ function MarketingHubView() {
           {!!path && <path d={path} fill="none" stroke={metric.color} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />}
           {trendData.map((x, i) => (
             <g key={x.month}>
-              <circle cx={xAt(i)} cy={yAt(usable[i])} r="4.5" fill="#fff" stroke={metric.color} strokeWidth="3">
+              {values[i] != null && <circle cx={xAt(i)} cy={yAt(usable[i])} r="4.5" fill="#fff" stroke={metric.color} strokeWidth="3">
                 <title>{x.month + " · " + metric.label + " " + (values[i] == null ? "-" : values[i].toLocaleString() + metric.suffix)}</title>
-              </circle>
+              </circle>}
               {(trendData.length <= 6 || i === trendData.length - 1 || i % 2 === 0) && <text x={xAt(i)} y={B + 19} textAnchor="middle" fontSize="9" fontWeight="700" fill="#64748b">{x.label}</text>}
               {(trendData.length <= 6 || i === trendData.length - 1) && <text x={xAt(i)} y={Math.max(12, yAt(usable[i]) - 9)} textAnchor="middle" fontSize="9" fontWeight="800" fill={metric.color}>{values[i] == null ? "-" : values[i].toLocaleString()}</text>}
             </g>
@@ -6875,7 +6876,7 @@ function MarketingHubView() {
         right={<div className="flex gap-2"><Btn size="xs" onClick={() => go("leads")}>유입 DB</Btn><Btn size="xs" kind="primary" onClick={() => go("marketing")}>채널 상세</Btn></div>} />
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
         <button className="text-left" onClick={() => go("leads")}><StatBig label="유입 DB" value={leads.length} unit="건" accent="border-sky-500" sub={totalCpl == null ? "아직 데이터가 없다" : "CPL " + fmtK(totalCpl) + "원"} /></button>
-        <button className="text-left" onClick={() => go("premeetingHub")}><StatBig label="프리미팅" value={periodMeetings.length} unit="건" accent="border-indigo-500" sub="선택 기간 기업 수 · 통합 성과와 동일 기준" /></button>
+        <button className="text-left" onClick={() => go("premeetingHub")}><StatBig label="프리미팅" value={hubCalendarEntries == null ? "조회 미확인" : periodMeetings.length} unit="건" accent="border-indigo-500" sub="CRM 일정 ID별 · 오늘까지 · 통합 성과와 동일 기준" /></button>
         <StatBig label="결제 기업 (유입일 기준)" value={paid.length} unit="개사" accent="border-emerald-500" sub={"선택 기간 유입 기업 중 입금 확인 · 유입 대비 " + pct(paid.length, leads.length) + "%"} />
         <Card cls="border-l-4 border-rose-500 p-4">
           <p className="text-xs font-semibold text-slate-400">ROAS · 계약액 기준</p>
@@ -6907,7 +6908,7 @@ function MarketingHubView() {
                 <tr key={x.month} className={"border-t border-slate-100 " + (i === 0 ? "bg-indigo-50/35" : "")}>
                   <td className="px-4 py-2.5 font-bold text-slate-700">{x.month}{i === 0 && <span className="ml-2 text-[9px] text-indigo-600">최신</span>}</td>
                   <td className={"px-3 py-2.5 text-right font-extrabold tabular-nums " + (x.leads >= monthlyLeadGoal ? "text-emerald-700" : "text-rose-600")}>{x.leads.toLocaleString()}건</td>
-                  <td className={"px-3 py-2.5 text-right font-extrabold tabular-nums " + (x.meetings >= monthlyMeetingGoal ? "text-emerald-700" : "text-rose-600")}>{x.meetings.toLocaleString()}건</td>
+                  <td className={"px-3 py-2.5 text-right font-extrabold tabular-nums " + (x.meetings == null ? "text-slate-500" : x.meetings >= monthlyMeetingGoal ? "text-emerald-700" : "text-rose-600")}>{x.meetings == null ? "조회 미확인" : x.meetings.toLocaleString() + "건"}</td>
                   <td className={"px-3 py-2.5 text-right font-bold tabular-nums " + (x.cpl == null ? "text-slate-500" : x.cpl <= 50000 ? "text-emerald-700" : "text-rose-600")}>{x.cpl == null ? "-" : fmtK(x.cpl) + "원"}</td>
                   <td className={"px-4 py-2.5 text-right font-extrabold tabular-nums " + (x.newRoas == null ? "text-slate-500" : x.newRoas >= monthlyRoasGoal ? "text-emerald-700" : "text-rose-600")}>{x.newRoas == null ? "-" : x.newRoas.toLocaleString() + "%"}</td>
                   <td className={"px-4 py-2.5 text-right font-extrabold tabular-nums " + (x.existingRoas == null ? "text-slate-500" : "text-violet-700")}>{x.existingRoas == null ? "-" : x.existingRoas.toLocaleString() + "%"}</td>
@@ -6925,7 +6926,7 @@ function MarketingHubView() {
         <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-3 flex-wrap">
           <div>
             <p className="text-sm font-extrabold text-slate-900">성과 흐름</p>
-            <p className="text-[10px] text-slate-400 mt-1">유입·프리 전환·결제 기업은 들어온 유입일 기준, 계약액·ROAS는 계약일 기준입니다. 결제 기업은 해당 유입 기업 중 현재까지 입금이 확인된 곳이며, 입금일 기준이 아닙니다.</p>
+            <p className="text-[10px] text-slate-400 mt-1">프리미팅은 CRM 일정일 기준으로 오늘까지 집계합니다. 유입·결제 기업은 들어온 유입일 기준, 계약액·ROAS는 계약일 기준입니다. 결제 기업은 해당 유입 기업 중 현재까지 입금이 확인된 곳이며, 입금일 기준이 아닙니다.</p>
           </div>
           <Btn size="xs" kind="ghost" onClick={() => go("marketing")}>전체 분석 <ExternalLink size={11} /></Btn>
         </div>
@@ -6937,8 +6938,8 @@ function MarketingHubView() {
                 <th className="px-3 py-2.5 text-right font-semibold">광고비</th>
                 <th className="px-3 py-2.5 text-right font-semibold">유입 DB</th>
                 <th className="px-3 py-2.5 text-right font-semibold">CPL</th>
-                <th className="px-3 py-2.5 text-right font-semibold">프리 전환</th>
-                <th className="px-3 py-2.5 text-right font-semibold">DB→프리</th>
+                <th className="px-3 py-2.5 text-right font-semibold">프리미팅 일정</th>
+                <th className="px-3 py-2.5 text-right font-semibold">DB 대비 일정</th>
                 <th className="px-3 py-2.5 text-right font-semibold">결제 기업 <span className="whitespace-nowrap font-normal">(유입일 기준)</span></th>
                 <th className="px-3 py-2.5 text-right font-semibold">DB→결제</th>
                 <th className="px-3 py-2.5 text-right font-semibold">CAC</th>
@@ -6953,8 +6954,8 @@ function MarketingHubView() {
                   <td className="px-3 py-3 text-right font-bold text-slate-700 tabular-nums">{x.spend == null ? "-" : fmtK(x.spend) + "원"}</td>
                   <td className="px-3 py-3 text-right font-black text-sky-700 tabular-nums">{x.rows.length}</td>
                   <td className="px-3 py-3 text-right text-xs font-bold text-amber-700 tabular-nums">{x.cpl == null ? "-" : fmtK(x.cpl) + "원"}</td>
-                  <td className="px-3 py-3 text-right font-black text-indigo-700 tabular-nums">{x.meetings.length}</td>
-                  <td className="px-3 py-3 text-right text-xs font-bold text-indigo-600 tabular-nums">{pct(x.meetings.length, x.rows.length)}%</td>
+                  <td className="px-3 py-3 text-right font-black text-indigo-700 tabular-nums">{hubCalendarEntries == null ? "조회 미확인" : x.meetings.length}</td>
+                  <td className="px-3 py-3 text-right text-xs font-bold text-indigo-600 tabular-nums">{hubCalendarEntries == null || !x.rows.length ? "-" : pct(x.meetings.length, x.rows.length) + "%"}</td>
                   <td className="px-3 py-3 text-right font-black text-emerald-700 tabular-nums">{x.paidCompanies.length}</td>
                   <td className="px-3 py-3 text-right text-xs font-bold text-emerald-600 tabular-nums">{pct(x.paidCompanies.length, x.rows.length)}%</td>
                   <td className="px-3 py-3 text-right text-xs font-bold text-slate-600 tabular-nums">{x.cac == null ? "-" : fmtK(x.cac) + "원"}</td>
@@ -6971,8 +6972,8 @@ function MarketingHubView() {
                   <td className="px-3 py-3 text-right text-xs font-bold tabular-nums">{spend == null ? "-" : fmtK(spend) + "원"}</td>
                   <td className="px-3 py-3 text-right text-sm font-black tabular-nums">{leads.length}</td>
                   <td className="px-3 py-3 text-right text-xs font-bold text-amber-300 tabular-nums">{totalCpl == null ? "-" : fmtK(totalCpl) + "원"}</td>
-                  <td className="px-3 py-3 text-right text-sm font-black text-indigo-300 tabular-nums">{met.length}</td>
-                  <td className="px-3 py-3 text-right text-xs font-bold text-indigo-300 tabular-nums">{pct(met.length, leads.length)}%</td>
+                  <td className="px-3 py-3 text-right text-sm font-black text-indigo-300 tabular-nums">{hubCalendarEntries == null ? "조회 미확인" : met.length}</td>
+                  <td className="px-3 py-3 text-right text-xs font-bold text-indigo-300 tabular-nums">{hubCalendarEntries == null || !leads.length ? "-" : pct(met.length, leads.length) + "%"}</td>
                   <td className="px-3 py-3 text-right text-sm font-black text-emerald-300 tabular-nums">{paid.length}</td>
                   <td className="px-3 py-3 text-right text-xs font-bold text-emerald-300 tabular-nums">{pct(paid.length, leads.length)}%</td>
                   <td className="px-3 py-3 text-right text-xs font-bold tabular-nums">{totalCac == null ? "-" : fmtK(totalCac) + "원"}</td>

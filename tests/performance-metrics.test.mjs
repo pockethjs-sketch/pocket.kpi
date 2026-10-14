@@ -90,7 +90,7 @@ test('stale daily spend cannot produce a reassuring zero-percent change', () => 
 test('integrated comparison uses the customer filter and refuses future-inclusive totals', () => {
   const source = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
   const block = source.slice(source.indexOf('  const comparisonWindow = dailyComparisonWindow'), source.indexOf('  const DailyDelta ='));
-  const calculate = new Function('db', 'r', 'todayISO', 'period', 'matchesCustomerType', 'inR', 'isPremeetingCompanyInRange', 'contractRoasByType', 'dailyComparisonWindow', 'previousDatedSpend', 'roasSpend', 'contractAmountTotal', block + '\nreturn { comparisonCurrent, comparisonPrevious, countBefore, amountBefore, previousSpend, comparisonLabel, divide };');
+  const calculate = new Function('db', 'r', 'todayISO', 'period', 'matchesCustomerType', 'inR', 'isPremeetingCompanyInRange', 'contractRoasByType', 'dailyComparisonWindow', 'previousDatedSpend', 'roasSpend', 'contractAmountTotal', 'calendarPeriodEntries', 'window', 'customerType', block + '\nreturn { comparisonCurrent, comparisonPrevious, countBefore, amountBefore, previousSpend, comparisonLabel, divide };');
   const range = ['2026-09-01', '2026-09-30'];
   const inR = (date, r) => !!date && date >= r[0] && date <= r[1];
   const leads = [
@@ -99,7 +99,7 @@ test('integrated comparison uses the customer filter and refuses future-inclusiv
     { createdAt: '2026-09-18', ctype: '기존', status: '계약 완료', contractAt: '2026-09-18', contractAmount: 900 },
   ];
   const adDaily = Object.fromEntries(['META', 'NAVER', 'GOOGLE'].map(key => [key, [{ date: '2026-09-17', spend: 100 }]]));
-  const result = calculate({ leads, adDaily }, range, () => '2026-09-18', { mode: 'month' }, l => l.ctype === '신규', inR, (l, r) => inR(l.premeetingAt, r), contractRoasByType, dailyComparisonWindow, previousDatedSpend, 300, 600);
+  const result = calculate({ leads, adDaily }, range, () => '2026-09-18', { mode: 'month' }, l => l.ctype === '신규', inR, (l, r) => inR(l.premeetingAt, r), contractRoasByType, dailyComparisonWindow, previousDatedSpend, 300, 600, (_, all, r) => all.filter(l => l.ctype === '신규' && inR(l.premeetingAt, r)), { crmCalendarSchedules: [] }, '신규');
   assert.deepEqual(result.comparisonCurrent, { marketing: 2, pre: 2, contract: 2, amount: 600 });
   assert.deepEqual(result.comparisonPrevious, { marketing: 1, pre: 1, contract: 1, amount: 500 });
   assert.equal(result.countBefore('pre', 2), 1);

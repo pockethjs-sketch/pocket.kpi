@@ -5,20 +5,22 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { transformWithOxc } from 'vite';
 import { contractRoasByType, contractRoasRows } from '../src/data/performanceMetrics.js';
+import { calendarPeriodEntries } from '../src/data/calendarActivity.js';
 
 const source = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
 const view = source.slice(source.indexOf('function MarketingHubView()'), source.indexOf('function PremeetingHubView()'));
 const { code } = await transformWithOxc(view, 'MarketingHubView.jsx', { jsx: { runtime: 'classic' } });
 const inR = (d, r) => !!d && d >= r[0] && d <= r[1];
-function render(spend = 2500000) {
+function render(spend = 2500000, calendar = [], today = '2026-10-07') {
   const db = { leads: [{ id:'synthetic-prior-inflow', createdAt:'2026-09-15', contractAt:'2026-10-02', status:'계약 완료', contractAmount:11000000, paid:11000000, channel:'기타' }], channels:[{ name:'기타' }], settings:{ kpi:{ inflow:600, conv:0.25, roasTarget:550 } }, adSpend:{} };
   const scope = {
+    calendarPeriodEntries, window: { crmCalendarSchedules: calendar },
     React, useApp:()=>({ db, period:{ mode:'month', y:2026, m:10 }, go:()=>{}, openLead:()=>{} }), useState:()=>[null,()=>{}],
     pRange:p=>[`${p.y}-${String(p.m).padStart(2,'0')}-01`, `${p.y}-${String(p.m).padStart(2,'0')}-31`], inR,
     hasCompletedMeeting:()=>false, isPremeetingCompanyInRange:()=>false, actualPaid:l=>l.paid||0,
     marketingSpendForPeriod:()=>spend, marketingSpendForMonth:()=>spend, channelGroupName:x=>x,
     contractRoasByType, contractRoasRows, useExcelExport:()=>{}, meetingDoneDate:()=>'',
-    pad:n=>String(n).padStart(2,'0'), todayISO:()=> '2026-10-07', pLabel:()=> '2026년 10월',
+    pad:n=>String(n).padStart(2,'0'), todayISO:()=> today, pLabel:()=> '2026년 10월',
     pct:(n,d)=>d?Math.round(n/d*100):0, fmtK:n=>String(n/10000)+'만', fmtWon:n=>String(n)+'원',
     Card:({children,cls})=>React.createElement('div',{className:cls},children),
     StatBig:({label,value,sub})=>React.createElement('section',null,React.createElement('h3',null,label),React.createElement('b',null,value),React.createElement('p',null,sub)),
@@ -37,6 +39,21 @@ test('labels explicitly preserve inflow-based paid companies alongside contract 
   assert.match(html,/<h3>결제 기업 \(유입일 기준\)<\/h3><b>0<\/b>/);
   assert.match(html,/440%/);
   assert.match(view,/const paid = leads.filter\(\(l\) => actualPaid\(l\) > 0\)/);
+});
+
+test('real marketing view renders 29 CRM schedules in its total instead of deduplicated company count', () => {
+  const calendar = Array.from({ length: 29 }, (_, i) => ({ msNo: i + 1, type: 1,
+    clientNo: i % 21, startAt: '2026-10-08T10:00:00+09:00', checked: i % 2 }));
+  const html = render(2500000, calendar, '2026-10-14');
+  assert.match(html, /<h3>프리미팅<\/h3><b>29<\/b>/);
+  assert.match(html, /CRM 일정 ID별/);
+});
+
+test('missing CRM calendar stays unknown in total, monthly trend and channel table, never a zero meeting result', () => {
+  const html = render(2500000, null, '2026-10-14');
+  assert.match(html, /<h3>프리미팅<\/h3><b>조회 미확인<\/b>/);
+  assert.ok((html.match(/조회 미확인/g) || []).length >= 9);
+  assert.ok(!html.includes('프리미팅 0건'));
 });
 
 test('legends distinguish monthly targets, ungraded existing ROAS and channel ROAS threshold',()=>{
