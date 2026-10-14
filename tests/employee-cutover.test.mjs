@@ -9,8 +9,9 @@ import * as scopeAccess from '../supabase/functions/_shared/premeeting-access.mj
 import * as receivablesAccess from '../supabase/functions/_shared/receivables-access.mjs';
 import { crmCalendar } from '../supabase/functions/_shared/crm-calendar.mjs';
 import { verifyCalendarConsistency } from '../supabase/functions/_shared/calendar-consistency.mjs';
+import { operationsFile, missingOperationsSource } from './operations-file.mjs';
 const domain = readFileSync(new URL('../supabase/functions/kpi-domain-api/index.ts', import.meta.url), 'utf8');
-const gs = readFileSync(new URL('../../pocket-kpi-deploy/Code.gs', import.meta.url), 'utf8');
+const gs = operationsFile('Code.gs');
 function handler(role, user = true, scope = 'all', grant = null, current = null, rawRecords = []) {
   let callback, writes = 0;
   const member = { organization_id: 'org', user_id: 'user', role, state: 'ACTIVE', archived_at: null, access_scope: scope };
@@ -97,7 +98,7 @@ test('supplemental VIEWER grant allows only current eligible record patches', as
     assert.equal((await revoked.call('mutation', body)).status, 403); assert.equal(revoked.writes(), 0);
   }
 });
-test('Apps Script rejects public tokens; HMAC validates exact content and timestamp', () => {
+test('Apps Script rejects public tokens; HMAC validates exact content and timestamp', {skip:gs==null ? missingOperationsSource : false}, () => {
   const secret = 'synthetic-private-server-secret';
   const scope = { PropertiesService: { getScriptProperties: () => ({ getProperty: () => secret }) }, Utilities: { Charset: { UTF_8: 'utf-8' }, computeHmacSha256Signature: (value, key) => [...createHmac('sha256', key).update(value).digest()] } };
   vm.runInNewContext(gs, scope); scope._json = (value) => value;

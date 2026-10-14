@@ -1,12 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { operationsFile, missingOperationsSource } from './operations-file.mjs';
 
-const code = await readFile(new URL("../../pocket-kpi-deploy/Code.gs", import.meta.url), "utf8");
-const calendar = await readFile(new URL("../../pocket-kpi-deploy/crm_lead.gs", import.meta.url), "utf8");
+const code = operationsFile('Code.gs');
+const calendar = operationsFile('crm_lead.gs');
+const opsTest = (name, fn) => test(name, {skip: !code || !calendar ? missingOperationsSource : false}, fn);
 const frontend = await readFile(new URL("../src/main.jsx", import.meta.url), "utf8");
 
-test("Apps Script commits Supabase primary without synchronous Sheets writes", () => {
+opsTest("Apps Script commits Supabase primary without synchronous Sheets writes", () => {
   const primary = code.indexOf("_crmCommitSupabasePrimary_(mutationId, current.revision, revision");
   const saveEnd = code.indexOf("function _crmShadowConfig_", primary);
   const saveBody = code.slice(primary, saveEnd);
@@ -15,30 +17,30 @@ test("Apps Script commits Supabase primary without synchronous Sheets writes", (
   assert.match(saveBody, /scheduled: true, intervalMinutes: 15/);
 });
 
-test("shadow credentials come only from Script Properties", () => {
+opsTest("shadow credentials come only from Script Properties", () => {
   assert.match(code, /getProperty\('KPI_SHADOW_GATEWAY_URL'\)/);
   assert.match(code, /getProperty\('KPI_SHADOW_HMAC_SECRET'\)/);
   assert.doesNotMatch(code, /KPI_SHADOW_HMAC_SECRET\s*=\s*['"][^'"]+['"]/);
 });
 
-test("shadow failure is queued without throwing into primary save", () => {
+opsTest("shadow failure is queued without throwing into primary save", () => {
   assert.match(code, /_crmQueueShadowFailure_/);
   assert.match(code, /pendingRetry: true/);
   assert.match(code, /retrySupabaseShadowQueue/);
 });
 
-test("state reads Supabase primary and falls back only when it is unavailable", () => {
+opsTest("state reads Supabase primary and falls back only when it is unavailable", () => {
   assert.match(code, /shadowState && shadowState\.revision && shadowState\.snapshot/);
   assert.match(code, /readBackend = 'supabase'/);
   assert.match(code, /if \(!stateOnly\) stateOnly = _crmReadStateEnvelope\(\)/);
 });
 
-test("failed Sheets backup does not roll back a committed Supabase write", () => {
+opsTest("failed Sheets backup does not roll back a committed Supabase write", () => {
   assert.match(code, /sheetsBackup = \{ ok: false, pending: true/);
   assert.match(code, /_crmBackupSupabasePrimaryToSheets_/);
 });
 
-test("periodic reconciliation runs even when the local retry queue is empty", () => {
+opsTest("periodic reconciliation runs even when the local retry queue is empty", () => {
   const retryStart = code.indexOf("function retrySupabaseShadowQueue()");
   const retryEnd = code.indexOf("function installSupabaseShadowRetryTrigger", retryStart);
   const retryBody = code.slice(retryStart, retryEnd);
@@ -46,13 +48,13 @@ test("periodic reconciliation runs even when the local retry queue is empty", ()
   assert.match(retryBody, /_crmBackupSupabasePrimaryToSheets_\(\)/);
 });
 
-test("state route does not read unused Sheets metadata before Supabase", () => {
+opsTest("state route does not read unused Sheets metadata before Supabase", () => {
   const stateStart = code.indexOf("if (action === 'state')");
   const stateEnd = code.indexOf("var marketing =", stateStart);
   assert.doesNotMatch(code.slice(stateStart, stateEnd), /_crmReadMeta\(\)/);
 });
 
-test("calendar synchronization and mutation baselines use Supabase primary, not Sheets A/B", () => {
+opsTest("calendar synchronization and mutation baselines use Supabase primary, not Sheets A/B", () => {
   const calendarStart = calendar.indexOf("function _crmRunPremeetingSync(body)");
   const calendarEnd = calendar.indexOf("function _crmRunSheetSync", calendarStart);
   const calendarBody = calendar.slice(calendarStart, calendarEnd);

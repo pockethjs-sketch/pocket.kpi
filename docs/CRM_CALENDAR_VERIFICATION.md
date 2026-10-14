@@ -10,7 +10,7 @@ Authorized CRM reads also return a fresh `calendarVerification` for the same raw
 
 The six-hour monitor checks aggregation metadata and independently queries raw count-only SQL. When authenticated CRM API/browser evidence is available it checks those counts too. It must distinguish server computation parity, actual browser display and unavailable employee sessions: a server computation check is not a rendered-browser E2E test. Prior runs without the new aggregation object are pending until the next scheduled run, not false successes/failures. No new recurring task or cadence change. Healthy/unchanged remains quiet.
 
-GitHub Pages CI now runs the full synthetic regression suite, including actual card wiring and 21-versus29 and October8 omission cases, before release. This closes the former build-only gate.
+GitHub Pages CI now runs the repository synthetic regression suite, including actual card wiring, employee authorization and 21-versus29/October8 omission cases, before release. Operator-owned Apps Script source outside the repository is intentionally not copied into public CI: only the13 source-integration tests requiring that absent checkout are explicitly skipped there and run locally. A missing local checkout still fails. This closes the former build-only gate without pretending external integration was tested in CI.
 
 Daily 09:00 KST collection already fetches mr_type=1 schedules. The daily graph now reads latest raw calendar schedules through authenticated domain CRM reads, not the potentially incomplete lead.crmMeetings projection. Missing lead links do not remove schedules. No extra collection trigger or browser-triggered source fetch is added.
 

@@ -1,5 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';import vm from 'node:vm';import {readFileSync} from 'node:fs';import {createHash} from 'node:crypto';
 import {crmRecentPremeetingRange as range,crmPlanRecentPremeetings as plan} from '../scripts/premeeting-sync-core.mjs';
+import { operationsFile, missingOperationsSource } from './operations-file.mjs';
+const opsCalendar = operationsFile('crm_lead.gs');
 const now='2026-09-15T08:00:00Z',hash=s=>createHash('sha256').update(s).digest('hex');
 const row=(extra={})=>({ms_no:1,client_no:1,proj_no:1,client_rep_name:'업체',start_dt:'2026-09-15T01:00:00Z',end_dt:'2026-09-15T02:00:00Z',mr_type:1,mr_checked:0,...extra});
 const apply=(state,p)=>{const x=structuredClone(state);x.leads.push(...structuredClone(p.mutation.collections.leads.upsert));for(const e of p.mutation.collections.leads.patches)for(const o of e.ops)x.leads.find(l=>l.id===e.id)[o.path[0]]=structuredClone(o.value);return x;};
@@ -60,8 +62,8 @@ test('trigger installation requires a one-time secret independent of the public 
  const {s}=harness();assert.equal(s._crmSetupDailyOnce({}).error,'forbidden');assert.equal(s._crmSetupDailyOnce({setupKey:'wrong'}).error,'forbidden');
  s.CRM_DAILY_SETUP_HASH=hash('test');assert.equal(s._crmSetupDailyOnce({setupKey:'test'}).triggerCount,1);assert.equal(s._crmSetupDailyOnce({setupKey:'test'}).error,'forbidden');
 });
-test('generated runtime and pure premeeting core equal the deployed source',()=>{
- const deployed=readFileSync(new URL('../../pocket-kpi-deploy/crm_lead.gs',import.meta.url),'utf8');new vm.Script(deployed);
+test('generated runtime and pure premeeting core equal the deployed source',{skip:opsCalendar==null ? missingOperationsSource : false},()=>{
+ const deployed=opsCalendar;new vm.Script(deployed);
  assert.equal(deployed.replace(/\r/g,''),(runtime+'\n/* BEGIN GENERATED PREMEETING CORE */\n'+readFileSync(new URL('../scripts/premeeting-sync-core.mjs',import.meta.url),'utf8').replace(/^export /gm,'')+'\n/* END GENERATED PREMEETING CORE */\n').replace(/\r/g,''));
 });
 

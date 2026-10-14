@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { operationsFile, missingOperationsSource } from './operations-file.mjs';
+const opsCode = operationsFile('Code.gs');
 import { _crmParseContractSource as parse, _crmPlanContractAutoSync as plan, _crmPlanContractPaymentSync as paymentPlan, _crmPlanContractAndPaymentSync as combinedPlan, _crmSyncMoney as money } from '../scripts/contract-sheet-sync-core.mjs';
 const hash = s => createHash('sha256').update(s).digest('hex');
 const header = ['날짜','업체명','프리','프로젝트','별도가','비고','신규/기존','대금 지급 확인'];
@@ -15,8 +17,8 @@ const apply = (state, result) => {
   next.contractStatusLogs=[...(next.contractStatusLogs||[]),...result.mutation.collections.contractStatusLogs.upsert];
   return next;
 };
-test('deployed Apps Script core matches the tested source',()=>{
-  const code=readFileSync(new URL('../../pocket-kpi-deploy/Code.gs',import.meta.url),'utf8');
+test('deployed Apps Script core matches the tested source',{skip:opsCode==null ? missingOperationsSource : false},()=>{
+  const code=opsCode;
   const core=readFileSync(new URL('../scripts/contract-sheet-sync-core.mjs',import.meta.url),'utf8').replace(/^export /gm,'').replace(/\r/g,'').trim();
   assert.equal(code.split('/* BEGIN GENERATED CONTRACT SYNC CORE */')[1].split('/* END GENERATED CONTRACT SYNC CORE */')[0].replace(/\r/g,'').trim(),core);
   new vm.Script(code);
@@ -103,8 +105,8 @@ test('source deletion is not propagated to customer or contracts',()=>{
   assert.equal(plan(short,next,now,hash).updated.length,0);
   assert.equal(plan([],next,now,hash).updated.length,0);
 });
-test('Apps Script replans after revision conflict instead of replaying old money patch',()=>{
-  const code=readFileSync(new URL('../../pocket-kpi-deploy/Code.gs',import.meta.url),'utf8');
+test('Apps Script replans after revision conflict instead of replaying old money patch',{skip:opsCode==null ? missingOperationsSource : false},()=>{
+  const code=opsCode;
   const start=code.indexOf('function _crmAutoSyncNewContracts(body)');
   const end=code.indexOf('\nfunction doPost',start);
   let read=0,save=0;
@@ -113,8 +115,8 @@ test('Apps Script replans after revision conflict instead of replaying old money
   vm.createContext(sandbox);vm.runInContext(code.slice(start,end),sandbox);
   const r=sandbox._crmAutoSyncNewContracts({});assert.equal(save,1);assert.equal(read,2);assert.equal(r.updated.length,0);assert.equal(r.blocked.length,1);
 });
-test('Apps Script dry-run never writes and failure never claims success',()=>{
-  const code=readFileSync(new URL('../../pocket-kpi-deploy/Code.gs',import.meta.url),'utf8');
+test('Apps Script dry-run never writes and failure never claims success',{skip:opsCode==null ? missingOperationsSource : false},()=>{
+  const code=opsCode;
   const body=code.slice(code.indexOf('function _crmAutoSyncNewContracts(body)'),code.indexOf('\nfunction doPost'));
   let saves=0;
   const sandbox={_crmContractSourceGroups:()=>source(),_crmReadSupabasePrimaryEnvelope_:()=>({revision:'r',data:JSON.stringify({leads:[lead()]})}),_crmPlanContractAndPaymentSync:combinedPlan,_crmIso:()=>now,_crmHash:hash,
