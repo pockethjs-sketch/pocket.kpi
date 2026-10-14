@@ -25,11 +25,11 @@ test('display hides Saturdays and Sundays without deleting activities or zero we
 test('all stages render lines, preserve date selection and separate attendance into two series', () => {
   for (const stage of ['marketing', 'contract', 'pre']) {
     const html = renderToStaticMarkup(React.createElement(Chart, { days, stage, label: '9월', selectedDate: '2026-09-07', onSelect() {} }));
-    assert.equal((html.match(/<polyline /g) || []).length, stage === 'pre' ? 2 : 1);
+    assert.equal((html.match(/<polyline /g) || []).length, 1);
     assert.equal((html.match(/role="button"/g) || []).length, 5);
     assert.equal((html.match(/aria-pressed="true"/g) || []).length, 1);
     assert.doesNotMatch(html, /2026-09-05|2026-09-06|NaN|Infinity/);
-    if (stage === 'pre') assert.match(html, /stroke-dasharray="5 4"/);
+    if (stage === 'pre') assert.match(html, /CRM 프리미팅 일정/);
   }
 });
 

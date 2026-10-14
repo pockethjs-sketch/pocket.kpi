@@ -155,21 +155,39 @@ test('daily meetings use KST meeting dates and attendance on each event, not com
   ] };
   const days = dailyStageActivity([lead], 'pre', '2026-09', '2026-09-18');
   assert.equal(days[0].count, 0, 'legacy dates do not duplicate calendar events');
-  assert.equal(days[2].count, 1, 'one company on the same date counts once');
+  assert.equal(days[2].count, 2, 'different CRM times on the same date count separately');
   assert.equal(days[2].completed, 1);
   assert.equal(days[3].unconfirmed, 1, 'contract status does not confirm later meetings');
-  assert.equal(days.reduce((sum, day) => sum + day.count, 0), 2);
+  assert.equal(days.reduce((sum, day) => sum + day.count, 0), 3);
 });
 
-test('manual attendance and historical dropped visits remain visible, creation dates are not meetings', () => {
+test('manual dates and lead status do not manufacture CRM schedule counts', () => {
   const days = dailyStageActivity([
     { id: 'drop', status: '드랍', premeetingDoneAt: '2026-09-05' },
     { id: 'scheduled', status: '프리미팅 확정', premeetingAt: '2026-09-05' },
     { id: 'no-date', status: '계약 완료', createdAt: '2026-09-05', contractAt: '2026-09-05' },
   ], 'pre', '2026-09', '2026-09-18');
-  assert.equal(days[4].completed, 1);
-  assert.equal(days[4].unconfirmed, 1);
-  assert.equal(days[4].entries.length, 2);
+  assert.equal(days[4].completed, 0);
+  assert.equal(days[4].unconfirmed, 0);
+  assert.equal(days[4].entries.length, 0);
+});
+
+test('CRM schedule IDs count once across records; distinct same-day IDs count separately regardless of attendance', () => {
+  const meetings = [
+    { msNo: 101, type: 1, startAt: '2026-10-14T10:00:00', checked: 0 },
+    { msNo: 102, type: 1, startAt: '2026-10-14T10:00:00', checked: 1 },
+    { msNo: 103, type: 1, startAt: '2026-10-15T10:00:00', checked: 0 },
+    { msNo: 104, type: 2, startAt: '2026-10-14T10:00:00', checked: 1 },
+  ];
+  const rows = dailyStageActivity([
+    { id: 'one', status: '드랍', crmMeetings: meetings },
+    { id: 'two', status: '계약 완료', crmMeeting: meetings[0] },
+  ], 'pre', '2026-10', '2026-10-14');
+  assert.equal(rows[13].count, 2);
+  assert.equal(rows[13].completed, 1);
+  assert.equal(rows[13].unconfirmed, 1);
+  assert.equal(rows.reduce((sum, row) => sum + row.count, 0), 2);
+  assert.equal(dailyStageActivity([{ crmMeetings: meetings }], 'pre', '2026-11', '2026-10-14').reduce((sum, row) => sum + row.count, 0), 0);
 });
 
 test('daily contracts use completed contract date and retain rows for amount drilldown', () => {

@@ -130,6 +130,7 @@ export function dailyLeadCounts(leads, month, today) {
 export function dailyStageActivity(leads, stage, month, today, range = null) {
   const days = dailyLeadCounts([], month, today).map(day => ({ ...day, completed: 0, unconfirmed: 0, entries: [] }));
   const byDate = new Map(days.map(day => [day.date, day]));
+  const seenMeetings = new Set();
   for (const lead of leads || []) {
     const events = new Map();
     if (stage === 'marketing') {
@@ -141,21 +142,28 @@ export function dailyStageActivity(leads, stage, month, today, range = null) {
       const meetings = Array.isArray(lead.crmMeetings) && lead.crmMeetings.length
         ? lead.crmMeetings : lead.crmMeeting ? [lead.crmMeeting] : [];
       for (const meeting of meetings) {
-        if (Number(meeting?.type) !== 1 || !meeting.startAt) continue;
-        const raw = String(meeting.startAt);
+        if (Number(meeting?.type ?? meeting?.mr_type) !== 1 || !(meeting.startAt || meeting.start_dt)) continue;
+        if (meeting.deleted === true || meeting.cancelled === true) continue;
+        const raw = String(meeting.startAt || meeting.start_dt);
         const parsed = new Date(/[T ]/.test(raw) && !/(Z|[+-]\d{2}:?\d{2})$/i.test(raw) ? raw.replace(' ', 'T') + '+09:00' : raw);
         const date = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw
           : Number.isNaN(parsed.getTime()) ? '' : new Date(parsed.getTime() + 9 * 3600000).toISOString().slice(0, 10);
-        if (!date) continue;
-        // Multiple calendar entries for one company on one day count as one visit.
-        events.set(date, events.get(date) === true || Number(meeting.checked) === 1);
+        if (!date || date > today || !inRange(date, range)) continue;
+        const identity = meeting.msNo ?? meeting.ms_no;
+        const key = identity != null && identity !== ''
+          ? 'crm:' + identity : 'legacy:' + (lead.projNo || lead.id || '') + ':' + parsed.getTime();
+        if (seenMeetings.has(key)) continue;
+        seenMeetings.add(key);
+        const day = byDate.get(date);
+        if (!day) continue;
+        const completed = Number(meeting.checked ?? meeting.mr_checked) === 1;
+        day.entries.push({ lead, meeting, completed });
+        day.count += 1;
+        if (completed) day.completed += 1;
+        else day.unconfirmed += 1;
       }
-      if (!events.size) {
-        const doneDate = String(lead.premeetingDoneAt || '').slice(0, 10);
-        const meetingDate = String(lead.premeetingAt || lead.bookedAt || '').slice(0, 10);
-        const completed = !!doneDate || ['프리미팅 완료', '견적·제안 발송', '계약 완료'].includes(lead.status);
-        if (doneDate || meetingDate) events.set(doneDate || meetingDate, completed);
-      }
+      // CRM-only schedule counts: never invent events from lead status or manual dates.
+      continue;
     }
     for (const [date, completed] of events) {
       const day = byDate.get(date);
