@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { crmCalendar } from "../_shared/crm-calendar.mjs";
+import { verifyCalendarConsistency } from '../_shared/calendar-consistency.mjs';
 import { authorizeEmployee, canEmployeeAct, mutationPermission } from "../_shared/employee-access.mjs";
 import { canAccessAction, isPremeetingOnly, isPremeetingLead, premeetingDocuments, validatePremeetingMutation } from "../_shared/premeeting-access.mjs";
 import { RECEIVABLES_WRITE_PROFILE, RECEIVABLES_WRITE_PAGES, validateReceivablesMutation } from "../_shared/receivables-access.mjs";
@@ -270,7 +271,11 @@ Deno.serve(async (req) => {
       if ((result.data || []).length < 500) break;
       if (offset >= 49500) { calendarError = 'crm_calendar_limit_exceeded'; break; }
     }
-    return reply(req, { ok: true, leads, calendar: calendarError ? null : crmCalendar(rawMeetings), calendarError,
+    const calendar = calendarError ? null : crmCalendar(rawMeetings);
+    const today = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
+    const calendarVerification = calendarError ? null : verifyCalendarConsistency(rawMeetings, {
+      start: '2026-09-30', end: today, today, calendar });
+    return reply(req, { ok: true, leads, calendar, calendarError, calendarVerification,
       revision: data?.[0]?.projected_revision || "" });
   }
 

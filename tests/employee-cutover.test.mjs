@@ -7,9 +7,11 @@ import { createHmac } from 'node:crypto';
 import { authorizeEmployee, canEmployeeAct, mutationPermission } from '../supabase/functions/_shared/employee-access.mjs';
 import * as scopeAccess from '../supabase/functions/_shared/premeeting-access.mjs';
 import * as receivablesAccess from '../supabase/functions/_shared/receivables-access.mjs';
+import { crmCalendar } from '../supabase/functions/_shared/crm-calendar.mjs';
+import { verifyCalendarConsistency } from '../supabase/functions/_shared/calendar-consistency.mjs';
 const domain = readFileSync(new URL('../supabase/functions/kpi-domain-api/index.ts', import.meta.url), 'utf8');
 const gs = readFileSync(new URL('../../pocket-kpi-deploy/Code.gs', import.meta.url), 'utf8');
-function handler(role, user = true, scope = 'all', grant = null, current = null) {
+function handler(role, user = true, scope = 'all', grant = null, current = null, rawRecords = []) {
   let callback, writes = 0;
   const member = { organization_id: 'org', user_id: 'user', role, state: 'ACTIVE', archived_at: null, access_scope: scope };
   const client = {
@@ -17,11 +19,14 @@ function handler(role, user = true, scope = 'all', grant = null, current = null)
     rpc: async (name) => { if (name !== 'kpi_claim_employee_invitation') writes++; return { data: { ok: true } }; },
     from: (table) => {
       const query = { select: () => query, eq: () => query, maybeSingle: async () => ({ data: table === 'organization_memberships' ? member : table === 'employee_write_grants' ? grant : current }) };
-      assert.ok(['organization_memberships','employee_write_grants','app_current_state'].includes(table)); return query;
+      Object.assign(query, {is:()=>query, order:()=>query,
+        range:async (start,end)=>({data:rawRecords?.slice(start,end+1)||[],error:rawRecords===null?{code:'TEST'}:null}),
+        then:(resolve,reject)=>Promise.resolve({data:[],error:null}).then(resolve,reject)});
+      assert.ok(['organization_memberships','employee_write_grants','app_current_state','leads','crm_raw_records'].includes(table)); return query;
     },
   };
   const source = stripTypeScriptTypes(domain.replace(/^import .*;\r?\n/gm, ''), { mode: 'transform' });
-  vm.runInNewContext(source, { createClient: () => client, authorizeEmployee, canEmployeeAct, mutationPermission, ...scopeAccess, ...receivablesAccess,
+  vm.runInNewContext(source, { createClient: () => client, authorizeEmployee, canEmployeeAct, mutationPermission, ...scopeAccess, ...receivablesAccess, crmCalendar, verifyCalendarConsistency,
     URL, Request, Response, TextEncoder, AbortSignal, crypto: globalThis.crypto,
     Deno: { env: { get: (key) => key === 'KPI_ORGANIZATION_ID' ? 'org' : 'test-only' }, serve: (fn) => { callback = fn; } } });
   return { call: (action, body = {}) => callback(new Request('https://example.invalid', { method: 'POST', headers: { authorization: 'Bearer synthetic-session', 'content-type': 'application/json' }, body: JSON.stringify({ action, ...body }) })), writes: () => writes };
@@ -30,6 +35,22 @@ test('real handler denies invalid sessions before data read/write', async () => 
   const h = handler('ADMIN', false);
   for (const action of ['crm', 'mutation', 'sheet_bridge', 'employees']) assert.equal((await h.call(action)).status, 401);
   assert.equal(h.writes(), 0);
+});
+
+test('authorized CRM response contains same-snapshot count verification, never raw notes, and fails unknown on read error', async () => {
+  const records=Array.from({length:29},(_,i)=>({id:i+1,external_id:String(i+1),last_seen_at:'2026-10-14T00:00:00Z',
+    payload:{mr_type:1,start_dt:'2026-10-08T10:00:00+09:00',note:'synthetic-private-note'}}));
+  const h=handler('ADMIN',true,'all',null,null,records);
+  const response=await h.call('crm'); assert.equal(response.status,200);
+  const body=await response.json();
+  assert.equal(body.calendar.length,29); assert.equal(body.calendarVerification.verified,true);
+  assert.equal(body.calendarVerification.source.total,29);
+  assert.equal(body.calendarVerification.screen.daily['2026-10-08'],29);
+  assert.ok(!JSON.stringify(body).includes('synthetic-private-note'));
+  assert.equal(h.writes(),0);
+  const bad=await (await handler('ADMIN',true,'all',null,null,null).call('crm')).json();
+  assert.equal(bad.calendar,null); assert.equal(bad.calendarVerification,null);
+  assert.equal(bad.calendarError,'crm_calendar_read_failed');
 });
 test('limited employee cannot request other business pages or privileged actions', async () => {
   const h = handler('EDITOR', true, 'premeeting');

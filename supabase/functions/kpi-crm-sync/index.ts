@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
+import { verifyCalendarConsistency } from '../_shared/calendar-consistency.mjs';
 
 const encoder = new TextEncoder();
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
@@ -120,6 +121,20 @@ Deno.serve(async (req) => {
     if (expectedMeetings.size !== storedMeetings.size || [...expectedMeetings].some(key => !storedMeetings.has(key))) throw new Error('calendar_storage_mismatch');
     calendar = { verified: true, source: 'crm_raw_records', collected: expectedMeetings.size, stored: storedMeetings.size,
       start, end, completedAt: new Date().toISOString() };
+    // Existing daily job: recheck the full reporting window, not only today's feed.
+    const allMeetings: any[] = [];
+    for (let offset = 0; ; offset += 500) {
+      const result = await supabase.from('crm_raw_records').select('id,external_id,last_seen_at,payload')
+        .eq('organization_id', organizationId).eq('record_type', 'MEETING').order('id').range(offset, offset + 499);
+      if (result.error) throw new Error('calendar_aggregation_read_failed');
+      allMeetings.push(...(result.data || []));
+      if ((result.data || []).length < 500) break;
+      if (offset >= 49500) throw new Error('calendar_aggregation_read_failed');
+    }
+    const today = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
+    calendar.aggregation = { ...verifyCalendarConsistency(allMeetings, {
+      start: '2026-09-30', end: today, today }), completedAt: new Date().toISOString() };
+    if (!calendar.aggregation.verified) throw new Error('calendar_aggregation_mismatch');
     // Catch up previously collected but unapplied rows even when today's feed is empty.
     // Keep the daily CRM request window unchanged; this reconciliation reads Supabase only.
     const { data: inflow, error: inflowError } = await supabase.rpc("kpi_reconcile_crm_inflow", {
@@ -139,7 +154,7 @@ Deno.serve(async (req) => {
     return json({ ok: true, start, end, leads: leadRows, meetings: meetingRows, inflow, calendar, fetchedAt: completedAt, syncRunId: run.id, readBackend: "supabase-edge" });
   } catch (error) {
     const detail = String(error instanceof Error ? error.message : error);
-    const message = /^(crm_http_\d+_\d+|raw_upsert_[a-zA-Z0-9]+|crm_response_invalid|inflow_reconcile_failed|inflow_identity_blocked|sync_completion_failed|calendar_verify_failed|calendar_storage_mismatch)$/.test(detail)
+    const message = /^(crm_http_\d+_\d+|raw_upsert_[a-zA-Z0-9]+|crm_response_invalid|inflow_reconcile_failed|inflow_identity_blocked|sync_completion_failed|calendar_verify_failed|calendar_storage_mismatch|calendar_aggregation_read_failed|calendar_aggregation_mismatch)$/.test(detail)
       ? detail : "crm_sync_internal_error";
     await supabase.from("crm_sync_runs").update({ status: "FAILED", error_code: message.slice(0, 200), completed_at: new Date().toISOString(), ...(calendar ? { inflow_result: { calendar } } : {}) }).eq("id", run.id);
     return json({ error: "crm_sync_failed", message }, 502);

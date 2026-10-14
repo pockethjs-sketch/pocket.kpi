@@ -2,6 +2,7 @@ import { MetricIcon, StageIcon } from "./components/MetricIcon.jsx";
 import { connectionPresentation } from "./data/connectionPresentation.js";
 import { leadDisplayName } from "./data/leadDisplayName.js";
 import { calendarActivityLeads, calendarPeriodEntries } from "./data/calendarActivity.js";
+import { CalendarConsistencyNotice } from './components/CalendarConsistencyNotice.jsx';
 import "./design.css";
 import "./styles.css";
 import { ExcelExportProvider, ExcelExportButton, useExcelExport } from './ExcelExport.jsx';
@@ -295,6 +296,7 @@ const isScopedReceivablesWriter = () => window.kpiEmployeeAccess?.writeProfile =
       var calendarPayload = await crmFetchDomainAction('crm', { timeoutMs: 25000 });
       window.crmCalendarSchedules = calendarPayload.calendar;
       window.crmCalendarError = calendarPayload.calendarError || '';
+      window.crmCalendarVerification = calendarPayload.calendarVerification || null;
       await marketingPromise;
       window.crmRemoteLoaded = true; window.crmRemoteError = '';
       window.crmLastRemoteValue = localStateText; window.crmOptimisticRemoteValue = localStateText;
@@ -309,6 +311,7 @@ const isScopedReceivablesWriter = () => window.kpiEmployeeAccess?.writeProfile =
     var assembled = Object.assign({}, results[0].documents || {}, { leads: results[1].leads || [] });
     window.crmCalendarSchedules = results[1].calendar;
     window.crmCalendarError = results[1].calendarError || '';
+    window.crmCalendarVerification = results[1].calendarVerification || null;
     assembled.adSpend = window.sheetMarketingSpend || {};
     assembled.adDaily = window.sheetMarketingDaily || { META: [], NAVER: [], GOOGLE: [] };
     assembled.adSpendMeta = window.sheetMarketingMeta || {};
@@ -6492,6 +6495,7 @@ useExcelExport(() => [excelTable('통합 성과', ['지표', '값', '단위'], [
   return (
     <div className="space-y-5">
       <SecTitle icon={Target} title="통합 성과 체크" sub={pLabel(period) + " 유입 DB 코호트가 마케팅 → 프리미팅 → 계약의 목표 전환과 비용 기준을 지키는지 확인합니다."} />
+      <CalendarConsistencyNotice report={window.crmCalendarVerification} count={preCount} range={r} today={todayISO()} customerType={customerType} />
       <div className="flex flex-wrap items-center justify-between gap-2 -mt-2">
 
         <div className="inline-flex items-center rounded-md border border-slate-200 bg-white p-0.5 shadow-sm" aria-label="고객 유형 필터">
@@ -6642,6 +6646,7 @@ useExcelExport(() => [excelTable('통합 성과', ['지표', '값', '단위'], [
                     {period.mode === "range" && <p className="mt-2 text-[11px] text-amber-700">선택 기간 밖의 날짜는 0건으로 표시됩니다.</p>}
                     {metricStage.id === "pre" && <div className="mt-3 flex flex-wrap gap-3 text-[11px]"><span className="font-bold text-indigo-600">━ CRM 프리미팅 일정 전체</span><span className="text-slate-400">오늘까지 · 방문 체크·영업 단계 무관 · CRM 일정 ID별 집계 · 수동 등록 제외 · 그래프는 주말 제외</span><span className="text-slate-500">주말 포함 전체 {dailyCounts.reduce((sum, day) => sum + day.count, 0)}건</span></div>}
                     {metricStage.id === 'pre' && !calendarReady ? <p className="py-8 text-center text-sm text-rose-600">CRM 일정 조회 미완료 · 새로고침이 필요합니다. 0건으로 집계하지 않습니다.</p> : <DailyActivityChart days={weekdayCounts} stage={metricStage.id} label={selectedDailyMonth + " " + dailyMetricLabel} selectedDate={selectedActivityDay?.date} onSelect={setDailyChartDate} />}
+                    {metricStage.id === 'pre' && <CalendarConsistencyNotice report={window.crmCalendarVerification} count={preCount} range={r} today={todayISO()} customerType={customerType} days={dailyCounts} month={selectedDailyMonth} />}
                     {metricStage.id === "marketing" && <LeadRevenueQuality leads={dailyCounts.flatMap(day => day.entries.map(entry => entry.lead))} label={selectedDailyMonth + (period.mode === "range" ? " 선택 범위" : " 월 전체") + " · " + customerType} dayLeads={selectedActivityDay?.entries.map(entry => entry.lead) || []} dayLabel={selectedActivityDay?.date} />}
                     <p className="mt-2 text-[10px] text-slate-400">점이나 날짜를 누르면 해당 일자를 확인합니다. 현재 월은 오늘까지, 토·일은 제외합니다. 주말 실적은 삭제하지 않으며 월간 합계·전일 대비에는 포함됩니다.{metricStage.id === "pre" && " 카드·그래프·비용·증감은 모두 CRM 일정 ID별 건수 기준입니다."}</p>
                     {selectedActivityDay && <div className="mt-4 border-t border-slate-100 pt-3">
@@ -6871,6 +6876,7 @@ function MarketingHubView() {
     <div className="space-y-4">
       <SecTitle icon={Megaphone} title="마케팅 총괄" sub={pLabel(period) + " 유입 DB를 기준으로 채널 효율과 프리미팅·결제 전환을 한 화면에서 봅니다."}
         right={<div className="flex gap-2"><Btn size="xs" onClick={() => go("leads")}>유입 DB</Btn><Btn size="xs" kind="primary" onClick={() => go("marketing")}>채널 상세</Btn></div>} />
+      <CalendarConsistencyNotice report={window.crmCalendarVerification} count={hubCalendarEntries?.length ?? null} range={r} today={todayISO()} />
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
         <button className="text-left" onClick={() => go("leads")}><StatBig label="유입 DB" value={leads.length} unit="건" accent="border-sky-500" sub={totalCpl == null ? "아직 데이터가 없다" : "CPL " + fmtK(totalCpl) + "원"} /></button>
         <button className="text-left" onClick={() => go("premeetingHub")}><StatBig label="프리미팅" value={hubCalendarEntries == null ? "조회 미확인" : periodMeetings.length} unit="건" accent="border-indigo-500" sub="CRM 일정 ID별 · 오늘까지 · 통합 성과와 동일 기준" /></button>

@@ -25,6 +25,7 @@ function render(spend = 2500000, calendar = [], today = '2026-10-07') {
     Card:({children,cls})=>React.createElement('div',{className:cls},children),
     StatBig:({label,value,sub})=>React.createElement('section',null,React.createElement('h3',null,label),React.createElement('b',null,value),React.createElement('p',null,sub)),
     SecTitle:()=>null, Btn:({children})=>React.createElement('button',null,children),
+    CalendarConsistencyNotice:()=>null,
     Modal:()=>null, Empty:()=>null, Megaphone:()=>null, ExternalLink:()=>null, ChannelRoasDetails:()=>null,
   };
   const Component = new Function(...Object.keys(scope),code+'; return MarketingHubView;')(...Object.values(scope));
