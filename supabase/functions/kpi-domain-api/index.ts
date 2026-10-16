@@ -33,15 +33,31 @@ function reply(req: Request, body: unknown, status = 200) {
 const number = (value: unknown) => Number(value || 0);
 const monthKey = (date: string) => String(date || "").slice(0, 7);
 
-async function readScopeLeads(client: any, org: string, includeArchived = false) {
+async function readScopeLeads(client: any, org: string, includeArchived = false, verifyComplete = false) {
   const rows: any[] = [];
+  let expectedCount: number | null = null;
+  let revision: string | null = null;
   for (let offset = 0; offset < 50000; offset += 500) {
-    let query = client.from('leads').select('source_payload,projected_revision,archived_at').eq('organization_id', org);
+    let query = client.from('leads').select('source_payload,projected_revision,archived_at', verifyComplete ? { count: 'exact' } : undefined).eq('organization_id', org);
     if (!includeArchived) query = query.is('archived_at', null);
-    const { data, error } = await query.order('id').range(offset, offset + 499);
+    if (verifyComplete) query = query.order('created_at', { ascending: true });
+    const { data, error, count } = await query.order('id').range(offset, offset + 499);
     if (error) return { data: null, error };
+    if (verifyComplete) {
+      if (!Number.isInteger(count) || count < 0) return { data: null, error: { code: 'crm_count_unavailable' } };
+      if (expectedCount !== null && expectedCount !== count) return { data: null, error: { code: 'crm_read_changed' } };
+      expectedCount = count;
+      for (const row of data || []) {
+        if (revision === null) revision = row.projected_revision;
+        if (!revision || row.projected_revision !== revision) return { data: null, error: { code: 'crm_read_changed' } };
+      }
+    }
     rows.push(...(data || []));
-    if ((data || []).length < 500) return { data: rows, error: null };
+    if (verifyComplete && rows.length === expectedCount) return { data: rows, error: null };
+    if ((data || []).length < 500) {
+      if (verifyComplete && rows.length !== expectedCount) return { data: null, error: { code: 'crm_read_incomplete' } };
+      return { data: rows, error: null };
+    }
   }
   return { data: null, error: { code: 'scope_limit_exceeded' } };
 }
@@ -256,8 +272,12 @@ Deno.serve(async (req) => {
       if (error) return reply(req, { error: 'scope_read_failed' }, 503);
       return reply(req, { ok: true, leads: data!.map(r => r.source_payload).filter(isPremeetingLead), revision: data?.[0]?.projected_revision || '' });
     }
-    const { data, error } = await supabase.from("leads").select("source_payload,projected_revision")
-      .eq("organization_id", organizationId).is("archived_at", null).order("created_at", { ascending: true });
+    // Never rely on PostgREST's default max_rows: new companies are beyond row1000.
+    let read = await readScopeLeads(supabase, organizationId, false, true);
+    for (let attempt = 1; read.error?.code === 'crm_read_changed' && attempt < 3; attempt++) {
+      read = await readScopeLeads(supabase, organizationId, false, true);
+    }
+    const { data, error } = read;
     if (error) return reply(req, { error: "crm_read_failed", code: error.code }, 500);
     const leads = (data || []).map(row => row.source_payload);
     const rawMeetings: any[] = [];
@@ -275,7 +295,7 @@ Deno.serve(async (req) => {
     const today = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
     const calendarVerification = calendarError ? null : verifyCalendarConsistency(rawMeetings, {
       start: '2026-09-30', end: today, today, calendar });
-    return reply(req, { ok: true, leads, calendar, calendarError, calendarVerification,
+    return reply(req, { ok: true, leads, leadReadVerification: { verified: true, count: leads.length }, calendar, calendarError, calendarVerification,
       revision: data?.[0]?.projected_revision || "" });
   }
 

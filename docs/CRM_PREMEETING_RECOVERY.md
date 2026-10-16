@@ -1,5 +1,21 @@
 # CRM company-list persistence and calendar refresh — 2026-10-16
 
+## Follow-up: normal employee CRM read silently capped at1000 (release pending)
+
+- October15 raw3 and eligible relational/snapshot records3 match. Normal `action=crm`
+  still used an unpaginated PostgREST read ordered by creation time. Active rows1034;
+  these targets rank1028/1030/1032 and therefore sit beyond the default1000 result cap.
+  The earlier DB recovery did not verify this API-read completeness; it was not a
+  successful employee-screen test. The restricted-scope branch was already paginated.
+- Use explicit500-row pages with original creation order plus ID tie-break. Compare
+  exact count, revisions and assembled length; retry a bounded mixed-snapshot read,
+  reject partial/error/count mismatch, and emit metadata-only leadReadVerification.
+  Same-revision browser cache is rebuilt when its lead count differs from verified
+  API count, so the retired1000-row cache cannot remain merely because revision matches.
+- No business writes, collection, permission/RLS/Auth or global API-limit change.
+  Tests exercise actual ADMIN/VIEWER handler1034 rows, missing middle page, revision/count
+  changes, server truncation, exact boundaries and same-revision1000-cache recovery.
+
 ## Cause and scope
 
 Raw collection/inflow continued on Oct14–16. The operational company projection did not:

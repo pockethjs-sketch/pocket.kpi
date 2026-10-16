@@ -12,7 +12,7 @@ import { verifyCalendarConsistency } from '../supabase/functions/_shared/calenda
 import { operationsFile, missingOperationsSource } from './operations-file.mjs';
 const domain = readFileSync(new URL('../supabase/functions/kpi-domain-api/index.ts', import.meta.url), 'utf8');
 const gs = operationsFile('Code.gs');
-function handler(role, user = true, scope = 'all', grant = null, current = null, rawRecords = []) {
+function handler(role, user = true, scope = 'all', grant = null, current = null, rawRecords = [], leadRows = [], leadReadError = false) {
   let callback, writes = 0;
   const member = { organization_id: 'org', user_id: 'user', role, state: 'ACTIVE', archived_at: null, access_scope: scope };
   const client = {
@@ -21,7 +21,9 @@ function handler(role, user = true, scope = 'all', grant = null, current = null,
     from: (table) => {
       const query = { select: () => query, eq: () => query, maybeSingle: async () => ({ data: table === 'organization_memberships' ? member : table === 'employee_write_grants' ? grant : current }) };
       Object.assign(query, {is:()=>query, order:()=>query,
-        range:async (start,end)=>({data:rawRecords?.slice(start,end+1)||[],error:rawRecords===null?{code:'TEST'}:null}),
+        range:async (start,end)=>table==='leads'
+          ? {data:leadRows.slice(start,end+1),count:leadRows.length,error:leadReadError&&start>=500?{code:'TEST'}:null}
+          : {data:rawRecords?.slice(start,end+1)||[],error:rawRecords===null?{code:'TEST'}:null},
         then:(resolve,reject)=>Promise.resolve({data:[],error:null}).then(resolve,reject)});
       assert.ok(['organization_memberships','employee_write_grants','app_current_state','leads','crm_raw_records'].includes(table)); return query;
     },
@@ -36,6 +38,19 @@ test('real handler denies invalid sessions before data read/write', async () => 
   const h = handler('ADMIN', false);
   for (const action of ['crm', 'mutation', 'sheet_bridge', 'employees']) assert.equal((await h.call(action)).status, 401);
   assert.equal(h.writes(), 0);
+});
+
+test('actual employee CRM response includes the October15 companies beyond1000 and count verification',async()=>{
+  const rows=Array.from({length:1034},(_,i)=>({source_payload:{id:'synthetic-'+i,status:i>=1000?'프리미팅 완료':'신규 DB',
+    crmMeetings:i>=1000?[{msNo:i,type:1,startAt:'2026-10-15T10:00:00+09:00'}]:[]},projected_revision:'synthetic-rev'}));
+  for(const role of ['ADMIN','VIEWER']) {
+    const h=handler(role,true,'all',null,null,[],rows);
+    const r=await h.call('crm');assert.equal(r.status,200);const body=await r.json();
+    assert.equal(body.leads.length,1034);assert.equal(body.leads[1032].id,'synthetic-1032');
+    assert.deepEqual(body.leadReadVerification,{verified:true,count:1034});assert.equal(h.writes(),0);
+  }
+  const bad=await handler('ADMIN',true,'all',null,null,[],rows,true).call('crm');
+  assert.equal(bad.status,500);assert.equal((await bad.json()).leads,undefined);
 });
 
 test('authorized CRM response contains same-snapshot count verification, never raw notes, and fails unknown on read error', async () => {

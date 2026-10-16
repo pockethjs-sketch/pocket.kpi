@@ -298,6 +298,13 @@ const isScopedReceivablesWriter = () => window.kpiEmployeeAccess?.writeProfile =
     var unchanged = !!(localStateText && cachedRevision && !localDirty && meta.revision && cachedRevision === meta.revision);
     if (unchanged) {
       var calendarPayload = await crmFetchDomainAction('crm', { timeoutMs: 25000 });
+      // A same-revision cache may have been built from the retired1000-row read.
+      // Never keep that truncated cache merely because its revision still matches.
+      var cachedLeadCount = -1;
+      try { cachedLeadCount = JSON.parse(localStateText).leads.length; } catch (e) {}
+      if (calendarPayload.leadReadVerification?.verified && calendarPayload.leadReadVerification.count !== cachedLeadCount) unchanged = false;
+    }
+    if (unchanged) {
       window.crmCalendarSchedules = calendarPayload.calendar;
       window.crmCalendarError = calendarPayload.calendarError || '';
       window.crmCalendarVerification = calendarPayload.calendarVerification || null;
