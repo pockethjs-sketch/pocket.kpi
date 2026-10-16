@@ -1,6 +1,6 @@
 # CRM company-list persistence and calendar refresh — 2026-10-16
 
-## Follow-up: normal employee CRM read silently capped at1000 (release pending)
+## Follow-up: normal employee CRM read silently capped at1000 (deployed)
 
 - October15 raw3 and eligible relational/snapshot records3 match. Normal `action=crm`
   still used an unpaginated PostgREST read ordered by creation time. Active rows1034;
@@ -15,6 +15,12 @@
 - No business writes, collection, permission/RLS/Auth or global API-limit change.
   Tests exercise actual ADMIN/VIEWER handler1034 rows, missing middle page, revision/count
   changes, server truncation, exact boundaries and same-revision1000-cache recovery.
+- Domain18ACTIVE/JWTtrue, all8 remote source files match, unauthenticated CRM401.
+  Webe4cfd0302fb1a81aa56e1703e6542fad3c310231 / Actions38850424835 both jobs success;
+  index-dR3IPDqB.js/main-WKNc-xKe.js200 and cache repair present.320tests/security/build
+  pass, audit0. Relational/snapshot1034 and primary revision unchanged by this release.
+  No actual employee credential/API-response/DOM observation was performed. The earlier
+  seven historical visit-check differences remain pending, not silently overwritten.
 
 ## Cause and scope
 
