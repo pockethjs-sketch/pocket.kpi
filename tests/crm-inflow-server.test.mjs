@@ -8,7 +8,7 @@ import { verifyCalendarConsistency } from '../supabase/functions/_shared/calenda
 
 const source = readFileSync(new URL('../supabase/functions/kpi-crm-sync/index.ts', import.meta.url), 'utf8');
 const js = stripTypeScriptTypes(source.replace(/^import .*\r?\n/gm, ''));
-function harness({ leads = [], meetings = [], calendarMismatch = false, aggregationMismatch = false, aggregationReadError = false, rpcError = false, blocked = false, completionError = false, invalid = false, rawError = false } = {}) {
+function harness({ leads = [], meetings = [], daily = false, projectionError = false, projectionMismatch = false, calendarMismatch = false, aggregationMismatch = false, aggregationReadError = false, rpcError = false, blocked = false, completionError = false, invalid = false, rawError = false } = {}) {
   const calls = []; let handler;
   let rawRows = [];
   const client = {
@@ -21,6 +21,10 @@ function harness({ leads = [], meetings = [], calendarMismatch = false, aggregat
       update(value) { return { async eq() { calls.push(value.status); return {error:completionError && value.status==='COMPLETED' ? {code:'TEST'} : null}; } }; },
     }; },
     async rpc(name,args) {
+      if(name==='kpi_reconcile_crm_premeetings') {
+        calls.push('companyProjection'); assert.equal(args.p_start,'2026-10-05');assert.equal(args.p_end,'2026-10-07');assert.equal(args.p_dry_run,false);
+        return {data:{ok:true,verified:!projectionMismatch,blocked:0,stored:meetings.length},error:projectionError ? {code:'TEST'} : null};
+      }
       calls.push('promote'); assert.equal(name,'kpi_reconcile_crm_inflow');
       assert.equal(args.p_dry_run,false); assert.equal(args.p_start,'2026-09-30');
       return {data:{ok:!blocked,blocked:blocked ? 1 : 0,added:leads.length},error:rpcError ? {code:'TEST'} : null};
@@ -28,12 +32,34 @@ function harness({ leads = [], meetings = [], calendarMismatch = false, aggregat
   };
   vm.runInNewContext(js, {
     TextEncoder, Response, crypto:webcrypto, createClient:()=>client,
+    Date:class extends Date {constructor(...args){super(...(args.length ? args : ['2026-10-07T01:00:00Z']));}static now(){return Date.parse('2026-10-07T01:00:00Z');}},
     verifyCalendarConsistency: (raw, options) => ({...verifyCalendarConsistency(raw, options), ...(aggregationMismatch ? {verified:false} : {})}),
-    Deno:{env:{get:name=>({SUPABASE_SERVICE_ROLE_KEY:'synthetic-only',CRM_BEARER_TOKEN:'synthetic-provider',KPI_ORGANIZATION_ID:'synthetic-org',SUPABASE_URL:'https://example.invalid'})[name]},serve:fn=>{handler=fn;}},
+    Deno:{env:{get:name=>({KPI_SHADOW_HMAC_SECRET:'synthetic-hmac-only',SUPABASE_SERVICE_ROLE_KEY:'synthetic-only',CRM_BEARER_TOKEN:'synthetic-provider',KPI_ORGANIZATION_ID:'synthetic-org',SUPABASE_URL:'https://example.invalid'})[name]},serve:fn=>{handler=fn;}},
     fetch:async url=>new Response(JSON.stringify(url.includes('newarrivals') ? invalid ? {error:'bad'} : leads : meetings)),
   });
-  return {calls, invoke:()=>handler(new Request('https://example.invalid',{method:'POST',headers:{authorization:'Bearer synthetic-only'},body:JSON.stringify({start:'2026-10-05',end:'2026-10-07'})})), handler};
+  return {calls, invoke:async()=>{
+    const body=JSON.stringify({start:'2026-10-05',end:'2026-10-07'});
+    const headers={authorization:'Bearer synthetic-only'};
+    if(daily){
+      delete headers.authorization;
+      headers['x-kpi-timestamp']=String(Date.parse('2026-10-07T01:00:00Z'));
+      const key=await webcrypto.subtle.importKey('raw',new TextEncoder().encode('synthetic-hmac-only'),{name:'HMAC',hash:'SHA-256'},false,['sign']);
+      headers['x-kpi-signature']=Buffer.from(await webcrypto.subtle.sign('HMAC',key,new TextEncoder().encode(headers['x-kpi-timestamp']+'.'+body))).toString('hex');
+    }
+    return handler(new Request('https://example.invalid',{method:'POST',headers,body}));
+  }, handler};
 }
+
+test('daily HMAC collection cannot complete before company-list projection verification',async()=>{
+  const h=harness({daily:true});const r=await h.invoke();assert.equal(r.status,200);
+  assert.deepEqual(h.calls,['calendar','aggregation','promote','companyProjection','COMPLETED']);
+  assert.equal((await r.json()).calendar.companyProjection.verified,true);
+});
+for(const option of ['projectionError','projectionMismatch'])test(`daily collection fails after ${option}`,async()=>{
+  const h=harness({daily:true,[option]:true});const r=await h.invoke();assert.equal(r.status,502);
+  assert.ok(!h.calls.includes('COMPLETED'));assert.equal(h.calls.at(-1),'FAILED');
+  assert.match((await r.json()).message,/^premeeting_/);
+});
 test('server reconciles raw leads before recording collection success',async()=>{
   const h=harness({leads:[{client_no:1,proj_no:2,reg_dt:'2026-10-06T01:00:00Z'}]});
   const r=await h.invoke(); assert.equal(r.status,200); assert.deepEqual(h.calls,['raw','calendar','aggregation','promote','COMPLETED']);

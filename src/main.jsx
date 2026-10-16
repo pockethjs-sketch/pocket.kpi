@@ -176,10 +176,14 @@ const isScopedReceivablesWriter = () => window.kpiEmployeeAccess?.writeProfile =
         crmFetchDomainAction('crm', { timeoutMs: 25000 })
       ]);
       if (results[0].revision && results[0].revision === results[1].revision) {
-        return { revision: results[0].revision, state: Object.assign({}, results[0].documents, { leads: results[1].leads }) };
+        return { revision: results[0].revision, state: Object.assign({}, results[0].documents, { leads: results[1].leads }),
+          calendar: results[1].calendar, calendarError: results[1].calendarError || '', calendarVerification: results[1].calendarVerification || null };
       }
     }
     throw new Error('contract_state_revision_busy');
+  };
+  window.crmReadPrimaryRevision = async function () {
+    return (await crmFetchDomainAction('meta', { timeoutMs: 15000 })).revision;
   };
 
   function crmApplyRemoteEnvelope(payload) {
@@ -2322,6 +2326,10 @@ function useDB() {
         window.crmRemoteRevision = remote.revision;
         localStorage.setItem(CRM_REMOTE_REVISION_KEY, remote.revision);
         const merged = crmApplyMutationLocal(fresh, localChanges);
+        // Calendar is an independent read model, never part of the saved business snapshot.
+        window.crmCalendarSchedules = remote.calendar;
+        window.crmCalendarError = remote.calendarError || '';
+        window.crmCalendarVerification = remote.calendarVerification || null;
         clearTimeout(timer.current);
         latestDbRef.current = merged;
         skip.current = true;
@@ -2337,7 +2345,30 @@ function useDB() {
       throw new Error('contract_state_revision_busy');
     };
     window.crmReloadAfterContractSync = refresh;
-    return () => { if (window.crmReloadAfterContractSync === refresh) delete window.crmReloadAfterContractSync; };
+    // Read-only freshness checks: no CRM collection, Sheets sync, or journal clearing.
+    let stopped = false, polling = false, lastPollAt = 0;
+    const poll = async () => {
+      if (stopped || polling || document.visibilityState !== 'visible' || !latestDbRef.current ||
+          !window.crmLastRemoteValue || Number(window.crmPendingRemoteSaves || 0) > 0 || Date.now() - lastPollAt < 60000) return;
+      polling = true; lastPollAt = Date.now();
+      try {
+        const revision = await window.crmReadPrimaryRevision();
+        if (stopped) return;
+        const today = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
+        if (revision !== window.crmRemoteRevision ||
+            (window.crmCalendarVerification?.asOf && window.crmCalendarVerification.asOf !== today)) await refresh();
+      } catch {
+        if (!stopped && Number(window.crmPendingRemoteSaves || 0) === 0) setSaveState('최신 데이터 조회 실패 · 기존 화면 유지');
+      } finally { polling = false; }
+    };
+    const interval = setInterval(poll, 5 * 60000);
+    document.addEventListener('visibilitychange', poll);
+    window.addEventListener('focus', poll);
+    return () => {
+      stopped = true; clearInterval(interval);
+      document.removeEventListener('visibilitychange', poll); window.removeEventListener('focus', poll);
+      if (window.crmReloadAfterContractSync === refresh) delete window.crmReloadAfterContractSync;
+    };
   }, []);
   useEffect(() => { (async () => {
     if (window.kpiEmployeeAccess?.scope === 'premeeting') {

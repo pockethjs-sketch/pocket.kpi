@@ -145,6 +145,17 @@ Deno.serve(async (req) => {
     });
     if (inflowError) throw new Error("inflow_reconcile_failed");
     if (!inflow?.ok || inflow.blocked > 0) throw new Error("inflow_identity_blocked");
+    // Existing Apps Script daily/manual premeeting path only. Broad employee
+    // crm_refresh/TM reads must not become historical company-list writers.
+    const recentStart = new Date(Date.parse(today + 'T00:00:00Z') - 2 * 86400000).toISOString().slice(0, 10);
+    if (!internalService && start === recentStart && end === today) {
+      const { data: projection, error } = await supabase.rpc('kpi_reconcile_crm_premeetings', {
+        p_organization_id: organizationId, p_start: start, p_end: end, p_dry_run: false,
+      });
+      if (error) throw new Error('premeeting_reconcile_failed');
+      calendar.companyProjection = projection;
+      if (!projection?.ok || !projection.verified || projection.blocked > 0) throw new Error('premeeting_projection_mismatch');
+    }
     const completedAt = new Date().toISOString();
     const { error: completeError } = await supabase.from("crm_sync_runs").update({
       status: "COMPLETED", lead_count: leadRows.length, meeting_count: meetingRows.length,
@@ -154,7 +165,7 @@ Deno.serve(async (req) => {
     return json({ ok: true, start, end, leads: leadRows, meetings: meetingRows, inflow, calendar, fetchedAt: completedAt, syncRunId: run.id, readBackend: "supabase-edge" });
   } catch (error) {
     const detail = String(error instanceof Error ? error.message : error);
-    const message = /^(crm_http_\d+_\d+|raw_upsert_[a-zA-Z0-9]+|crm_response_invalid|inflow_reconcile_failed|inflow_identity_blocked|sync_completion_failed|calendar_verify_failed|calendar_storage_mismatch|calendar_aggregation_read_failed|calendar_aggregation_mismatch)$/.test(detail)
+    const message = /^(crm_http_\d+_\d+|raw_upsert_[a-zA-Z0-9]+|crm_response_invalid|inflow_reconcile_failed|inflow_identity_blocked|sync_completion_failed|calendar_verify_failed|calendar_storage_mismatch|calendar_aggregation_read_failed|calendar_aggregation_mismatch|premeeting_reconcile_failed|premeeting_projection_mismatch)$/.test(detail)
       ? detail : "crm_sync_internal_error";
     await supabase.from("crm_sync_runs").update({ status: "FAILED", error_code: message.slice(0, 200), completed_at: new Date().toISOString(), ...(calendar ? { inflow_result: { calendar } } : {}) }).eq("id", run.id);
     return json({ error: "crm_sync_failed", message }, 502);

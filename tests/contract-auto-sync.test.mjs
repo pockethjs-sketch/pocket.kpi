@@ -217,3 +217,51 @@ test('contract reload retries baseline races and does not acknowledge pending sa
   assert.equal(reads,2);assert.equal(s.status,undefined);
   assert.equal(s.latestDbRef.current.leads[0].grade,'상');
 });
+
+test('reload replaces independent calendar before rendering without persisting it',async()=>{
+  const {s,remote}=reloadHarness();
+  s.window.crmCalendarSchedules=[{msNo:'old'}];
+  s.window.crmCalendarError='old failure';
+  s.window.crmReadPrimaryContractState=async()=>({state:structuredClone(remote),revision:'new',
+    calendar:[{msNo:'new',type:1,startAt:'2026-10-16T00:00:00Z'}],calendarVerification:{verified:true},calendarError:''});
+  const original=s.setDb;
+  s.setDb=db=>{assert.equal(s.window.crmCalendarSchedules[0].msNo,'new');original(db);};
+  await s.refresh();
+  assert.equal(s.window.crmCalendarError,'');
+  assert.equal(s.window.crmCalendarVerification.verified,true);
+  assert.equal(s.saved.calendar,undefined);
+  assert.equal(s.saved.leads[0].grade,'상');
+});
+
+test('primary contract read returns calendar only from the accepted revision',async()=>{
+  const code=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8').replace(/\r/g,'');
+  const a=code.indexOf('  window.crmReadPrimaryContractState =');
+  const b=code.indexOf('\n\n  function crmApplyRemoteEnvelope',a);
+  let reads=0;
+  const s={window:{},crmFetchDomainAction:async action=>{
+    if(action==='bootstrap')return {revision:++reads===1?'old':'new',documents:{}};
+    return {revision:'new',leads:[],calendar:[{msNo:reads}],calendarVerification:{verified:true}};
+  }};
+  vm.runInNewContext(code.slice(a,b),s);
+  const r=await s.window.crmReadPrimaryContractState();
+  assert.equal(reads,2);assert.equal(r.calendar[0].msNo,2);
+  assert.equal(r.calendarVerification.verified,true);assert.equal(r.state.calendar,undefined);
+});
+
+test('visible-page freshness polling reads revisions, refreshes once, and cleans up without collecting CRM',async()=>{
+  const {s,remote}=reloadHarness();
+  const listeners=new Map();let poll,ms,reads=0,removed=0;
+  s.document={visibilityState:'visible',addEventListener:(k,f)=>listeners.set(k,f),removeEventListener:()=>{removed++;}};
+  s.window.addEventListener=(k,f)=>listeners.set(k,f);s.window.removeEventListener=()=>{removed++;};
+  s.setInterval=(f,n)=>{poll=f;ms=n;return 1;};s.clearInterval=()=>{removed++;};
+  s.window.crmRemoteRevision='old';s.window.crmReadPrimaryRevision=async()=>{reads++;return 'new';};
+  s.window.crmReadPrimaryContractState=async()=>({state:structuredClone(remote),revision:'new',calendar:[{msNo:42}],calendarVerification:{verified:true}});
+  const code=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8').replace(/\r/g,'');
+  const a=code.indexOf('  useEffect(() => {',code.indexOf('function useDB()'))+'  useEffect(() => {'.length;
+  const b=code.indexOf('  }, []);',a);
+  const cleanup=vm.runInContext('(function(){'+code.slice(a,b)+'})()',s);
+  assert.equal(ms,300000);assert.equal(reads,0);
+  await poll();assert.equal(reads,1);assert.equal(s.window.crmCalendarSchedules[0].msNo,42);
+  await listeners.get('focus')();assert.equal(reads,1);
+  cleanup();assert.equal(removed,3);await poll();assert.equal(reads,1);
+});

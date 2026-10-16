@@ -90,7 +90,7 @@ test('warning renders exact metadata differences; healthy view has no extra clut
 });
 test('wire up existing authorized reads, both actual views, daily verifier and graph before weekday hiding', () => {
   const main=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
-  assert.equal((main.match(/window.crmCalendarVerification =/g)||[]).length,2);
+  assert.equal((main.match(/window.crmCalendarVerification =/g)||[]).length,3);
   assert.match(main,/count=\{preCount\}[^\n]*days=\{dailyCounts\}/);
   assert.match(main,/count=\{hubCalendarEntries\?\.length \?\? null\}/);
   const sync=readFileSync(new URL('../supabase/functions/kpi-crm-sync/index.ts',import.meta.url),'utf8');
