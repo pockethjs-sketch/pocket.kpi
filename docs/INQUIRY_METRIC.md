@@ -1,5 +1,7 @@
 # Inquiry metric contract — 2026-10-16
 
+Production release: frontend `0cc4140`, GitHub Actions `38876479317` succeeded; live entry `index-BXHE033Z.js` and lazy CRM asset `main-BmZ5m_K-.js` HTTP200 include native META basis, source breakdown and daily source table. After release, the source API was reread at 08:53 UTC and October 11+103=114 was committed/reread again; all 16 dates and the 289-day model still agree, finance snapshot unchanged. Existing heartbeat `kpi` was updated in place with the inquiry source/daily/month/model checks; six-hour read-only monitoring and daily 09:00 collection schedules remain unchanged. First subsequent scheduled collector execution is not yet observed; actual employee browser/API response remains a separate unverified boundary.
+
 ## Canonical metric
 
 - Inquiry DB is website submissions plus native META lead submissions, not CRM customer registrations or project registrations. It is a submission count, not cross-source unique people/companies.
