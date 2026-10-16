@@ -42,3 +42,22 @@ so an already open graph retained its old in-memory calendar.
 - Actual employee browser remains unobserved. Raw/API/frontend-model verification
   is not represented as a successful authenticated DOM/browser test.
 - Deployment and committed recovery verification are recorded in the operations ledger.
+
+## Production outcome
+
+- Collector v15 ACTIVE, five source files match; invalid unauthenticated collector/domain
+  probes401. New RPC denies anon/authenticated EXECUTE and remains SECURITY INVOKER.
+- Committed recovery: Oct14–16 nine schedules (3new/6existing companies), followed by
+  Oct8–9 four schedules (1new/3existing). Each scoped transaction asserted all protected
+  fields/financial tuples and repeat no-op. All35 October schedule IDs now have eligible
+  company-list references, with matching KST days.
+- Remaining, NOT applied: Oct7 five and Oct13 two existing schedules have source visit
+  check1 but saved check0; one also differs in time within the same day. The attempted
+  whole-month update was rejected by automatic safety review as outside the approved
+  recovery scope. No bypass or partial workaround was used; explicit approval is needed.
+  A full-month dry-run therefore reports7 pending metadata updates, not7 absent IDs.
+- Web bdd70a7dd7c9f3c89865c6fa0858612a4998ff69, Actions38833542659 build/deploy success;
+  public index-BVHLJOt4.js/main-DGVWeblT.js200 and new refresh/read-poll code confirmed.
+  Final310 tests/security/build pass, audit0. Actual employee DOM and next09:00 run remain
+  unobserved. Existing6-hour monitor now also checks companyProjection and monthly
+  company reconciliation with p_dry_run=true only; no collection/repair was scheduled.
