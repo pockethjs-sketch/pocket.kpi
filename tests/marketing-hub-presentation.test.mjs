@@ -6,20 +6,26 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { transformWithOxc } from 'vite';
 import { contractRoasByType, contractRoasRows } from '../src/data/performanceMetrics.js';
 import { calendarPeriodEntries } from '../src/data/calendarActivity.js';
+import { buildInquiryReport, inquiryPeriod, inquiryReportOf } from '../src/data/inquiryMetrics.js';
+const componentSource = readFileSync(new URL('../src/components/InquiryBreakdown.jsx', import.meta.url),'utf8').replace(/^import .*\r?\n/gm,'').replace('export default ','');
+const componentCode = (await transformWithOxc(componentSource,'InquiryBreakdown.jsx',{jsx:{runtime:'classic'}})).code;
+const RealInquiryBreakdown = new Function('React',componentCode+';return InquiryBreakdown;')(React);
 
 const source = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
 const view = source.slice(source.indexOf('function MarketingHubView()'), source.indexOf('function PremeetingHubView()'));
 const { code } = await transformWithOxc(view, 'MarketingHubView.jsx', { jsx: { runtime: 'classic' } });
 const inR = (d, r) => !!d && d >= r[0] && d <= r[1];
-function render(spend = 2500000, calendar = [], today = '2026-10-07') {
+function render(spend = 2500000, calendar = [], today = '2026-10-07', inquiryReport = null, exported = null) {
   const db = { leads: [{ id:'synthetic-prior-inflow', createdAt:'2026-09-15', contractAt:'2026-10-02', status:'계약 완료', contractAmount:11000000, paid:11000000, channel:'기타' }], channels:[{ name:'기타' }], settings:{ kpi:{ inflow:600, conv:0.25, roasTarget:550 } }, adSpend:{} };
   const scope = {
+    inquiryPeriod, inquiryReportOf, InquiryBreakdown:RealInquiryBreakdown,
     calendarPeriodEntries, window: { crmCalendarSchedules: calendar },
     React, useApp:()=>({ db, period:{ mode:'month', y:2026, m:10 }, go:()=>{}, openLead:()=>{} }), useState:()=>[null,()=>{}],
     pRange:p=>[`${p.y}-${String(p.m).padStart(2,'0')}-01`, `${p.y}-${String(p.m).padStart(2,'0')}-31`], inR,
     hasCompletedMeeting:()=>false, isPremeetingCompanyInRange:()=>false, actualPaid:l=>l.paid||0,
     marketingSpendForPeriod:()=>spend, marketingSpendForMonth:()=>spend, channelGroupName:x=>x,
-    contractRoasByType, contractRoasRows, useExcelExport:()=>{}, meetingDoneDate:()=>'',
+    contractRoasByType, contractRoasRows, useExcelExport:callback=>{if(exported)exported.push(...callback());}, meetingDoneDate:()=>'',
+    excelTable:(name,headers,rows)=>({name,headers,rows}), exportLeadTable:()=>({name:'reference'}),
     pad:n=>String(n).padStart(2,'0'), todayISO:()=> today, pLabel:()=> '2026년 10월',
     pct:(n,d)=>d?Math.round(n/d*100):0, fmtK:n=>String(n/10000)+'만', fmtWon:n=>String(n)+'원',
     Card:({children,cls})=>React.createElement('div',{className:cls},children),
@@ -28,6 +34,7 @@ function render(spend = 2500000, calendar = [], today = '2026-10-07') {
     CalendarConsistencyNotice:()=>null,
     Modal:()=>null, Empty:()=>null, Megaphone:()=>null, ExternalLink:()=>null, ChannelRoasDetails:()=>null,
   };
+  db.adSpendMeta={inquiries:inquiryReport};
   const Component = new Function(...Object.keys(scope),code+'; return MarketingHubView;')(...Object.values(scope));
   return renderToStaticMarkup(React.createElement(Component));
 }
@@ -40,6 +47,20 @@ test('labels explicitly preserve inflow-based paid companies alongside contract 
   assert.match(html,/<h3>결제 기업 \(유입일 기준\)<\/h3><b>0<\/b>/);
   assert.match(html,/440%/);
   assert.match(view,/const paid = leads.filter\(\(l\) => actualPaid\(l\) > 0\)/);
+});
+test('real hub card, monthly row, channel total and export share website plus native META facts',()=>{
+  const rows=Array.from({length:16},(_,index)=>{const date='2026-10-'+String(index+1).padStart(2,'0');return [
+    {source:'WEBSITE',inquiry_date:date,inquiry_count:index===0?2:index===15?1:0,channels:{META:0,NAVER:0,GOOGLE:index===0?2:0,OTHER:index===15?1:0}},
+    {source:'META',inquiry_date:date,inquiry_count:index===0?5:index===15?3:0,channels:{META:index===0?5:index===15?3:0,NAVER:0,GOOGLE:0,OTHER:0}}
+  ];}).flat();
+  const exported=[]; const html=render(110000,[],'2026-10-16',buildInquiryReport(rows),exported);
+  assert.match(html,/<h3>유입 DB<\/h3><b>11<\/b>/);
+  assert.ok((html.match(/홈페이지 <b[^>]*>3건<\/b>/g)||[]).length>=3);
+  assert.ok((html.match(/META DB <b[^>]*>8건<\/b>/g)||[]).length>=3);
+  const daily=exported.find(sheet=>sheet.name==='문의 일별');
+  assert.equal(daily.rows.length,16);assert.equal(daily.rows.reduce((s,row)=>s+row[3],0),11);
+  assert.deepEqual(daily.rows.at(-1),['2026-10-16',1,3,4]);
+  const channels=exported.find(sheet=>sheet.name==='채널별 성과');assert.equal(channels.rows.reduce((s,row)=>s+row[2],0),11);
 });
 
 test('real marketing view renders 29 CRM schedules in its total instead of deduplicated company count', () => {

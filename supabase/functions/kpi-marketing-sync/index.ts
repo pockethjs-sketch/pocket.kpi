@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
+import { commitInquiryReport, recordInquiryFailure } from '../_shared/website-inquiries.mjs';
 
 const encoder = new TextEncoder();
 const hex = (bytes: Uint8Array) => [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -57,6 +58,8 @@ function metaConversions(actions: any[]) {
 async function collectMeta(config: Record<string, string>, start: string, end: string) {
   const account = String(config.MK_META_AD_ACCOUNT_ID || "").replace(/^act_/, "");
   const version = config.MK_META_GRAPH_VERSION || "v25.0";
+  const accountInfo = await fetchJson(`https://graph.facebook.com/${version}/act_${encodeURIComponent(account)}?fields=timezone_name`, { headers: { authorization: `Bearer ${config.MK_META_ACCESS_TOKEN}` } }, 'meta_timezone');
+  if (accountInfo.timezone_name !== 'Asia/Seoul') throw new Error('inquiry_meta_timezone_unverified');
   const traffic = new RegExp(config.MK_META_TRAFFIC_PATTERN || "트래픽|traffic", "i");
   const builder = new RegExp(config.MK_META_BUILDER_PATTERN || "빌더진|builderjin", "i");
   const lead = new RegExp(config.MK_META_LEAD_PATTERN || "잠재|리드|lead|전환|conversion|문의|홈페이지", "i");
@@ -67,14 +70,24 @@ async function collectMeta(config: Record<string, string>, start: string, end: s
     for (const row of Array.isArray(body.data) ? body.data : []) objectives.set(String(row.id || ""), String(row.objective || ""));
     campaignNext = body?.paging?.next || "";
   }
+  if (campaignNext) throw new Error('inquiry_meta_page_limit');
   if (!objectives.size) throw new Error("meta_no_campaigns");
   const fields = "date_start,campaign_id,campaign_name,spend,impressions,clicks,actions";
   let next = `https://graph.facebook.com/${version}/act_${encodeURIComponent(account)}/insights?fields=${encodeURIComponent(fields)}&level=campaign&time_increment=1&time_range=${encodeURIComponent(JSON.stringify({ since: start, until: end }))}&limit=500`;
   const insights: any[] = [];
   for (let page = 0; next && page < 50; page++) {
     const body = await fetchJson(next, { headers: { authorization: `Bearer ${config.MK_META_ACCESS_TOKEN}` } }, "meta");
+    if (!Array.isArray(body.data)) throw new Error('inquiry_meta_response_invalid');
     insights.push(...(Array.isArray(body.data) ? body.data : []));
     next = body?.paging?.next || "";
+  }
+  if (next) throw new Error('inquiry_meta_page_limit');
+  const inquiryKeys = new Set<string>();
+  for (const row of insights) {
+    const key = `${row.date_start}:${row.campaign_id}`;
+    if (inquiryKeys.has(key)) throw new Error('inquiry_meta_repeated_row');
+    inquiryKeys.add(key);
+    if (!row.date_start || row.date_start < start || row.date_start > end) throw new Error('inquiry_meta_date_mismatch');
   }
   const rows: any[] = insights.map((row) => {
     const name = String(row.campaign_name || "");
@@ -88,7 +101,9 @@ async function collectMeta(config: Record<string, string>, start: string, end: s
       campaign_external_id: String(row.campaign_id || "") || null, campaign_name: name,
       spend_amount: n(row.spend), impressions: n(row.impressions), clicks: n(row.clicks), conversions: metaConversions(row.actions),
       source_row_key: `edge:meta:${row.date_start}:${row.campaign_id || name}`,
-      payload: { collector: "supabase-edge", campaignClass: channel, objective }, archived_at: null };
+      payload: { collector: "supabase-edge", campaignClass: channel, objective,
+        metaInquiryCount: n((Array.isArray(row.actions) ? row.actions : []).find((action: any) => action.action_type === 'onsite_conversion.lead_grouped')?.value),
+        metaInquiryBasis: 'onsite_conversion.lead_grouped' }, archived_at: null };
   });
   const dates = new Set(rows.map((row) => row.spend_date));
   for (const date of dateRange(start, end)) if (!dates.has(date)) rows.push({
@@ -96,7 +111,7 @@ async function collectMeta(config: Record<string, string>, start: string, end: s
     campaign_external_id: null, campaign_name: null, spend_amount: 0,
     impressions: 0, clicks: 0, conversions: 0,
     source_row_key: `edge:meta:${date}:no-spend`,
-    payload: { collector: "supabase-edge", campaignClass: "META_OTHER", zeroFill: true }, archived_at: null,
+    payload: { collector: "supabase-edge", campaignClass: "META_OTHER", zeroFill: true, metaInquiryCount: 0, metaInquiryBasis: 'onsite_conversion.lead_grouped' }, archived_at: null,
   });
   return rows;
 }
@@ -273,8 +288,20 @@ Deno.serve(async (req) => {
       });
       if (commitError || !committed?.ok) throw new Error(`atomic_commit_${commitError?.code || "failed"}`);
       results[provider] = { ok: true, rows: validation.rows, amount: validation.amount, latestDate: end, channels: validation.channels, runId };
+      if (provider === 'META') {
+        const daily = dateRange(start, end).map(date => {
+          const count = rows.filter(row => row.spend_date === date).reduce((sum, row) => sum + n(row.payload?.metaInquiryCount), 0);
+          if (!Number.isSafeInteger(count) || count < 0) throw new Error('inquiry_meta_metric_invalid');
+          return { date, count, channels: { META: count, NAVER: 0, GOOGLE: 0, OTHER: 0 } };
+        });
+        const sourceHash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', encoder.encode(JSON.stringify(daily))))).map(byte => byte.toString(16).padStart(2, '0')).join('');
+        results[provider].inquiries = await commitInquiryReport(client, organizationId, {
+          source: 'META', start, end, daily, total: daily.reduce((sum, day) => sum + day.count, 0), sourceHash, completedAt: new Date().toISOString(),
+        });
+      }
     } catch (error) {
       const detail = String(error instanceof Error ? error.message : error).slice(0, 500);
+      if (provider === 'META') await recordInquiryFailure(client, organizationId, 'META', detail);
       await client.from("provider_sync_state").upsert({ organization_id: organizationId, provider, status: "FAILED",
         checkpoint: { start, end, collector: "supabase-edge" }, last_attempt_at: attemptedAt,
         error_code: detail.split("_").slice(0, 4).join("_"), error_detail: detail, updated_at: new Date().toISOString(),

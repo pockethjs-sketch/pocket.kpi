@@ -55,6 +55,7 @@ test('renders three cards, month/day counts, missing and ambiguous answers safel
 
 test('integration only inserts revenue summary under marketing daily chart', () => {
   const main = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
-  assert.match(main, /metricStage.id === "marketing" && <LeadRevenueQuality leads=\{dailyCounts.flatMap/);
+  assert.match(main, /별도 CRM 고객 매출 분석 · 문의 합계와 다른 모집단/);
+  assert.match(main, /<LeadRevenueQuality leads=\{cohort\}/);
   assert.ok(main.indexOf('<DailyActivityChart') < main.indexOf('<LeadRevenueQuality'));
 });

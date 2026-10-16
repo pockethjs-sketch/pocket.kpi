@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { verifyCalendarConsistency } from '../_shared/calendar-consistency.mjs';
+import { collectWebsiteInquiries, commitInquiryReport, recordInquiryFailure } from '../_shared/website-inquiries.mjs';
 
 const encoder = new TextEncoder();
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
@@ -82,6 +83,17 @@ Deno.serve(async (req) => {
   if (runError) return json({ error: "sync_run_create_failed" }, 500);
   const origin = "https://crm.xn--9i1b674cwc38r6pa.com";
   const headers = { authorization: `Bearer ${token}`, origin, referer: `${origin}/`, "x-requested-with": "XMLHttpRequest", accept: "application/json" };
+  // Independent reporting source: full current month, both read/unread states.
+  // Never promote these counts into customers, contracts, receipts or raw LEAD rows.
+  let websiteInquiries: any;
+  try {
+    const report = await collectWebsiteInquiries({ fetcher: fetch, headers, start: end.slice(0, 7) + '-01', end, hash: sha256 });
+    websiteInquiries = await commitInquiryReport(supabase, organizationId, report);
+  } catch (error) {
+    websiteInquiries = await recordInquiryFailure(supabase, organizationId, 'WEBSITE', error instanceof Error ? error.message : 'inquiry_collection_failed');
+  }
+  const { error: inquiryStatusError } = await supabase.from('crm_sync_runs').update({ website_inquiry_result: websiteInquiries }).eq('id', run.id);
+  if (inquiryStatusError) return json({ error: 'inquiry_status_write_failed' }, 502);
   const leadUrl = `https://api.xn--9i1b674cwc38r6pa.com/crm/v3/projects/newarrivals/v2?keyword=&start_dt=${encodeURIComponent(start + "T00:00:00+09:00")}&end_dt=${encodeURIComponent(end + "T23:59:59+09:00")}&is_inquiry=true`;
   const meetingUrl = `https://api.xn--9i1b674cwc38r6pa.com/crm/v3/mr_schedules?offset=0&limit=1000&state=1&page=schedule&start_dt=${encodeURIComponent(start + "T00:00:00+09:00")}&end_dt=${encodeURIComponent(end + "T23:59:59+09:00")}`;
   let calendar: any = null;
@@ -162,7 +174,8 @@ Deno.serve(async (req) => {
       completed_at: completedAt, inflow_completed_at: completedAt, inflow_result: { ...inflow, calendar },
     }).eq("id", run.id);
     if (completeError) throw new Error("sync_completion_failed");
-    return json({ ok: true, start, end, leads: leadRows, meetings: meetingRows, inflow, calendar, fetchedAt: completedAt, syncRunId: run.id, readBackend: "supabase-edge" });
+    const inquiryOk = websiteInquiries?.verified === true;
+    return json({ ok: inquiryOk, ...(inquiryOk ? {} : { error: 'website_inquiry_sync_failed' }), start, end, leads: leadRows, meetings: meetingRows, inflow, calendar, websiteInquiries, fetchedAt: completedAt, syncRunId: run.id, readBackend: "supabase-edge" }, inquiryOk ? 200 : 502);
   } catch (error) {
     const detail = String(error instanceof Error ? error.message : error);
     const message = /^(crm_http_\d+_\d+|raw_upsert_[a-zA-Z0-9]+|crm_response_invalid|inflow_reconcile_failed|inflow_identity_blocked|sync_completion_failed|calendar_verify_failed|calendar_storage_mismatch|calendar_aggregation_read_failed|calendar_aggregation_mismatch|premeeting_reconcile_failed|premeeting_projection_mismatch)$/.test(detail)

@@ -32,7 +32,7 @@ test('six top-level marketing cards open real-value breakdown and ROAS status', 
   assert.match(source, /onClick=\{\(\) => setMetricDetail\(m\.key\)\}/);
   assert.match(source, /유입 코호트 누적 입금/);
   assert.match(source, /metricLeads\.map\(\(lead\) =>/);
-  assert.match(source, /매체 문의전환 = 광고 플랫폼/);
+  assert.match(source, /문의 DB = 홈페이지 문의 전용 API 접수 \+ META 인앱 잠재고객/);
   assert.match(source, /directSources\[key\]/);
   assert.match(source, /configured: !!\(direct\.lastSuccessAt \|\| direct\.status === "SUCCESS"/);
 });

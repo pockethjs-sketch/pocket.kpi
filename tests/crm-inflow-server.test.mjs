@@ -5,22 +5,24 @@ import { stripTypeScriptTypes } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { webcrypto } from 'node:crypto';
 import { verifyCalendarConsistency } from '../supabase/functions/_shared/calendar-consistency.mjs';
+import { collectWebsiteInquiries, commitInquiryReport, recordInquiryFailure } from '../supabase/functions/_shared/website-inquiries.mjs';
 
 const source = readFileSync(new URL('../supabase/functions/kpi-crm-sync/index.ts', import.meta.url), 'utf8');
 const js = stripTypeScriptTypes(source.replace(/^import .*\r?\n/gm, ''));
-function harness({ leads = [], meetings = [], daily = false, projectionError = false, projectionMismatch = false, calendarMismatch = false, aggregationMismatch = false, aggregationReadError = false, rpcError = false, blocked = false, completionError = false, invalid = false, rawError = false } = {}) {
+function harness({ leads = [], meetings = [], daily = false, inquiryError = false, projectionError = false, projectionMismatch = false, calendarMismatch = false, aggregationMismatch = false, aggregationReadError = false, rpcError = false, blocked = false, completionError = false, invalid = false, rawError = false } = {}) {
   const calls = []; let handler;
   let rawRows = [];
   const client = {
     from(table) { return {
       insert() { return { select() { return { single: async () => ({data:{id:'synthetic-run'},error:null}) }; } }; },
-      async upsert(rows) { rawRows.push(...rows); calls.push('raw'); return {error:rawError ? {code:'TEST'} : null}; },
+      async upsert(rows) { if(table==='marketing_inquiry_sync_state') return {error:null}; rawRows.push(...rows); calls.push('raw'); return {error:rawError ? {code:'TEST'} : null}; },
       select(columns) { const aggregate = columns.includes('payload'); const chain = { eq() { return chain; }, order() { return chain; }, async range() {
         calls.push(aggregate ? 'aggregation' : 'calendar'); return { data: calendarMismatch ? [] : rawRows.filter(row => row.record_type === 'MEETING'), error: aggregate && aggregationReadError ? {code:'TEST'} : null };
       } }; return chain; },
-      update(value) { return { async eq() { calls.push(value.status); return {error:completionError && value.status==='COMPLETED' ? {code:'TEST'} : null}; } }; },
+      update(value) { return { async eq() { if(value.status) calls.push(value.status); return {error:completionError && value.status==='COMPLETED' ? {code:'TEST'} : null}; } }; },
     }; },
     async rpc(name,args) {
+      if(name==='kpi_commit_inquiry_days') { assert.equal(args.p_source,'WEBSITE'); assert.equal(args.p_start,'2026-10-01'); assert.equal(args.p_end,'2026-10-07'); return {data:{verified:true,total:args.p_total,days:args.p_daily.length},error:null}; }
       if(name==='kpi_reconcile_crm_premeetings') {
         calls.push('companyProjection'); assert.equal(args.p_start,'2026-10-05');assert.equal(args.p_end,'2026-10-07');assert.equal(args.p_dry_run,false);
         return {data:{ok:true,verified:!projectionMismatch,blocked:0,stored:meetings.length},error:projectionError ? {code:'TEST'} : null};
@@ -31,11 +33,12 @@ function harness({ leads = [], meetings = [], daily = false, projectionError = f
     },
   };
   vm.runInNewContext(js, {
-    TextEncoder, Response, crypto:webcrypto, createClient:()=>client,
+    TextEncoder, Response, URL, AbortSignal, crypto:webcrypto, createClient:()=>client,
+    collectWebsiteInquiries, commitInquiryReport, recordInquiryFailure,
     Date:class extends Date {constructor(...args){super(...(args.length ? args : ['2026-10-07T01:00:00Z']));}static now(){return Date.parse('2026-10-07T01:00:00Z');}},
     verifyCalendarConsistency: (raw, options) => ({...verifyCalendarConsistency(raw, options), ...(aggregationMismatch ? {verified:false} : {})}),
     Deno:{env:{get:name=>({KPI_SHADOW_HMAC_SECRET:'synthetic-hmac-only',SUPABASE_SERVICE_ROLE_KEY:'synthetic-only',CRM_BEARER_TOKEN:'synthetic-provider',KPI_ORGANIZATION_ID:'synthetic-org',SUPABASE_URL:'https://example.invalid'})[name]},serve:fn=>{handler=fn;}},
-    fetch:async url=>new Response(JSON.stringify(url.includes('newarrivals') ? invalid ? {error:'bad'} : leads : meetings)),
+    fetch:async url=>new Response(JSON.stringify(url.includes('income_inquiry') ? {query:[]} : url.includes('newarrivals') ? invalid ? {error:'bad'} : leads : meetings),{status:inquiryError&&url.includes('income_inquiry')?403:200}),
   });
   return {calls, invoke:async()=>{
     const body=JSON.stringify({start:'2026-10-05',end:'2026-10-07'});
@@ -54,6 +57,11 @@ test('daily HMAC collection cannot complete before company-list projection verif
   const h=harness({daily:true});const r=await h.invoke();assert.equal(r.status,200);
   assert.deepEqual(h.calls,['calendar','aggregation','promote','companyProjection','COMPLETED']);
   assert.equal((await r.json()).calendar.companyProjection.verified,true);
+});
+test('a website inquiry failure is reported separately and cannot return an all-source success',async()=>{
+  const h=harness({inquiryError:true}); const r=await h.invoke(); const body=await r.json();
+  assert.equal(r.status,502);assert.equal(body.ok,false);assert.equal(body.websiteInquiries.verified,false);
+  assert.equal(body.error,'website_inquiry_sync_failed');assert.ok(h.calls.includes('COMPLETED'));
 });
 for(const option of ['projectionError','projectionMismatch'])test(`daily collection fails after ${option}`,async()=>{
   const h=harness({daily:true,[option]:true});const r=await h.invoke();assert.equal(r.status,502);

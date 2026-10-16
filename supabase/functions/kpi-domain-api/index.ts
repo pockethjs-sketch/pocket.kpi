@@ -4,6 +4,7 @@ import { verifyCalendarConsistency } from '../_shared/calendar-consistency.mjs';
 import { authorizeEmployee, canEmployeeAct, mutationPermission } from "../_shared/employee-access.mjs";
 import { canAccessAction, isPremeetingOnly, isPremeetingLead, premeetingDocuments, validatePremeetingMutation } from "../_shared/premeeting-access.mjs";
 import { RECEIVABLES_WRITE_PROFILE, RECEIVABLES_WRITE_PAGES, validateReceivablesMutation } from "../_shared/receivables-access.mjs";
+import { buildInquiryReport } from '../../../src/data/inquiryMetrics.js';
 
 const ALLOWED_ORIGINS = new Set([
   "https://pockethjs-sketch.github.io",
@@ -325,14 +326,41 @@ Deno.serve(async (req) => {
   }
 
   if (action === "marketing") {
+    // Counts only; keep the same verified employee/organization boundary.
+    const inquiryRows: any[] = [];
+    let inquiryReadError = '';
+    for (let offset = 0; offset < 10000; offset += 500) {
+      const { data, error } = await supabase.from('marketing_inquiry_daily')
+        .select('source,inquiry_date,inquiry_count,channels,source_hash,collected_at').eq('organization_id', organizationId)
+        .order('inquiry_date').order('source').range(offset, offset + 499);
+      if (error) { inquiryReadError = 'inquiry_read_failed'; break; }
+      inquiryRows.push(...(data || []));
+      if ((data || []).length < 500) break;
+      if (offset === 9500) inquiryReadError = 'inquiry_read_incomplete';
+    }
+    const inquiryState = await supabase.from('marketing_inquiry_sync_state')
+      .select('source,status,last_attempt_at,last_success_at,range_start,range_end,source_total,source_hash,expected_daily,error_code').eq('organization_id', organizationId);
+    if (inquiryState.error) inquiryReadError = 'inquiry_status_read_failed';
+    const readMarketingLedger = async () => {
+      const rows: any[] = [];
+      for (let offset = 0; offset < 50000; offset += 500) {
+        const result = await supabase.from('marketing_daily_spend').select('spend_date,provider,channel_code,spend_amount,impressions,clicks,conversions,payload')
+          .eq('organization_id', organizationId).is('archived_at', null).order('spend_date').order('id').range(offset, offset + 499);
+        if (result.error) return { data: null, error: result.error };
+        rows.push(...(result.data || []));
+        if ((result.data || []).length < 500) return { data: rows, error: null };
+      }
+      return { data: null, error: { code: 'marketing_read_incomplete' } };
+    };
     const [{ data: rows, error }, { data: syncRows, error: syncError }] = await Promise.all([
-      supabase.from("marketing_daily_spend").select("spend_date,provider,channel_code,spend_amount,impressions,clicks,conversions,payload")
-        .eq("organization_id", organizationId).is("archived_at", null).order("spend_date", { ascending: true }).limit(5000),
+      readMarketingLedger(),
       supabase.from("provider_sync_state").select("provider,status,last_attempt_at,last_success_at,latest_source_date,row_count,amount_total,error_code,error_detail")
         .eq("organization_id", organizationId),
     ]);
     if (error || syncError) return reply(req, { error: "marketing_read_failed", code: error?.code || syncError?.code }, 500);
-    return reply(req, { ok: true, ...buildMarketing(rows || [], syncRows || []) });
+    const marketing = buildMarketing(rows || [], syncRows || []);
+    return reply(req, { ok: true, ...marketing, marketingMeta: { ...marketing.marketingMeta,
+      inquiries: { ...buildInquiryReport(inquiryReadError ? [] : inquiryRows, inquiryState.data || []), readError: inquiryReadError } } });
   }
 
   if (action === "crm_refresh") {
