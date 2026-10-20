@@ -1,6 +1,8 @@
 # Employee authentication cutover — 2026-09-18
 
-## 2026-10-20 KPI-only warehouse UI refinement (release pending; browser unverified)
+## 2026-10-20 KPI-only warehouse UI refinement (deployed; browser unverified)
+
+- Released d6a32e557ecdf15c2acfbc0ba0914c6fca29ef39 / Actions39410868003 build+deployment success. 10:52UTC live HTML/9 JS-CSS/5 fonts/license HTTP200; actual entry index-m1EY0KYS.js/main-CJHmthPA.js, UI CSS main-BrrgOI4n.css. Main code matches after asset-name normalization; UI CSS/fonts/buildup bytes exact. Shared index CSS differs only in40 LAB rounding values (max0.0001), not selectors or layout. Browser and employee session remain unverified by user choice.
 
 - User limited this change to existing KPI UI and selected code/automated checks only, then explicitly approved deployment. Shared presentation primitives and KPI-scoped tokens replace overlapping theme overrides. Auth/API/RLS, KPI calculations/storage/sync, chooser and external hub are unchanged. The already-deployed buildup v4.8 update on main is retained without modification; no backend or migration deployment is part of this release.
 - Latest-main integration passed386 tests/security/build/artifact checks and npm audit0 in a separate release checkout so the original dirty working tree stays intact. Nine core token contrast pairs pass4.5:1; not a whole-screen accessibility or visual QA claim. Dark receivables/frozen contract-header geometry have explicit exceptions. Poppins Latin assets include public OFL. Actual employee UI remains unverified. See KPI_UI_REFINEMENT.md.
