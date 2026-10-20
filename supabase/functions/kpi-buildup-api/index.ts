@@ -4,6 +4,7 @@ import {
   BUILDUP_ID, UUID, BUILDUP_LIMITS, byteLength, canUseBuildup, isBuildupAdmin, canReadBuildupOwner,
   validateSave, decideSave, validateAi, aiRateLimited, aiUpstreamError, createUsageTap, memberName, listItem, usageRows,
 } from "../_shared/buildup-access.mjs";
+import { passwordChangeRequired } from "../_shared/account-access.mjs";
 
 // Sales buildup consultation workspace API.
 // - Every request: verified Supabase Auth employee session + current ACTIVE organization membership.
@@ -60,13 +61,16 @@ Deno.serve(async (req) => {
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+  let authUser: any = null;
   const access = await authorizeEmployee({ request: req, organizationId,
-    verifyUser: (jwt: string) => supabase.auth.getUser(jwt),
+    verifyUser: async (jwt: string) => { const result = await supabase.auth.getUser(jwt); authUser = result.data?.user || null; return result; },
     findMembership: (org: string, userId: string) => supabase.from("organization_memberships")
       .select("organization_id,user_id,role,state,archived_at").eq("organization_id", org).eq("user_id", userId).maybeSingle(),
   });
   if (!access.ok) return reply(req, { error: access.error }, access.status);
   if (!canUseBuildup(access)) return reply(req, { error: "permission_denied" }, 403);
+  // Accounts still on an administrator-set temporary password must choose their own first.
+  if (passwordChangeRequired(authUser)) return reply(req, { error: "password_change_required" }, 403);
 
   let body: any;
   try {

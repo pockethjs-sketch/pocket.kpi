@@ -6,6 +6,8 @@ import { consumeMasterSetupToken, isMasterLoginAlias, isPlausibleEmail } from '.
 import { freshEntryUrl, isChunkLoadError, recoverChunkLoad } from './data/chunkRecovery.js';
 import './styles.css';
 import { applyEmployeeMenuPolicy } from './data/employeeMenuPolicy.js';
+import { accountRequest } from './data/accountApi.js';
+import PasswordSetup from './PasswordSetup.jsx';
 
 const MASTER_SETUP_STORAGE_KEY = 'pocket-kpi:master-setup-token:v1';
 
@@ -18,10 +20,11 @@ function EmployeeEntry() {
   const [LoadedApp, setLoadedApp] = useState(null);
   const [appLoadFailed, setAppLoadFailed] = useState(false);
   const [sessionStalled, setSessionStalled] = useState(false);
+  const [passwordGate, setPasswordGate] = useState(null);
   const submitting = useRef(false);
   const checkAccess = useRef(() => {});
   useEffect(() => {
-    let alive = true, currentUser = '', checking = false, queued = false, generation = 0;
+    let alive = true, currentUser = '', checking = false, queued = false, generation = 0, passwordPending = false;
     const check = async () => {
       if (!alive) return;
       if (checking) { queued = true; return; }
@@ -32,11 +35,20 @@ function EmployeeEntry() {
         const { data, error } = await employeeSession();
         if (error) throw error;
         if (!alive || version !== generation) return;
-        if (!data.session) { if (alive) { setLoadedApp(null); if (!submitting.current) setMessage('승인된 직원 이메일로 로그인하세요.'); } return; }
+        if (!data.session) { if (alive) { setLoadedApp(null); setPasswordGate(null); if (!submitting.current) setMessage('승인된 직원 이메일로 로그인하세요.'); } return; }
         const access = await applyEmployeeMenuPolicy(await employeeRequest('session'));
         if (!alive || version !== generation) return;
         const identity = `${access.userId}:${access.role}:${access.scope || 'all'}:${access.writeProfile || ''}:${(access.menuPages || []).join(',')}`;
         if (currentUser && currentUser !== identity) { location.reload(); return; }
+        // An administrator-set temporary password must be replaced before any workspace loads.
+        if (!currentUser || passwordPending) {
+          let account = null;
+          try { account = await accountRequest('status'); } catch { account = null; }
+          if (!alive || version !== generation) return;
+          if (account?.mustChangePassword) { passwordPending = true; setLoadedApp(null); setPasswordGate(account); setMessage(''); return; }
+          passwordPending = false;
+          setPasswordGate(null);
+        }
         currentUser = identity;
         window.kpiEmployeeAccess = access;
         window.kpiEmployeeStorage = scopedEmployeeStorage(window.localStorage, access.scope === 'premeeting' ? `${access.userId}:premeeting` : access.userId);
@@ -59,13 +71,13 @@ function EmployeeEntry() {
           recoverChunkLoad(error, { storage: window.sessionStorage, location: window.location, online: window.navigator.onLine !== false });
           return;
         }
-        if (alive) { setLoadedApp(null); setSessionStalled(error.message === 'auth_session_timeout'); setMessage(error.message === 'employee_approval_required' ? '이메일 인증 후 관리자 승인이 필요합니다.' : `로그인 확인 실패: ${loginErrorMessage(error)}`); }
+        if (alive) { setLoadedApp(null); setPasswordGate(null); setSessionStalled(error.message === 'auth_session_timeout'); setMessage(error.message === 'employee_approval_required' ? '이메일 인증 후 관리자 승인이 필요합니다.' : `로그인 확인 실패: ${loginErrorMessage(error)}`); }
       } finally { checking = false; if (queued && alive) { queued = false; setTimeout(check, 0); } }
     };
     checkAccess.current = check;
     check();
     const { data: listener } = employeeAuth.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_OUT') { generation++; if (currentUser) location.reload(); else { setLoadedApp(null); setMessage('로그아웃되었습니다.'); } }
+      if (event === 'SIGNED_OUT') { generation++; passwordPending = false; if (currentUser) location.reload(); else { setLoadedApp(null); setPasswordGate(null); setMessage('로그아웃되었습니다.'); } }
       else setTimeout(check, 0);
     });
     const timer = setInterval(check, 60_000);
@@ -116,6 +128,7 @@ function EmployeeEntry() {
     finally { submitting.current = false; setBusy(false); }
   }
   if (LoadedApp) return <LoadedApp />;
+  if (passwordGate) return <PasswordSetup account={passwordGate} onDone={() => { setPasswordGate(null); setMessage('새 비밀번호로 업무 화면을 여는 중…'); checkAccess.current(); }} onSignOut={() => employeeAuth.auth.signOut({ scope: 'local' })} />;
   return <div className="min-h-screen bg-slate-900 flex items-center justify-center p-5"><form className="bg-white rounded-md p-7 max-w-md w-full space-y-4" onSubmit={(e) => { e.preventDefault(); submit(false); }}>
     <h1 className="text-xl font-bold">포켓 KPI · MASTER / 직원 로그인</h1>
     <p className="text-sm text-slate-600">MASTER는 이메일 인증 없이 계정명과 비밀번호로 접속합니다. 일반 직원만 승인된 이메일을 사용합니다.</p>

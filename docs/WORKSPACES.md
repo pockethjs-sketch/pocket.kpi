@@ -1,6 +1,21 @@
 # KPI / 빌드업 상위 작업 공간 — 2026-10-20
 
-상태: 빌드업 v4.8 연결 — Supabase 마이그레이션·Edge Function 운영 반영, 프런트엔드는 이 커밋의 GitHub Actions 배포 기준. 실제 직원 로그인/브라우저 조작 검증은 미실시.
+상태: 빌드업 v4.8 운영 반영(PR #1). 계정 관리·첫 로그인 비밀번호 변경 — Edge Function 운영 반영, 프런트엔드는 이 브랜치 PR 병합 후 GitHub Actions 배포 기준. 실제 직원 로그인/브라우저 조작 검증은 미실시.
+
+## 계정 관리 · 첫 로그인 비밀번호 변경 (2026-10-20)
+
+- 사용자 요청: MASTER 계정은 그대로 두고 `design@pocket.company`, `ceo@pocket.company` 두 계정 추가. 첫 비밀번호는 관리자가 정한 임시 비밀번호이고, 처음 로그인하면 본인이 비밀번호를 정해야 업무 화면이 열린다. MASTER는 로그인 후 `계정 관리` 화면에서 계정을 보고 관리한다.
+- 화면(`src/AccountWorkspace.jsx`): 선택 홈 카드와 상단 메뉴에 `계정 관리`(OWNER·ADMIN, 범위 all일 때만 표시 — 표시는 편의이고 권한은 서버가 다시 확인). 계정 추가(이메일·이름·권한·임시 비밀번호 8자 이상), 계정 표(권한 변경, 사용 중지/다시 사용, 임시 비밀번호 재설정, 이름 변경, 비밀번호 상태, 마지막 로그인), 가입 대기(설정의 `직원 등록` 초대 중 미가입) 목록과 `임시 비밀번호로 만들기`. MASTER 별칭 주소는 화면·응답에 나오지 않는다(`MASTER`로 표시).
+- 첫 로그인(`src/EmployeeEntry.jsx`, `src/PasswordSetup.jsx`): 기존 세션 확인 직후 `kpi-account-api status`를 묻고 `mustChangePassword`이면 KPI 앱 import 전에 새 비밀번호 화면(12자 이상·같은 글자 반복 금지·확인 칸)만 보여 준다. 저장하면 같은 세션으로 다시 확인해 업무 화면을 연다. status 호출이 실패하면 기존처럼 열린다(가용성 우선, 다음 로그인 때 다시 물음). 브라우저 저장소에 비밀번호를 두지 않는다.
+- 서버(`supabase/functions/kpi-account-api`, verify_jwt=true): 모든 동작이 `authorizeEmployee`(Auth getUser + 현재 ACTIVE 멤버십) 뒤에 온다. `status`·`change_password`는 본인만. 임시 비밀번호 상태(`app_metadata.pk_password_change`, 서비스 역할만 설정·해제)이면 그 밖의 동작은 403 `password_change_required`. 관리 동작은 OWNER·ADMIN만, ADMIN 권한 부여·ADMIN 계정 관리는 OWNER만, MASTER·OWNER·SERVICE·본인 계정은 변경 불가. 계정 생성 = Auth 사용자(email_confirm, 플래그) → profiles → ACTIVE 멤버십 → 초대 claimed, 실패 시 역순 삭제. 사용 중지 = 멤버십 ARCHIVED + Auth ban, 다시 사용 = ACTIVE + ban 해제. 감사 기록 `audit_events`(entity_type `employee_account`)에는 권한·상태·임시 여부만 남기고 비밀번호는 저장·기록·응답하지 않는다. DB 마이그레이션·RLS·권한 부여 변경 없음.
+- `kpi-buildup-api` v2도 임시 비밀번호 상태 세션을 403 `password_change_required`로 막는다. `kpi-domain-api`(KPI 본 API)는 바꾸지 않았다 — 임시 비밀번호 상태 차단은 로그인 화면과 계정·빌드업 API에서 이뤄진다(서버 전면 강제가 필요하면 후속 작업).
+- 두 계정 준비: `employee_invitations`에 `design@pocket.company`, `ceo@pocket.company`(EDITOR, 미가입)만 등록. Auth 계정과 임시 비밀번호는 배포 후 MASTER가 `계정 관리 → 가입 대기 → 임시 비밀번호로 만들기`에서 만든다(비밀번호는 브라우저 → 함수 → Supabase Auth로만 전달, 저장소·문서에 남기지 않음). 일회성 부트스트랩 비밀 등록은 비밀 저장소 쓰기 승인 정책으로 막혀 철회했고, 인증 없는 계정 생성 경로는 코드·배포본 모두에 없다.
+
+### 검증(2026-10-20, 계정 관리)
+
+- 로컬: 신규 `account-access` 8개 포함 `CI=true node --test` 385개 중 371 통과·13 skip·1 실패(`receivables-table`, `lucide-react` 미설치 — 기존과 같은 환경 문제, CI에서 확인). `npm run security:check` 통과. 실제 화면 컴포넌트(KPI 셸·계정 관리·새 비밀번호)를 가짜 서버로 번들·렌더링해 13개 흐름 통과: MASTER 홈 카드·상단 메뉴, MASTER 변경 불가 행, 가입 대기, 계정 만들기(소문자 이메일·입력 비움), 권한 변경, 임시 비밀번호 재설정, 사용 중지 확인, 서버 호출 순서, 짧은 비밀번호 거절, 새 비밀번호 저장 후 업무 화면, 오류 0.
+- Supabase 운영: `kpi-account-api` v2 ACTIVE(verify_jwt=true, 배포 소스 = 이 커밋 소스, 부트스트랩 경로 없음), `kpi-buildup-api` v2 ACTIVE. 합성 프로브만 사용: 형식 오류 JWT 401(`UNAUTHORIZED_INVALID_JWT_FORMAT`), 서명 위조 JWT 401(`UNAUTHORIZED_LEGACY_JWT`), 인증 헤더 없음 → 함수 401 `login_required`, 옛 부트스트랩 요청도 401. 스키마 재확인: 멤버십(organization_id,user_id)·초대(organization_id,email) 유일 제약, profiles·audit_events 열·enum 호환, auth.users 트리거 없음.
+- 미검증: 실제 MASTER 로그인 후 계정 생성, 직원 첫 로그인 비밀번호 변경, 사용 중지 후 로그인 차단(직원 자격 증명을 검증에 쓰지 않음).
 
 ## 빌드업 인텔리전스 v4.8 — 직원별 저장 · 관리자 보기 · 회사 AI 키 · 사이트 녹음 (2026-10-20)
 

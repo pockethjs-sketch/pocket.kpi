@@ -8,11 +8,15 @@ export const MARKETING_HUB = {
   href: 'https://pocket-mkt.github.io/',
 };
 
-export const INITIAL_WORKSPACE = { active: 'home', kpiOpened: false, buildupOpened: false };
+// MASTER/ADMIN only. Visibility is presentation; kpi-account-api re-checks the role on every request.
+export const ACCOUNT_WORKSPACE = { id: 'accounts', title: '계정 관리', description: '직원 계정을 만들고 임시 비밀번호 · 권한 · 사용 여부를 관리합니다.', detail: 'MASTER · 관리자 전용', action: '계정 관리 열기' };
+export const canManageAccounts = (access) => ['OWNER', 'ADMIN'].includes(access?.role) && (access?.scope || 'all') === 'all';
+
+export const INITIAL_WORKSPACE = { active: 'home', kpiOpened: false, buildupOpened: false, accountsOpened: false };
 
 export function selectWorkspace(state, target) {
-  if (!['home', 'kpi', 'buildup'].includes(target)) return state;
-  return { ...state, active: target, kpiOpened: state.kpiOpened || target === 'kpi', buildupOpened: state.buildupOpened || target === 'buildup' };
+  if (!['home', 'kpi', 'buildup', 'accounts'].includes(target)) return state;
+  return { ...state, active: target, kpiOpened: state.kpiOpened || target === 'kpi', buildupOpened: state.buildupOpened || target === 'buildup', accountsOpened: (state.accountsOpened || false) || target === 'accounts' };
 }
 
 // An opaque-origin frame must never receive the KPI session, storage or business state.

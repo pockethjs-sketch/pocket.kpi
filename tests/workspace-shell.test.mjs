@@ -6,7 +6,7 @@ import vm from 'node:vm';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { transformWithOxc } from 'vite';
-import { WORKSPACES, MARKETING_HUB, INITIAL_WORKSPACE, selectWorkspace, BUILDUP_SANDBOX, BUILDUP_CSP, BUILDUP_FRAME_ALLOW, BUILDUP_NOTICE, prepareBuildupDocument } from '../src/data/workspaces.js';
+import { WORKSPACES, MARKETING_HUB, INITIAL_WORKSPACE, ACCOUNT_WORKSPACE, canManageAccounts, selectWorkspace, BUILDUP_SANDBOX, BUILDUP_CSP, BUILDUP_FRAME_ALLOW, BUILDUP_NOTICE, prepareBuildupDocument } from '../src/data/workspaces.js';
 
 // SHA-256 of the v4.8 web build copied from the intelligence project (see docs/WORKSPACES.md).
 const BUILDUP_ASSET_SHA256 = 'a7c65ff4fd947313434e67afd6c9b1e904f90c0234d747b7351226768d61dd47';
@@ -16,9 +16,9 @@ const main = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
 const source = shellSource.replace(/^import .*\r?\n/gm, '').replace('export default ', '');
 const { code } = await transformWithOxc(source, 'WorkspaceShell.jsx', { jsx: { runtime: 'classic' } });
 const icon = () => null;
-function compile(useState, BuildupWorkspace = () => null) {
-  return new Function('React', 'useState', 'WORKSPACES', 'MARKETING_HUB', 'INITIAL_WORKSPACE', 'selectWorkspace', 'BuildupWorkspace', 'ArrowRight', 'ChartNoAxesCombined', 'Layers3', 'LayoutGrid', code + ';return WorkspaceShell;')(
-    React, useState, WORKSPACES, MARKETING_HUB, INITIAL_WORKSPACE, selectWorkspace, BuildupWorkspace, icon, icon, icon, icon,
+function compile(useState, BuildupWorkspace = () => null, AccountWorkspace = () => null) {
+  return new Function('React', 'useState', 'WORKSPACES', 'MARKETING_HUB', 'INITIAL_WORKSPACE', 'ACCOUNT_WORKSPACE', 'canManageAccounts', 'selectWorkspace', 'BuildupWorkspace', 'AccountWorkspace', 'ArrowRight', 'ChartNoAxesCombined', 'Layers3', 'LayoutGrid', 'Users', code + ';return WorkspaceShell;')(
+    React, useState, WORKSPACES, MARKETING_HUB, INITIAL_WORKSPACE, ACCOUNT_WORKSPACE, canManageAccounts, selectWorkspace, BuildupWorkspace, AccountWorkspace, icon, icon, icon, icon, icon,
   );
 }
 function elements(node) {
@@ -124,4 +124,27 @@ test('v4.8 web build is pinned, syntactically valid, bridge-only and isolated fr
   assert.match(BUILDUP_NOTICE, /녹음 파일\(음성\)은 서버에 남지 않/);
   assert.match(frameSource, /\.catch\(/);
   assert.throws(() => prepareBuildupDocument('invalid'), /buildup_document_invalid/);
+});
+
+test('account management is offered only to MASTER/OWNER and ADMIN sessions', () => {
+  assert.equal(canManageAccounts({ role: 'OWNER' }), true);
+  assert.equal(canManageAccounts({ role: 'ADMIN' }), true);
+  assert.equal(canManageAccounts({ role: 'EDITOR' }), false);
+  assert.equal(canManageAccounts({ role: 'VIEWER' }), false);
+  assert.equal(canManageAccounts({ role: 'ADMIN', scope: 'premeeting' }), false);
+  assert.equal(canManageAccounts(undefined), false);
+  const render = (access) => {
+    globalThis.kpiEmployeeAccess = access;
+    try { return renderToStaticMarkup(React.createElement(compile(React.useState))); } finally { delete globalThis.kpiEmployeeAccess; }
+  };
+  const owner = render({ role: 'OWNER', userId: 'synthetic' });
+  assert.match(owner, /계정 관리 열기/);
+  assert.equal((owner.match(/class="workspace-card"/g) || []).length, 4);
+  assert.match(owner, /aria-label="계정 관리"/);
+  const editor = render({ role: 'EDITOR', userId: 'synthetic' });
+  assert.doesNotMatch(editor, /계정 관리/);
+  assert.equal((editor.match(/class="workspace-card"/g) || []).length, 3);
+  let state = INITIAL_WORKSPACE;
+  state = selectWorkspace(state, ACCOUNT_WORKSPACE.id);
+  assert.deepEqual([state.active, state.accountsOpened, state.kpiOpened], ['accounts', true, false]);
 });
