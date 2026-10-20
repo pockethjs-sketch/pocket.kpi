@@ -91,5 +91,8 @@ test('Latin fonts are local OFL assets with four declared weights, while origina
   const currentAsset=new URL('../src/assets/buildup-intelligence.html',import.meta.url);
   const hasCurrent=existsSync(currentAsset);
   const original=readFileSync(hasCurrent ? currentAsset : new URL('../src/assets/buildup-intelligence-v3.html',import.meta.url));
-  assert.equal(createHash('sha256').update(original).digest('hex'),hasCurrent ? 'a7c65ff4fd947313434e67afd6c9b1e904f90c0234d747b7351226768d61dd47' : '367d69ea4ec012cc5a28a066c6765af90f98e96b2b47a2761e8c6db9559d0a99');
+  // The sales HTML must equal the reviewed build pinned once in workspace-shell.test.mjs (single pin, updated only with a new build).
+  const pinned=(read('tests/workspace-shell.test.mjs').match(/const BUILDUP_ASSET_SHA256 = '([0-9a-f]{64})'/)||[])[1];
+  assert.ok(pinned,'buildup asset pin missing in workspace-shell.test.mjs');
+  assert.equal(createHash('sha256').update(original).digest('hex'),hasCurrent ? pinned : '367d69ea4ec012cc5a28a066c6765af90f98e96b2b47a2761e8c6db9559d0a99');
 });
