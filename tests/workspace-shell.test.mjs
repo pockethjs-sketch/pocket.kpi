@@ -7,9 +7,10 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { transformWithOxc } from 'vite';
 import { WORKSPACES, MARKETING_HUB, INITIAL_WORKSPACE, ACCOUNT_WORKSPACE, canManageAccounts, selectWorkspace, BUILDUP_SANDBOX, BUILDUP_CSP, BUILDUP_FRAME_ALLOW, BUILDUP_NOTICE, prepareBuildupDocument } from '../src/data/workspaces.js';
+import { BUILDUP_AI_MODELS } from '../supabase/functions/_shared/buildup-access.mjs';
 
-// SHA-256 of the v4.8 web build copied from the intelligence project (see docs/WORKSPACES.md).
-const BUILDUP_ASSET_SHA256 = 'a7c65ff4fd947313434e67afd6c9b1e904f90c0234d747b7351226768d61dd47';
+// SHA-256 of the v4.9 web build copied from the intelligence project (see docs/WORKSPACES.md).
+const BUILDUP_ASSET_SHA256 = '60b42f2e559d0376717f2309d609729744ad10678812932f1b5ab285c8db961c';
 const shellSource = readFileSync(new URL('../src/WorkspaceShell.jsx', import.meta.url), 'utf8');
 const frameSource = readFileSync(new URL('../src/BuildupWorkspace.jsx', import.meta.url), 'utf8');
 const main = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
@@ -101,7 +102,7 @@ test('workspace logout delegates to the existing employee signout without cleari
   assert.match(main, /if \(!window.kpiEmployeeAccess\?\.userId\) throw new Error\('employee_login_required'\)/);
 });
 
-test('v4.8 web build is pinned, syntactically valid, bridge-only and isolated from KPI credentials', () => {
+test('v4.9 web build is pinned, syntactically valid, bridge-only and isolated from KPI credentials', () => {
   const raw = readFileSync(new URL('../src/assets/buildup-intelligence.html', import.meta.url));
   assert.equal(createHash('sha256').update(raw).digest('hex'), BUILDUP_ASSET_SHA256);
   const html = raw.toString('utf8');
@@ -109,6 +110,12 @@ test('v4.8 web build is pinned, syntactically valid, bridge-only and isolated fr
   assert.equal(scripts.length, 1);
   for (const [index, match] of scripts.entries()) new vm.Script(match[1], { filename: 'buildup-inline-' + index + '.js' });
   assert.match(scripts[0][1], /^\s*window\.PK_WEB = 1;/);
+  // Workspace AI (insights, chat, recap, report) always asks the server for Claude Opus 5.5 with the company key.
+  assert.match(scripts[0][1], /const WEB_MODEL = 'claude-opus-5-5';/);
+  assert.match(scripts[0][1], /const body = \{ model: WEB_MODEL, max_tokens:/);
+  assert.ok(BUILDUP_AI_MODELS.includes('claude-opus-5-5'));
+  // Upcoming CRM premeetings reach the frame only through the bridge op (no network in the frame).
+  assert.match(scripts[0][1], /web\.bridge\.call\('premeetings', \{\}/);
   assert.doesNotMatch(html, /<script[^>]+src=|<link[^>]+href=["']https?:/i);
   const prepared = prepareBuildupDocument(html);
   assert.ok(prepared.indexOf('Content-Security-Policy') < prepared.search(/<script\b/));

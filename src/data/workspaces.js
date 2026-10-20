@@ -24,7 +24,7 @@ export function selectWorkspace(state, target) {
 // the microphone stays denied in the frame because recording runs in this page (buildupRecorder.js).
 export const BUILDUP_SANDBOX = 'allow-scripts allow-downloads allow-modals';
 export const BUILDUP_FRAME_ALLOW = "camera 'none'; microphone 'none'; geolocation 'none'";
-export const BUILDUP_NOTICE = '빌드업 인텔리전스 v4.8 · 상담은 직원 계정별로 자동 저장되고 관리자(OWNER·ADMIN)는 직원별 현황을 봅니다 · 녹음 파일(음성)은 서버에 남지 않으니 필요하면 내려받으세요 · KPI 데이터와는 연동되지 않습니다';
+export const BUILDUP_NOTICE = '빌드업 인텔리전스 v4.9 · 상담은 직원 계정별로 자동 저장되고 관리자(OWNER·ADMIN)는 직원별 현황을 봅니다 · 녹음 파일(음성)은 서버에 남지 않으니 필요하면 내려받으세요 · KPI 데이터와는 연동되지 않습니다';
 export const BUILDUP_CSP = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src blob:; connect-src 'none'; form-action 'none'; base-uri 'none'";
 
 export function prepareBuildupDocument(html) {

@@ -16,7 +16,7 @@ export const BUILDUP_BRIDGE_LIMITS = Object.freeze({
 const ID = /^[A-Za-z0-9_-]{1,80}$/;
 const REQUEST_ID = /^[A-Za-z0-9_-]{1,40}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const SERVER_OPS = new Set(['session', 'list', 'get', 'save', 'delete', 'usage']);
+const SERVER_OPS = new Set(['session', 'list', 'get', 'save', 'delete', 'usage', 'premeetings']);
 const ERROR_FIELDS = ['revision', 'name', 'detail', 'perm', 'message'];
 
 const plainObject = (value) => !!value && typeof value === 'object' && !Array.isArray(value)
@@ -34,6 +34,8 @@ const RULES = {
     && sizeOf(a) <= BUILDUP_BRIDGE_LIMITS.saveBytes,
   delete: (a) => ID.test(String(a.id || '')),
   usage: (a) => a.days === undefined || (Number.isInteger(a.days) && a.days >= 1 && a.days <= 90),
+  // Upcoming CRM premeetings for the overview (read-only, no arguments).
+  premeetings: (a) => Object.keys(a).length === 0,
   ai: (a) => typeof a.model === 'string' && a.model.length <= 80 && Number.isInteger(a.max_tokens) && a.max_tokens >= 1
     && Array.isArray(a.messages) && a.messages.length >= 1 && a.messages.length <= 200
     && a.messages.every((m) => plainObject(m) && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')

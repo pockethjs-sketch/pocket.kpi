@@ -1,5 +1,18 @@
 # Employee authentication cutover — 2026-09-18
 
+## 2026-10-20 Buildup v4.9: upcoming CRM premeetings in the overview (local; production approval pending)
+
+- User requested the KPI premeeting company list (today onward, refreshed 08:00 KST daily, today loaded now) inside the buildup "프로젝트 전체 보기".
+- New server-only tables `buildup_premeetings` / `buildup_premeeting_runs` (RLS enable+force, no anon/authenticated grants, no phone/e-mail/address columns) and `buildup_store_premeetings()` (security invoker, execute granted to service_role only) that atomically replaces the today..+30-day window, marks schedules missing from the CRM as removed and purges rows older than 30 days. KPI leads, `crm_raw_records` and the KPI premeeting projection are not read or written.
+- New Edge Function `kpi-buildup-premeetings` (verify_jwt) accepts only the existing internal schedule secret header (`KPI_MARKETING_CRON_SECRET` reused, Vault `kpi_marketing_cron_secret`); pg_cron `pocket-buildup-premeetings` `0 23 * * *` UTC. It reads the same CRM calendar endpoint as `kpi-crm-sync` with `CRM_BEARER_TOKEN`, refuses a full 1000-row page as possibly truncated, and returns counts only. No new secrets.
+- `kpi-buildup-api` gains read-only `premeetings` after the existing employee checks; owner names of already-prepared consultations are returned only to OWNER/ADMIN. The bridge allows one argument-free `premeetings` op. Summary whitelist adds `crm` (schedule number) so prepared consultations link back.
+- Status: two production migration approval requests closed without approval; nothing deployed for this feature yet. Local tests and the 43-flow frame harness pass.
+
+## 2026-10-20 Buildup v4.9: workspace AI fixed to Claude Opus 5.5 (frontend via PR #2)
+
+- User requested AI insights in the buildup workspace on Opus 5.5. Asset-only change: the frame always requests `claude-opus-5-5` through the existing bridge and `kpi-buildup-api`. No API, auth, RLS, CSP, sandbox, bridge or model-allowlist change; the asset stays pinned by SHA-256 in tests.
+- The company key stays server-only in Supabase Secrets `ANTHROPIC_API_KEY`. A secure-input request for it (value never passes through the assistant) was dismissed by the user, so it is still unregistered; until then the function returns `ai_not_configured` and the frame stays rule-based. No redeploy is needed after registration.
+
 ## 2026-10-20 Employee account administration and first-login password change (functions deployed; frontend via this PR)
 
 - User requested: keep MASTER unchanged, add `design@pocket.company` and `ceo@pocket.company` with an administrator-set temporary password that must be replaced at first login, and give MASTER an account-management screen to view and manage accounts.

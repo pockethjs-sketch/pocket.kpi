@@ -840,6 +840,7 @@ ol.three p{margin:4px 0 0;font-size:var(--fs-16);line-height:var(--lh-ui);font-w
 .rph .ai{font-size:var(--fs-12);font-weight:var(--w-r);line-height:var(--lh-ui);color:var(--sub);display:inline-flex;align-items:center;gap:8px;min-width:0}
 .rph .ai i{width:7px;height:7px;border-radius:50%;background:var(--mute);flex:none}
 .rph .ai.on i{background:var(--blue)}
+.rph .ai span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .rph .sp{flex:1}
 .recbar{display:flex;align-items:center;gap:8px;padding:12px 12px 12px 20px}
 .recbtn{display:inline-flex;align-items:center;gap:8px;height:var(--h-btn);padding:0 16px 0 12px;border-radius:var(--r-ctl);border:1px solid var(--line-2);background:var(--panel);font-weight:var(--w-s);font-size:var(--fs-16);line-height:var(--lh-ui);color:var(--ink)}
@@ -1057,7 +1058,7 @@ button.ctx:hover,button.actx:hover{background:var(--tint)}
 .drop.over{border-color:var(--blue);background:var(--tint)}
 .drop small{font-size:var(--fs-12);color:var(--mute)}
 .drop .ic{color:var(--mute)}
-.tmgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.tmgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1.7fr) minmax(0,1fr);gap:12px}
 .ana-h .hint{font-size:var(--fs-12);font-weight:var(--w-r);color:var(--sub)}
 .cat{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
 .cat h3{margin:0 0 8px;font-size:var(--fs-12);color:var(--sub);font-weight:var(--w-s)}
@@ -2153,6 +2154,32 @@ body.inkon .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
 .ptbl.staff .pco small{display:block}
 .ptbl.staff td small{margin-left:4px;color:var(--mute);font-size:var(--fs-11)}
 .ptbl.staff .pco[disabled]{cursor:default;opacity:1}
+
+/* ===== v4.9 CRM 프리미팅(곧 미팅할 기업): 전체 보기 줄 · 캘린더 · TM 미리 채움 =====
+ * 아직 상담이 아닌 CRM 일정은 점선 테두리로 구분하고, 상담을 만들면 보통 줄(작은 CRM 표시)로 바뀐다 */
+.pcrm{display:flex;align-items:center;gap:12px;padding:10px 12px 10px 16px;border-radius:var(--r-box);background:var(--panel);border:1px dashed var(--blue-soft);font-size:var(--fs-13);color:var(--text);line-height:var(--lh-ui);flex-wrap:wrap}
+.pcrm b{font-weight:var(--w-s);color:var(--ink)}
+.pcrm small{font-size:var(--fs-12);color:var(--sub)}
+.pcrm .sp{flex:1}
+.pcrm .pcrm-ic{display:grid;place-items:center;color:var(--blue)}
+.pcrm.warn{background:var(--warn-bg);border-color:var(--warn-line);color:var(--warn-ink)}
+.pcrm.warn .pcrm-ic{color:var(--warn-ink)}
+.crmtag{display:inline-flex;align-items:center;height:18px;padding:0 6px;border-radius:var(--r-tag);border:1px solid var(--blue-soft);color:var(--blue-deep);background:transparent;font-size:var(--fs-11);font-weight:var(--w-s);line-height:var(--lh-ui);vertical-align:middle;white-space:nowrap}
+.st.crm{background:transparent;border:1px dashed var(--blue-soft);color:var(--blue-deep)}
+.ptbl tr.crm{background:color-mix(in srgb,var(--tint) 35%,transparent)}
+.ptbl tr.crm>th,.ptbl tr.crm>td{border-bottom-style:dashed}
+.ptbl .pcrmf{color:var(--sub);font-size:var(--fs-13)}
+.pnext .btn.crmgo{display:inline-flex;flex-direction:row;height:var(--h-sm);padding:0 12px;border:1px solid var(--blue);color:var(--blue);background:var(--panel);font-size:var(--fs-13);max-width:none}
+.pnext .btn.crmgo:hover{background:var(--blue);color:var(--on-blue)}
+.pnext .btn.crmgo:hover span{color:var(--on-blue)}
+.pnext .btn.crmgo+small{display:block;margin-top:4px}
+.ptools .chip.crmchip:not(.on){border-style:dashed}
+.ce.crm{background:transparent;border:1px dashed var(--blue-soft);color:var(--blue-deep)}
+.ag.crm{background:var(--panel);border:1px dashed var(--blue-soft)}
+.ag.crm:hover{background:var(--tint)}
+.ag .crmtag{margin-top:1px;flex:none}
+.tmcrm{display:flex;align-items:flex-start;gap:8px;margin:0 0 12px;padding:8px 12px;border-radius:var(--r-box);background:var(--tint);color:var(--blue-deep);font-size:var(--fs-13);line-height:var(--lh-txt)}
+.tmcrm svg{flex:none;margin-top:2px}
 
 </style>
 </head>
@@ -4546,6 +4573,22 @@ window.PK_VIS = {
     async getAudio(key) { return web.audio.get(key); },
     async delAudio(key) { web.audio.delete(key); },
     async usage(days) { return web.bridge.call('usage', { days: days || 30 }); },
+    /* 곧 미팅할 CRM 프리미팅(오늘 이후 · 서버가 매일 아침 8시에 CRM에서 업데이트) · 5분 안에 다시 부르면 받아 둔 값 */
+    pm: null, pmAt: 0, pmBusy: null,
+    premeetings(force) {
+      if (!web.bridge) return Promise.resolve(null);
+      if (!force && web.pm && Date.now() - web.pmAt < 300000) return Promise.resolve(web.pm);
+      if (web.pmBusy) return web.pmBusy;
+      const ok = x => x && typeof x === 'object' && /^[0-9]{1,20}$/.test(String(x.scheduleNo || '')) && typeof x.company === 'string' && x.company && /^\d{4}-\d{2}-\d{2}$/.test(String(x.meetingDay || ''));
+      web.pmBusy = web.bridge.call('premeetings', {}, { timeout: 30000 }).then(r => {
+        web.pm = { items: (Array.isArray(r && r.items) ? r.items : []).filter(ok), today: String((r && r.today) || ''), sync: (r && r.sync) || null, err: null };
+        return web.pm;
+      }).catch(e => {
+        web.pm = Object.assign({ items: [], today: '', sync: null }, web.pm || {}, { err: (e && e.code) || 'error' });
+        return web.pm;
+      }).then(v => { web.pmAt = Date.now(); web.pmBusy = null; return v; });
+      return web.pmBusy;
+    },
     subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); }
   };
 
@@ -4563,6 +4606,8 @@ window.PK_VIS = {
   'use strict';
   const API = 'https://api.anthropic.com/v1/messages';
   const DEF = { chatModel: 'claude-sonnet-5-5', quickModel: 'claude-haiku-5-5', docModel: 'claude-opus-5-5', auto: true, every: 20 };
+  /* 포켓 KPI 워크스페이스(회사 키)는 AI 인사이트 · AI 대화 · 녹음 정리 · 상세 레포트를 모두 Claude Opus 5.5로 부른다(회사 정책 · 개인 설정과 무관) */
+  const WEB_MODEL = 'claude-opus-5-5';
   /* 화면에 보일 모델 이름: 'claude-opus-5-5' → 'Opus 5.5' */
   function modelLabel(id) {
     const m = String(id || '').match(/claude-(opus|sonnet|haiku|fable|mythos)-(\d+)(?:-(\d+))?/i);
@@ -4576,8 +4621,11 @@ window.PK_VIS = {
     setConfig(c) { A.cfg = Object.assign({}, DEF, c || {}); A.refresh(); },
     refresh() { A.mode = A.sample ? 'claude' : A.web ? 'web' : (A.cfg.key ? 'key' : 'none'); },
     ready() { return A.mode !== 'none'; },
-    label() { return A.mode === 'claude' ? 'Claude 연결됨' : A.mode === 'web' ? '회사 AI 연결됨' : A.mode === 'key' ? 'API 키로 연결됨' : 'AI 미연결 · 규칙 기반'; },
+    label() { return A.mode === 'claude' ? 'Claude 연결됨' : A.mode === 'web' ? '회사 AI 연결됨 · ' + modelLabel(WEB_MODEL) : A.mode === 'key' ? 'API 키로 연결됨' : 'AI 미연결 · 규칙 기반'; },
+    /* 대화 인텔리전스 머리말의 짧은 표시(좁은 패널에서도 한 줄) */
+    chip() { return A.mode === 'web' ? modelLabel(WEB_MODEL) + ' 연결됨' : A.label(); },
     modelLabel,
+    webModel: WEB_MODEL,
     /* 상세 레포트(Word)에 쓰는 모델 — 기본 Claude Opus 5.5 */
     docModel() { return A.cfg.docModel || DEF.docModel; },
     /* 자동(타이머) 분석은 API 키 · 회사 키 모드에서만 — claude.ai 링크는 사람의 요청으로만 부른다 */
@@ -4631,9 +4679,9 @@ window.PK_VIS = {
     }
     return { text, model, truncated };
   }
-  /* 웹 워크스페이스: 부모 창이 직원 세션으로 서버를 부르고, 서버가 회사 키로 Anthropic을 부른다(키는 이 화면에 없다) */
+  /* 웹 워크스페이스: 부모 창이 직원 세션으로 서버를 부르고, 서버가 회사 키로 Anthropic을 부른다(키는 이 화면에 없다) · 모델은 언제나 Opus 5.5 */
   async function viaWeb(system, turns, o) {
-    const body = { model: o.model || (o.tier === 'quick' ? A.cfg.quickModel : o.tier === 'complex' ? A.cfg.docModel || DEF.docModel : A.cfg.chatModel), max_tokens: o.maxTokens || 1200, messages: turns, stream: !!o.onText };
+    const body = { model: WEB_MODEL, max_tokens: o.maxTokens || 1200, messages: turns, stream: !!o.onText };
     if (system) body.system = system;
     let last = '';
     const r = await A.web.call('ai', body, {
@@ -8420,7 +8468,7 @@ function quoteText(q) {
 /* ===== ui_core — 공용 도구 · 상태 · 프로젝트 모델 ===== */
 const E = PK.engine, D = PK.diag, A = PK.analyze, AI = PK.ai, REC = PK.rec, ST = PK.store, RP = PK.reports;
 const IMG = window.PK_IMG || {}, PAGES = window.PK_PAGES || {}, V2 = window.PK_V2 || {}, PAGE_OF = window.PK_PAGE_OF || {}, PITCH = window.PK_PITCH || {};
-const VERSION = 'v4.8';
+const VERSION = 'v4.9';
 const CONTACT = '02-1800-2550 · ceo@pocket.company';
 const AN = E.AREA_NAME, AREA_IDS = D.AREA_IDS;
 const VIEWS = [['company', '회사 정보'], ['diag', '빌드업 진단'], ['report', '종합 레포트'], ['docs', '상세 레포트']];
@@ -8635,6 +8683,12 @@ function normP(p) {
   if (p.sched && (typeof p.sched !== 'object' || Array.isArray(p.sched))) delete p.sched;
   else if (p.sched) { Object.keys(p.sched).forEach(k => { const v = parseInt(p.sched[k], 10); if (!E.ITEMS[k] || !(v >= 1 && v <= 52)) delete p.sched[k]; else p.sched[k] = v; }); if (!Object.keys(p.sched).length) delete p.sched; }
   if (!AREA_IDS.includes(p.area)) p.area = 'grant';
+  /* CRM 프리미팅에서 만든 상담: 그 일정 번호(겹쳐 만들지 않게 · 전체 보기에서 이어 보이게) */
+  if (p.crm !== undefined) {
+    const c = p.crm, digits = v => /^[0-9]{1,20}$/.test(String(v === null || v === undefined ? '' : v));
+    if (!c || typeof c !== 'object' || Array.isArray(c) || !digits(c.ms)) delete p.crm;
+    else p.crm = { ms: String(c.ms), proj: digits(c.proj) ? String(c.proj) : '', at: String(c.at || '').slice(0, 40) };
+  }
   return p;
 }
 function coreOf(p) { const c = Object.assign({}, p); delete c.heavy; return c; }
@@ -8642,7 +8696,7 @@ function summaryOf(p) {
   let total = 0; try { const m = D.model(p); total = m.q ? m.q.total : 0; } catch (e) { /* 계산 실패 */ }
   const hv = p.heavy || {};
   return { id: p.id, name: p.company.name, ceo: p.company.ceo, date: p.date, time: timeOk(p.time) ? p.time : '', status: p.status, tier: E.TIERS[D.tierOf(p)], total, updatedAt: p.updatedAt, saveId: p.saveId || '', tm: p.tm ? { by: p.tm.by || '', at: p.tm.at || '' } : null, bm1: bmOne(p), deal: dealOf(p),
-    recSec: Math.round(+hv.elapsed || 0), trN: Array.isArray(hv.transcript) ? hv.transcript.length : 0, final: !!(p.rep && p.rep.finalAt) };
+    recSec: Math.round(+hv.elapsed || 0), trN: Array.isArray(hv.transcript) ? hv.transcript.length : 0, final: !!(p.rep && p.rep.finalAt), crm: p.crm && p.crm.ms ? { ms: p.crm.ms } : null };
 }
 function isEmptyP(p) {
   const c = p.company, h = p.heavy, n = o => !!o && Object.keys(o).length > 0;
@@ -10941,7 +10995,7 @@ function renderRight() {
     (recOn || paused ? '<span class="rtime num" id="railClock">' + mmss(REC.elapsed()) + '</span>' : '') +
     '<button type="button" class="btn icon ghost" data-act="meetings" aria-label="미팅 기록">' + ic('note') + '</button>' +
     '<button type="button" class="btn icon ghost" data-act="right" aria-label="인사이트">' + ic('spark') + '</button>' + (S.intel.unseen ? '<span class="badge">' + S.intel.unseen + '</span>' : '') + '</div>';
-  let h = '<div class="rp"><div class="rph"><b>대화 인텔리전스</b><span class="ai' + (AI.ready() ? ' on' : '') + '"><i></i>' + esc(AI.label()) + '</span><span class="sp"></span>' +
+  let h = '<div class="rp"><div class="rph"><b>대화 인텔리전스</b><span class="ai' + (AI.ready() ? ' on' : '') + '" title="' + esc(AI.label()) + '"><i></i><span>' + esc(AI.chip()) + '</span></span><span class="sp"></span>' +
     '<button type="button" class="btn sm icon ghost" data-act="settings" aria-label="설정 · AI 연결">' + ic('gear', 'sm') + '</button>' +
     '<button type="button" class="btn sm icon ghost" data-act="right" aria-label="인텔리전스 접기">' + ic('right', 'sm') + '</button></div>';
   h += '<div class="recbar"><button type="button" class="recbtn' + (recOn ? ' on' : paused ? ' paused' : '') + '" data-act="rec"><span class="dot">' + ic(recOn ? 'pause' : 'mic') + '</span><span>' +
@@ -12211,7 +12265,8 @@ function freshTm() { return { by: ST.lsGet('tmBy') || '', date: '', time: '', na
 function tmHasDraft(f) { return !!(f && (f.name || f.ceo || f.text || f.audio.length || f.res)); }
 function tmBody() {
   const f = S.tmf;
-  let h = '<div class="tmgrid"><div class="fld"><label for="tmName">회사명</label><input class="in" id="tmName" data-tk="name" value="' + esc(f.name) + '" autocomplete="off" aria-describedby="tmNameErr"><small class="ferr" id="tmNameErr" hidden>회사명을 넣어 주세요</small></div>' +
+  let h = f.crm ? '<p class="tmcrm">' + ic('cal', 'sm') + '<span>CRM 프리미팅에서 가져왔습니다 · 일정 #' + esc(f.crm.ms) + (f.crm.owner ? ' · 담당 ' + esc(f.crm.owner) : '') + ' · 「자동 정리」로 회사 정보 · 진단에 넣을 수 있습니다</span></p>' : '';
+  h += '<div class="tmgrid"><div class="fld"><label for="tmName">회사명</label><input class="in" id="tmName" data-tk="name" value="' + esc(f.name) + '" autocomplete="off" aria-describedby="tmNameErr"><small class="ferr" id="tmNameErr" hidden>회사명을 넣어 주세요</small></div>' +
     '<div class="fld"><label for="tmCeo">대표자</label><input class="in" id="tmCeo" data-tk="ceo" value="' + esc(f.ceo) + '" autocomplete="off"></div>' +
     '<div class="fld"><label for="tmDate">미팅 예정일 · 시간</label><div class="dtpair"><input class="in" type="date" id="tmDate" data-tk="date" value="' + esc(f.date) + '"><input class="in" type="time" step="600" id="tmTime" data-tk="time" value="' + esc(f.time || '') + '" aria-label="미팅 시간"></div></div>' +
     '<div class="fld"><label for="tmBy">TM 담당</label><input class="in" id="tmBy" data-tk="by" value="' + esc(f.by) + '" autocomplete="off"></div></div>';
@@ -12272,6 +12327,7 @@ async function tmCreate() {
   if (f.res) applyItems(p, f.items, f.checked);
   p.company.name = f.name.trim() || p.company.name; p.company.ceo = f.ceo.trim() || p.company.ceo;
   p.tm = { by: f.by.trim().slice(0, 40), at: now, summary: f.summary.trim().slice(0, 3000), ask: f.ask.split('\n').map(s => s.trim().slice(0, 200)).filter(Boolean).slice(0, 20) };
+  if (f.crm && /^[0-9]{1,20}$/.test(String(f.crm.ms || ''))) p.crm = { ms: String(f.crm.ms), proj: String(f.crm.proj || ''), at: String(f.crm.at || '') };
   if (f.text.trim()) p.heavy.meetings.push({ id: uid(), kind: 'tm', no: 0, date: today(), title: 'TM 통화', text: f.text.trim(), applied: f.res ? Object.keys(f.checked).filter(k => f.checked[k]) : [], appliedAt: f.res ? now : null, trUpTo: 0 });
   if (f.by.trim()) ST.lsSet('tmBy', f.by.trim());
   const tmMid = (p.heavy.meetings[0] || {}).id;
@@ -12279,6 +12335,51 @@ async function tmCreate() {
   S.tmf = null; S.tmDraft = null; closeModal(true);
   await switchTo(p, true);
   toast('프로젝트를 만들었습니다 · ' + (p.company.name || '이름 없음'));
+}
+
+/* ---------- CRM 프리미팅 → TM 사전 입력(미리 채움) ----------
+ * 회사명 · 신청자 · 미팅 일시 · TM 담당과 CRM 사전 정보를 채워 열고, 만든 프로젝트는 그 일정 번호와 이어 둔다 */
+const CRM_WAY = { visit: '방문', zoom: '화상(줌)', outer: '외부 미팅' };
+function crmTime(iso) {
+  const d = new Date(iso); if (isNaN(d.getTime())) return '';
+  const k = new Date(d.getTime() + 9 * 3600000);
+  return String(k.getUTCHours()).padStart(2, '0') + ':' + String(k.getUTCMinutes()).padStart(2, '0');
+}
+function crmText(x) {
+  const c = x.client || {}, L = ['[CRM 프리미팅 · 일정 #' + x.scheduleNo + ']'];
+  L.push('미팅: ' + x.meetingDay + ' ' + crmTime(x.meetingAt) + (CRM_WAY[x.way] ? ' · ' + CRM_WAY[x.way] : ''));
+  const mg = (x.managers || []).filter(Boolean);
+  if (mg.length || x.salesOwner) L.push('담당 영업: ' + (mg.length ? mg.join(', ') : x.salesOwner));
+  if (x.bookedBy) L.push('예약(TM): ' + x.bookedBy);
+  if (x.contact) L.push('신청자: ' + x.contact);
+  const facts = [c.annualSales ? '최근 매출 ' + c.annualSales : '', c.expectedSales ? '예상 매출 ' + c.expectedSales : '', c.members ? '인원 ' + c.members : '', c.founded ? '설립 ' + c.founded : ''].filter(Boolean);
+  if (facts.length) L.push(facts.join(' · '));
+  if (c.needBuildup || c.needBuildupText) L.push('필요한 빌드업: ' + [c.needBuildup, c.needBuildupText].filter(Boolean).join(' · '));
+  if (c.financing && c.financing.length) L.push('투자 · 지원 경험: ' + c.financing.join(', '));
+  if (c.business) L.push('사업 내용: ' + c.business);
+  if (c.sectorText) L.push('업종: ' + c.sectorText);
+  if (c.homepage) L.push('홈페이지: ' + c.homepage);
+  if (x.note) L.push('CRM 메모: ' + x.note);
+  return L.join('\n');
+}
+async function crmPrep(x) {
+  if (!x) return;
+  if (REC.state === 'rec' || REC.state === 'paused') { toast('녹음을 끝낸 뒤 새 프로젝트를 만들 수 있습니다'); return; }
+  const d = S.tmDraft;
+  if (d && tmHasDraft(d) && !(d.crm && d.crm.ms === x.scheduleNo)) {
+    const ok = await confirmBox('작성 중인 TM 사전 입력이 있습니다. 지우고 「' + x.company + '」 CRM 정보로 새로 채울까요?', 'CRM 정보로 채우기');
+    if (!ok) return;
+  }
+  if (!(d && d.crm && d.crm.ms === x.scheduleNo)) {
+    const f = freshTm();
+    f.name = x.company === '(업체명 미등록)' ? '' : x.company; f.ceo = x.contact || ''; f.date = x.meetingDay || ''; f.time = crmTime(x.meetingAt);
+    if (x.bookedBy) f.by = x.bookedBy;
+    f.text = crmText(x);
+    f.crm = { ms: x.scheduleNo, proj: x.projectNo || '', at: x.meetingAt || '', owner: x.salesOwner || '' };
+    S.tmDraft = f;
+  }
+  if (S.pipe) closePipe();
+  openTm();
 }
 
 /* ---------- 프로젝트 파일(.json) ---------- */
@@ -12406,19 +12507,25 @@ function calMove(n) {
   if (n === 0) { const d = new Date(); st.y = d.getFullYear(); st.m = d.getMonth(); st.sel = today(); }
   else { const d = new Date(st.y, st.m + n, 1); st.y = d.getFullYear(); st.m = d.getMonth(); }
 }
-function calEvents(list) {
+function calEvents(list, crm) {
   const m = {};
   list.forEach(x => {
     if (dOf(x.date)) (m[x.date] = m[x.date] || []).push({ x, kind: 'meet', time: timeOk(x.time) ? x.time : '' });
     const d = dealOf(x);
     if (d.nextAt && d.stage !== 'lost') (m[d.nextAt] = m[d.nextAt] || []).push({ x, kind: 'next', time: '', text: d.next });
   });
-  Object.keys(m).forEach(k => m[k].sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'meet' ? -1 : 1) || String(a.time || '99').localeCompare(String(b.time || '99'))));
+  (crm || []).forEach(r => { if (dOf(r.date)) (m[r.date] = m[r.date] || []).push({ x: r, kind: 'crm', time: r.time }); });
+  const rank = k => k === 'next' ? 1 : 0;
+  Object.keys(m).forEach(k => m[k].sort((a, b) => rank(a.kind) - rank(b.kind) || String(a.time || '99').localeCompare(String(b.time || '99'))));
   return m;
 }
+/* 일정 하나를 누르면: 프로젝트는 열기, CRM 프리미팅은 상담 준비 */
+function evAct(e, act) { return e.kind === 'crm' ? 'crm-prep:' + esc(e.x.it.scheduleNo) : (act || 'load') + ':' + esc(e.x.id); }
 function agItem(e, act) {
-  return '<button type="button" class="ag ' + e.kind + '" data-act="' + (act || 'load') + ':' + esc(e.x.id) + '"><time>' + (e.kind === 'meet' ? (e.time || '시간 미정') : '할 일') + '</time>' +
-    '<span class="agt"><b>' + esc(e.x.name || '이름 없음') + '</b><small>' + esc(e.kind === 'meet' ? (e.x.bm1 || '') : (e.text || '다음 할 일')) + '</small></span>' + (e.kind === 'meet' ? dealChip(e.x) : '') + '</button>';
+  const crm = e.kind === 'crm', it = crm ? e.x.it : null;
+  return '<button type="button" class="ag ' + e.kind + '" data-act="' + evAct(e, act) + '"><time>' + (e.kind === 'next' ? '할 일' : (e.time || '시간 미정')) + '</time>' +
+    '<span class="agt"><b>' + esc(e.x.name || '이름 없음') + '</b><small>' + esc(crm ? ['CRM 프리미팅', it.salesOwner ? '담당 ' + it.salesOwner : '', CRM_WAY_SHORT[it.way] || ''].filter(Boolean).join(' · ') : e.kind === 'meet' ? (e.x.bm1 || '') : (e.text || '다음 할 일')) + '</small></span>' +
+    (crm ? '<span class="crmtag">상담 준비</span>' : e.kind === 'meet' ? dealChip(e.x) : '') + '</button>';
 }
 function calGrid(ev, big, act) {
   const st = calState(), td = today(), first = new Date(st.y, st.m, 1), start = new Date(st.y, st.m, 1 - first.getDay());
@@ -12426,12 +12533,12 @@ function calGrid(ev, big, act) {
   let h = '<div class="calg' + (big ? ' big' : '') + '">' + WD.map((w, i) => '<span class="wd' + (i === 0 ? ' sun' : '') + '">' + w + '</span>').join('');
   for (let i = 0; i < weeks * 7; i++) {
     const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i), k = ymd(d), es = ev[k] || [];
-    const nm = es.filter(e => e.kind === 'meet').length, nn = es.length - nm;
+    const nm = es.filter(e => e.kind !== 'next').length, nn = es.length - nm;
     const cls = 'cd' + (d.getMonth() !== st.m ? ' out' : '') + (k === td ? ' today' : '') + (k === st.sel ? ' sel' : '') + (d.getDay() === 0 ? ' sun' : '');
     const lab = fmtMD(d) + (nm ? ' · 미팅 ' + nm + '건' : '') + (nn ? ' · 할 일 ' + nn + '건' : '');
     if (big) {
       h += '<div class="' + cls + '"><button type="button" class="dn" data-act="cal-sel:' + k + '" aria-label="' + esc(lab) + '">' + d.getDate() + '</button>' +
-        es.slice(0, 4).map(e => '<button type="button" class="ce ' + e.kind + ' st-' + dealOf(e.x).stage + '" data-act="' + (act || 'load') + ':' + esc(e.x.id) + '" title="' + esc((e.time ? e.time + ' ' : '') + (e.x.name || '') + (e.kind === 'next' ? ' · ' + (e.text || '다음 할 일') : '')) + '">' + (e.kind === 'meet' ? '<time>' + (e.time || '') + '</time>' : '<time>할 일</time>') + '<span>' + esc(e.x.name || '이름 없음') + '</span></button>').join('') +
+        es.slice(0, 4).map(e => '<button type="button" class="ce ' + e.kind + (e.kind === 'crm' ? '' : ' st-' + dealOf(e.x).stage) + '" data-act="' + evAct(e, act) + '" title="' + esc((e.time ? e.time + ' ' : '') + (e.x.name || '') + (e.kind === 'next' ? ' · ' + (e.text || '다음 할 일') : e.kind === 'crm' ? ' · CRM 프리미팅(상담 준비 전)' : '')) + '">' + (e.kind === 'next' ? '<time>할 일</time>' : '<time>' + (e.time || '') + '</time>') + '<span>' + esc(e.x.name || '이름 없음') + '</span></button>').join('') +
         (es.length > 4 ? '<button type="button" class="more" data-act="cal-sel:' + k + '">+' + (es.length - 4) + '</button>' : '') + '</div>';
     } else {
       h += '<button type="button" class="' + cls + '" data-act="cal-sel:' + k + '" aria-label="' + esc(lab) + '" aria-pressed="' + (k === st.sel) + '"><span>' + d.getDate() + '</span>' +
@@ -12522,6 +12629,74 @@ async function quickDeal(id, key, val) {
   if (ok && S.pipe) paintPipe();
 }
 
+/* ---------- CRM 프리미팅(곧 미팅할 기업 · 서버가 매일 아침 8시에 CRM에서 업데이트) ----------
+ * 웹 워크스페이스에서만. 아직 상담을 준비하지 않은 일정은 표 · 캘린더에 'CRM' 줄로 보이고,
+ * 「상담 준비」를 누르면 CRM 정보로 채운 TM 사전 입력이 열린다. 만든 상담은 일정 번호로 이어져 CRM 줄 대신 보인다. */
+const CRM_WAY_SHORT = { visit: '방문', zoom: '화상', outer: '외부' };
+function crmOn() { return S.mode === 'web' && !!(ST.web && ST.web.bridge); }
+function crmState() {
+  const st = S.pipe; if (!crmOn() || !st) return null;
+  if (!st.pm && !st.pmBusy) {
+    st.pmBusy = true;
+    ST.web.premeetings().then(r => { st.pm = r || { items: [], err: 'error' }; }, () => { st.pm = { items: [], err: 'error' }; })
+      .then(() => { st.pmBusy = false; if (S.pipe === st) paintPipe(); });
+  }
+  return st.pm || null;
+}
+function crmReload() {
+  const st = S.pipe; if (!st || !crmOn() || st.pmBusy) return;
+  st.pmBusy = true; st.pm = null; paintPipe();
+  ST.web.premeetings(true).then(r => { st.pm = r || { items: [], err: 'error' }; }, () => { st.pm = { items: [], err: 'error' }; })
+    .then(() => { st.pmBusy = false; if (S.pipe === st) { paintPipe(); toast(st.pm && st.pm.err ? 'CRM 프리미팅을 불러오지 못했습니다' : 'CRM 프리미팅을 다시 불러왔습니다'); } });
+}
+function crmHHMM(iso) {
+  const d = new Date(iso); if (isNaN(d.getTime())) return '';
+  const k = new Date(d.getTime() + 9 * 3600000);
+  return String(k.getUTCHours()).padStart(2, '0') + ':' + String(k.getUTCMinutes()).padStart(2, '0');
+}
+/* 상담이 아직 없는 일정만(내 목록 · 관리자 전체 목록에 이어진 상담이 있으면 그 상담 줄이 대신 보인다) */
+function crmRowsOf(pm, all) {
+  if (!pm || !Array.isArray(pm.items)) return [];
+  const linked = {}; all.forEach(x => { if (x.crm && x.crm.ms) linked[x.crm.ms] = true; });
+  const td = today();
+  return pm.items.filter(it => !linked[it.scheduleNo] && String(it.meetingDay) >= td)
+    .map(it => ({ kind: 'crm', id: 'crm:' + it.scheduleNo, it, name: it.company, date: it.meetingDay, time: crmHHMM(it.meetingAt) }));
+}
+function crmMatch(it, q) {
+  if (!q) return true;
+  const c = it.client || {};
+  return [it.company, it.contact, it.salesOwner, it.bookedBy, c.business, c.needBuildup].concat(it.managers || []).some(v => String(v || '').toLowerCase().includes(q));
+}
+function crmItem(no) { const pm = ST.web && ST.web.pm; return pm && Array.isArray(pm.items) ? pm.items.find(x => x.scheduleNo === no) || null : null; }
+function crmStrip(pm, crm) {
+  if (!crmOn()) return '';
+  const head = '<span class="pcrm-ic">' + ic('cal', 'sm') + '</span>';
+  const again = '<button type="button" class="btn sm icon ghost" data-act="crm-reload" aria-label="CRM 프리미팅 다시 불러오기"' + (S.pipe && S.pipe.pmBusy ? ' disabled' : '') + '>' + ic('sync', 'sm') + '</button>';
+  if (!pm) return '<div class="pcrm">' + head + '<span class="busy">CRM 프리미팅을 불러오는 중</span></div>';
+  const items = pm.items || [];
+  if (pm.err && !items.length) return '<div class="pcrm warn" role="status">' + head + '<span>CRM 프리미팅 목록을 불러오지 못했습니다 · 잠시 뒤 다시 불러오세요</span><span class="sp"></span>' + again + '</div>';
+  const td = today(), nToday = items.filter(x => x.meetingDay === td).length;
+  const nWeek = items.filter(x => { const n = dday(x.meetingDay); return n !== null && n >= 0 && n <= 7; }).length;
+  const sync = pm.sync || {}, at = sync.at ? fmtDT(sync.at) : '';
+  return '<div class="pcrm" role="status">' + head + '<span><b>곧 미팅할 프리미팅 ' + items.length + '건</b> · 오늘 ' + nToday + ' · 7일 안 ' + nWeek +
+    (items.length ? ' · 상담 준비 전 ' + crm.length : '') + '</span><span class="sp"></span>' +
+    '<small>' + (at ? 'CRM 기준 · 매일 아침 8시 업데이트 · 마지막 ' + esc(at) : 'CRM 기준 · 매일 아침 8시 업데이트 · 아직 업데이트 전') + (sync.failed ? ' · 최근 업데이트 실패(이전 목록)' : '') + '</small>' + again + '</div>';
+}
+function crmRowHtml(r, adminAll) {
+  const it = r.it, c = it.client || {}, dd = ddayTxt(r.date), nm = it.company, no = esc(it.scheduleNo);
+  const facts = [c.annualSales ? '매출 ' + c.annualSales : '', c.members || '', c.needBuildup ? '필요 ' + c.needBuildup : ''].filter(Boolean).join(' · ');
+  const other = it.linked && !it.linked.mine ? (it.linked.ownerName ? it.linked.ownerName + ' 님이 준비함' : '다른 직원이 준비함') : '';
+  const way = CRM_WAY_SHORT[it.way] ? CRM_WAY_SHORT[it.way] + ' 미팅' : '미팅';
+  return '<tr class="crm">' +
+    '<th scope="row"><button type="button" class="pco" data-act="crm-prep:' + no + '"><b>' + esc(nm) + ' <span class="crmtag">CRM</span></b><small>' + esc([it.contact ? it.contact + ' 님' : '', it.salesOwner ? '담당 ' + it.salesOwner : ''].filter(Boolean).join(' · ') || '—') + '</small></button></th>' +
+    (adminAll ? '<td class="pown"><span>' + esc(it.salesOwner || '—') + '</span></td>' : '') +
+    '<td class="pbm">' + (c.business ? esc(short(c.business, 60)) : '<span class="mute">—</span>') + '</td>' +
+    '<td class="pwhen">' + esc(whenTxt(r)) + (dd ? '<small class="' + (dd === '오늘' ? 'td' : '') + '">' + dd + '</small>' : '') + '</td>' +
+    '<td><span class="st crm">' + way + ' 예정</span></td>' +
+    '<td colspan="3" class="pcrmf">' + (facts ? esc(facts) : '<span class="mute">CRM 사전 정보 없음</span>') + '</td>' +
+    '<td class="pnext"><button type="button" class="btn sm crmgo" data-act="crm-prep:' + no + '">' + ic('plus', 'sm') + '<span>상담 준비</span></button>' + (other ? '<small>' + esc(other) + '</small>' : '') + '</td><td></td></tr>';
+}
+
 /* ---------- 프로젝트 전체 보기(표 · 캘린더) ---------- */
 function openPipe() {
   if (S.client) return;
@@ -12565,6 +12740,7 @@ function pipeBody() {
   let list = all.filter(x => itemMatch(x, q));
   const ownerName = adminAll && st.owner ? ((ST.web.members.find(m => m.userId === st.owner) || {}).name || (list.find(x => x.ownerId === st.owner) || {}).ownerName || '직원') : '';
   if (adminAll && st.owner) list = list.filter(x => (x.ownerId || S.web.me) === st.owner);
+  const pm = crmState(), crmAll = crmRowsOf(pm, all), crm = st.owner ? [] : crmAll.filter(r => crmMatch(r.it, q));
   const by = k => list.filter(x => dealOf(x).stage === k), sum = a => a.reduce((s, x) => s + (+x.total || 0), 0);
   const open = by('open'), won = by('won');
   const soon = list.filter(x => { const n = dday(x.date); return n !== null && n >= 0 && n <= 7; }).length;
@@ -12576,29 +12752,39 @@ function pipeBody() {
     '<div class="won"><b class="num">' + won.length + '</b><span>계약 성사' + (sum(won) ? ' · ' + E.fmt(sum(won)) + '만 원' : '') + '</span></div>' +
     '<div><b class="num">' + high.length + '</b><span>가능성 높음' + (sum(high) ? ' · ' + E.fmt(sum(high)) + '만 원' : '') + '</span></div></div>';
   if (ownerName) h += '<div class="pfilter"><span>' + esc(ownerName) + ' 님의 상담만 보는 중</span><button type="button" class="btn sm ghost" data-act="pipe-owner:all">전체 직원 보기</button></div>';
+  if (!ownerName) h += crmStrip(pm, crmAll);
   if (st.tab === 'cal') {
-    return h + '<div class="pcal">' + calHead('p') + calGrid(calEvents(list), true, 'pipe-open') + pipeDay(list) + '</div>';
+    return h + '<div class="pcal">' + calHead('p') + calGrid(calEvents(list, crm), true, 'pipe-open') + pipeDay(list, crm) + '</div>';
   }
-  const f = st.f, rows = (f === 'all' ? list : list.filter(x => dealOf(x).stage === f)).slice();
+  if (st.f === 'crm' && !crmOn()) st.f = 'all';
+  const f = st.f, rows = (f === 'all' ? list : f === 'crm' ? [] : list.filter(x => dealOf(x).stage === f)).slice();
   const CH = { high: 0, mid: 1, low: 2, '': 3 };
-  rows.sort((a, b) => {
-    if (st.sort === 'amount') return (+b.total || 0) - (+a.total || 0);
-    if (st.sort === 'chance') return CH[dealOf(a).chance] - CH[dealOf(b).chance] || (+b.total || 0) - (+a.total || 0);
-    if (st.sort === 'updated') return String(b.updatedAt || '').localeCompare(String(a.updatedAt || ''));
+  const byDate = (a, b) => {
     const da = dday(a.date), db = dday(b.date), ka = da === null ? 3 : da >= 0 ? 0 : 1, kb = db === null ? 3 : db >= 0 ? 0 : 1;
     if (ka !== kb) return ka - kb;
     if (ka === 0) return da - db || String(a.time || '99').localeCompare(String(b.time || '99'));
     return String(b.date || '').localeCompare(String(a.date || ''));
+  };
+  rows.sort((a, b) => {
+    if (st.sort === 'amount') return (+b.total || 0) - (+a.total || 0);
+    if (st.sort === 'chance') return CH[dealOf(a).chance] - CH[dealOf(b).chance] || (+b.total || 0) - (+a.total || 0);
+    if (st.sort === 'updated') return String(b.updatedAt || '').localeCompare(String(a.updatedAt || ''));
+    return byDate(a, b);
   });
-  h += '<div class="ptools"><div class="chips" role="group" aria-label="계약 상태로 거르기">' + [['all', '전체', list.length]].concat(DEAL_IDS.map(k => [k, DEAL[k], by(k).length])).map(t =>
-    '<button type="button" class="chip' + (f === t[0] ? ' on' : '') + '" aria-pressed="' + (f === t[0]) + '" data-act="pipe-f:' + t[0] + '">' + t[1] + ' <span class="num">' + t[2] + '</span></button>').join('') + '</div><span class="sp"></span>' +
+  /* CRM 줄: 미팅일 순이면 프로젝트와 날짜대로 섞고, 다른 정렬이면 프로젝트 뒤에 날짜순으로 */
+  const crmShown = f === 'all' || f === 'crm' ? crm.slice().sort(byDate) : [];
+  const shown = st.sort === 'date' || f === 'crm' ? rows.concat(crmShown).sort(byDate) : rows.concat(crmShown);
+  const chips = [['all', '전체', list.length + crm.length]].concat(crmOn() ? [['crm', 'CRM 예정', crm.length]] : []).concat(DEAL_IDS.map(k => [k, DEAL[k], by(k).length]));
+  h += '<div class="ptools"><div class="chips" role="group" aria-label="계약 상태로 거르기">' + chips.map(t =>
+    '<button type="button" class="chip' + (t[0] === 'crm' ? ' crmchip' : '') + (f === t[0] ? ' on' : '') + '" aria-pressed="' + (f === t[0]) + '" data-act="pipe-f:' + t[0] + '">' + t[1] + ' <span class="num">' + t[2] + '</span></button>').join('') + '</div><span class="sp"></span>' +
     '<label class="psort">정렬 <select id="pipeSort" aria-label="정렬">' + [['date', '미팅일(다가오는 순)'], ['updated', '최근 고친 순'], ['amount', '견적 금액'], ['chance', '가능성']].map(o => '<option value="' + o[0] + '"' + (st.sort === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></label></div>';
-  if (!rows.length) return h + '<p class="lempty">' + (all.length ? '조건에 맞는 프로젝트가 없습니다' : 'TM 사전 입력이나 새 미팅으로 첫 프로젝트를 만드세요') + '</p>';
+  if (!shown.length) return h + '<p class="lempty">' + (f === 'crm' ? (pm && !pm.err ? '상담 준비 전인 CRM 프리미팅이 없습니다' : 'CRM 프리미팅을 불러오면 여기에 보입니다') : all.length ? '조건에 맞는 프로젝트가 없습니다' : 'TM 사전 입력이나 새 미팅으로 첫 프로젝트를 만드세요') + '</p>';
   h += '<div class="ptw"><table class="ptbl"><thead><tr><th scope="col">회사</th>' + (adminAll ? '<th scope="col">담당</th>' : '') + '<th scope="col">비즈니스 모델</th><th scope="col">미팅 일시</th><th scope="col">진행</th><th scope="col">계약 상태</th><th scope="col">가능성</th><th scope="col" class="r">견적 합계</th><th scope="col">다음 할 일</th><th scope="col"><span class="sr">고치기</span></th></tr></thead><tbody>' +
-    rows.map(x => {
+    shown.map(x => {
+      if (x.kind === 'crm') return crmRowHtml(x, adminAll);
       const d = dealOf(x), dd = ddayTxt(x.date), cur = S.p && !S.sample && curKey() === x.id, nm = x.name || '이름 없는 프로젝트', ro = othersItem(x);
       return '<tr class="st-' + d.stage + (cur ? ' cur' : '') + (ro ? ' ro' : '') + '">' +
-        '<th scope="row"><button type="button" class="pco" data-act="pipe-open:' + esc(x.id) + '"><b>' + esc(nm) + '</b><small>' + esc([x.ceo ? x.ceo + ' 대표' : '', x.tier || ''].filter(Boolean).join(' · ') || '—') + '</small></button></th>' +
+        '<th scope="row"><button type="button" class="pco" data-act="pipe-open:' + esc(x.id) + '"><b>' + esc(nm) + (x.crm && x.crm.ms ? ' <span class="crmtag" title="CRM 프리미팅에서 준비한 상담">CRM</span>' : '') + '</b><small>' + esc([x.ceo ? x.ceo + ' 대표' : '', x.tier || ''].filter(Boolean).join(' · ') || '—') + '</small></button></th>' +
         (adminAll ? '<td class="pown">' + (ro ? '<button type="button" class="lnk" data-act="pipe-owner:' + esc(x.ownerId) + '">' + esc(x.ownerName || '직원') + '</button>' : '<span>나</span>') + '</td>' : '') +
         '<td class="pbm">' + esc(x.bm1 || '—') + '</td>' +
         '<td class="pwhen">' + (whenTxt(x) ? esc(whenTxt(x)) + (dd ? '<small class="' + (dd === '오늘' ? 'td' : dd === '지남' ? 'past' : '') + '">' + dd + '</small>' : '') : '<span class="mute">미정</span>') + '</td>' +
@@ -12653,8 +12839,8 @@ function staffBody(all) {
     '<p class="hint">이름을 누르면 그 직원의 상담만 표로 봅니다 · 다른 직원의 상담은 열어 볼 수만 있고 고칠 수 없습니다' + (st.usage && st.usage.err ? ' · AI 사용량을 불러오지 못했습니다' : '') + '</p>';
   return h;
 }
-function pipeDay(list) {
-  const st = calState(), ev = calEvents(list), es = ev[st.sel] || [], sd = dOf(st.sel);
+function pipeDay(list, crm) {
+  const st = calState(), ev = calEvents(list, crm), es = ev[st.sel] || [], sd = dOf(st.sel);
   return '<div class="agenda wide"><div class="agh">' + (sd ? fmtMD(sd) : '') + (st.sel === today() ? ' · 오늘' : '') + '</div>' + (es.length ? es.map(e => agItem(e, 'pipe-open')).join('') : '<p class="agempty">이날 일정이 없습니다</p>') + '</div>';
 }
 
@@ -12665,7 +12851,7 @@ function openSettings() {
   let h = '';
   if (web) h += '<div class="set"><h3>계정</h3><p>' + esc((S.web.name || '로그인한 직원') + ' · ' + (({ OWNER: '소유자', ADMIN: '관리자', EDITOR: '직원(편집)', VIEWER: '직원(보기)' })[S.web.role] || '직원')) + (S.web.admin ? ' · 전체 직원 상담을 볼 수 있습니다' : '') + '</p></div>';
   h += '<div class="set"><h3>AI 연결</h3>';
-  if (web) h += '<p>회사 AI 키로 연결됩니다(서버에 보관 · 키 입력 없음). 상세 레포트(Word)와 녹음 정리는 Claude Opus 5.5로 씁니다.</p><div class="line"><span class="' + (AI.ready() ? 'okmsg' : 'errmsg') + '">' + esc(AI.ready() ? AI.label() : '회사 AI 키가 아직 등록되지 않았습니다 · 관리자에게 요청하세요') + '</span></div>' +
+  if (web) h += '<p>회사 AI 키로 연결됩니다(서버에 보관 · 키 입력 없음). AI 인사이트 · AI 대화 · 녹음 정리 · 상세 레포트(Word)를 모두 Claude Opus 5.5로 씁니다.</p><div class="line"><span class="' + (AI.ready() ? 'okmsg' : 'errmsg') + '">' + esc(AI.ready() ? AI.label() : '회사 AI 키가 아직 등록되지 않았습니다 · 관리자에게 요청하세요') + '</span></div>' +
       '<div class="line" style="margin-top:12px"><label class="toggle"><input type="checkbox" id="setAuto"' + (c.auto !== false ? ' checked' : '') + '> 녹음 중 자동 인사이트</label>' +
       '<select class="in" id="setEvery" style="width:auto;height:40px" aria-label="자동 인사이트 간격">' + [20, 30, 60, 90].map(n => '<option value="' + n + '"' + (+c.every === n ? ' selected' : '') + '>' + n + '초마다</option>').join('') + '</select></div>';
   else if (shared) h += '<p>이 링크에서는 Claude에 바로 연결됩니다(키 필요 없음). 처음 물어볼 때 한 번 허용을 묻습니다. 상세 레포트(Word) 문장은 Claude Opus 5.5로 씁니다(계정에서 쓸 수 없으면 가장 성능 좋은 모델).</p><div class="line"><span class="okmsg">' + esc(AI.label()) + '</span></div>';
@@ -13019,7 +13205,14 @@ async function act(name, arg, el, ev) {
     case 'pipe': openPipe(); return;
     case 'pipe-close': closePipe(); return;
     case 'pipe-tab': if (S.pipe) { S.pipe.tab = arg === 'cal' ? 'cal' : arg === 'staff' ? 'staff' : 'table'; renderPipe(); const b = $('[data-act="pipe-tab:' + S.pipe.tab + '"]'); if (b) b.focus(); } return;
-    case 'pipe-f': if (S.pipe) { S.pipe.f = DEAL[arg] || arg === 'all' ? arg : 'all'; paintPipe(); } return;
+    case 'pipe-f': if (S.pipe) { S.pipe.f = DEAL[arg] || arg === 'all' || arg === 'crm' ? arg : 'all'; paintPipe(); } return;
+    case 'crm-reload': crmReload(); return;
+    case 'crm-prep': {
+      const it = crmItem(arg); if (!it) { toast('CRM 일정을 찾지 못했습니다 · 목록을 다시 불러오세요'); return; }
+      if (it.linked && it.linked.mine && it.linked.projectId) { closePipe(); loadProject(it.linked.projectId); return; }
+      if (it.linked && !it.linked.mine && !(await confirmBox((it.linked.ownerName ? it.linked.ownerName + ' 님이' : '다른 직원이') + ' 이 미팅의 상담을 이미 준비했습니다. 그래도 내 상담으로 새로 만들까요?', '새로 만들기'))) return;
+      crmPrep(it); return;
+    }
     case 'pipe-open': closePipe(); if (!(S.p && !S.sample && curKey() === arg)) loadProject(arg); return;
     case 'pchance': { const k = arg.lastIndexOf(':'), id = arg.slice(0, k), v = arg.slice(k + 1), x = leftItems().find(y => y.id === id); if (!x || !CHANCE[v]) return; quickDeal(id, 'chance', dealOf(x).chance === v ? '' : v); return; }
     case 'bview': S.intel.bizView = arg === 'chat' ? 'chat' : 'q'; renderRight(); if (arg === 'chat') { const ci = $('#chatIn'); if (ci && !narrow()) ci.focus(); } return;

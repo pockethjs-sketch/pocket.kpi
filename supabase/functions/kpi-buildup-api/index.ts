@@ -5,6 +5,7 @@ import {
   validateSave, decideSave, validateAi, aiRateLimited, aiUpstreamError, createUsageTap, memberName, listItem, usageRows,
 } from "../_shared/buildup-access.mjs";
 import { passwordChangeRequired } from "../_shared/account-access.mjs";
+import { kstDay, premeetingItem, premeetingSync } from "../_shared/premeeting-upcoming.mjs";
 
 // Sales buildup consultation workspace API.
 // - Every request: verified Supabase Auth employee session + current ACTIVE organization membership.
@@ -155,6 +156,45 @@ Deno.serve(async (req) => {
     if (updateError) return reply(req, { error: "buildup_delete_failed" }, 500);
     if (!updated?.length) return reply(req, { error: "conflict" }, 409);
     return reply(req, { ok: true });
+  }
+
+  // Upcoming CRM premeetings (today onward, KST) refreshed daily by kpi-buildup-premeetings. Read-only for every
+  // buildup employee; the same companies are visible to them in the KPI premeeting list. Projects already prepared
+  // from a schedule are marked so nobody prepares it twice (owner names only for OWNER/ADMIN).
+  if (action === "premeetings") {
+    const today = kstDay(new Date());
+    const [{ data: rows, error }, { data: runs, error: runError }] = await Promise.all([
+      supabase.from("buildup_premeetings")
+        .select("schedule_no,meeting_at,meeting_end_at,meeting_day,meeting_way,company,contact,sales_owner,managers,booked_by,crm_project_no,visited,client,note")
+        .eq("organization_id", organizationId).is("removed_at", null).gte("meeting_day", today)
+        .order("meeting_at", { ascending: true }).limit(BUILDUP_LIMITS.premeetingRows),
+      supabase.from("buildup_premeeting_runs").select("status,window_start,window_end,completed_at,error_code")
+        .eq("organization_id", organizationId).order("started_at", { ascending: false }).limit(10),
+    ]);
+    if (error || runError) return reply(req, { error: "premeetings_read_failed" }, 500);
+    const numbers = (rows || []).map((row: any) => row.schedule_no);
+    const links = new Map<string, any>();
+    if (numbers.length) {
+      const { data: projects, error: linkError } = await supabase.from("buildup_projects")
+        .select("project_id,owner_user_id,ms:summary->crm->>ms")
+        .eq("organization_id", organizationId).is("deleted_at", null).in("summary->crm->>ms", numbers);
+      if (linkError) return reply(req, { error: "premeetings_read_failed" }, 500);
+      for (const project of projects || []) {
+        const current = links.get(project.ms);
+        if (!current || (project.owner_user_id === me && current.owner_user_id !== me)) links.set(project.ms, project);
+      }
+    }
+    const admin = isBuildupAdmin(access);
+    const people = admin && [...links.values()].some((project) => project.owner_user_id !== me) ? await memberNames(supabase, organizationId) : null;
+    if (people?.error) return reply(req, { error: "members_read_failed" }, 500);
+    const items = (rows || []).map((row: any) => {
+      const project = links.get(row.schedule_no);
+      if (!project) return premeetingItem(row);
+      const mine = project.owner_user_id === me;
+      return premeetingItem(row, mine ? { mine: true, projectId: project.project_id }
+        : { mine: false, ...(admin ? { ownerId: project.owner_user_id, projectId: project.project_id, ownerName: people?.names?.get(project.owner_user_id) || "직원" } : {}) });
+    });
+    return reply(req, { ok: true, today, items, sync: premeetingSync(runs) });
   }
 
   if (action === "usage") {

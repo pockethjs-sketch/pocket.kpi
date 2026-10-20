@@ -17,6 +17,30 @@
 - Supabase 운영: `kpi-account-api` v2 ACTIVE(verify_jwt=true, 배포 소스 = 이 커밋 소스, 부트스트랩 경로 없음), `kpi-buildup-api` v2 ACTIVE. 합성 프로브만 사용: 형식 오류 JWT 401(`UNAUTHORIZED_INVALID_JWT_FORMAT`), 서명 위조 JWT 401(`UNAUTHORIZED_LEGACY_JWT`), 인증 헤더 없음 → 함수 401 `login_required`, 옛 부트스트랩 요청도 401. 스키마 재확인: 멤버십(organization_id,user_id)·초대(organization_id,email) 유일 제약, profiles·audit_events 열·enum 호환, auth.users 트리거 없음.
 - 미검증: 실제 MASTER 로그인 후 계정 생성, 직원 첫 로그인 비밀번호 변경, 사용 중지 후 로그인 차단(직원 자격 증명을 검증에 쓰지 않음).
 
+## 빌드업 인텔리전스 v4.9 — 곧 미팅할 CRM 프리미팅을 「프로젝트 전체 보기」에 (2026-10-20)
+
+- 사용자 요청: KPI가 CRM API로 매일 불러오는 프리미팅 기업 목록을 인텔리전스 「프로젝트 전체 보기」에 똑같이 보이게 DB 연동. 지난 미팅은 빼고 오늘 이후(곧 미팅할 기업)만, 매일 아침 8시 업데이트, 오늘 것은 바로 불러오기.
+- 출처: KPI CRM 동기화(`kpi-crm-sync`)와 같은 CRM 일정 API(`crm/v3/mr_schedules`, `state=1&page=schedule`, `mr_type=1` 프리미팅)와 같은 표시 규칙(회사 = client_rep_name → client_name → mr_name, 담당 영업 = 첫 CRM 담당자). KPI 리드 · 원본 CRM 증거(`crm_raw_records`) · KPI 프리미팅 반영 함수는 읽지도 바꾸지도 않는다(KPI 반영은 지금처럼 오늘까지만).
+- 저장(`supabase/migrations/20261020100000_buildup_upcoming_premeetings.sql`): 서버 전용 `buildup_premeetings`(일정 번호 · 미팅 일시 · 방식 · 회사 · 신청자 이름 · 담당 영업 · 예약 TM · CRM 사전 정보 요약 · CRM 메모)와 `buildup_premeeting_runs`(창 · 건수 · 오류 코드). 전화 · 이메일 · 주소는 저장하지 않는다. RLS enable+force, anon/authenticated 권한 없음. `buildup_store_premeetings()`(security invoker, service_role만 실행)가 오늘~+30일 창을 한 트랜잭션으로 바꾼다: 창 밖 행 거부, CRM에서 사라진 창 안 일정은 `removed_at`, 30일 지난 행 삭제, 저장 건수 = 받은 건수 확인.
+- 업데이트: pg_cron `pocket-buildup-premeetings` `0 23 * * *`(UTC = 매일 08:00 KST) → Edge Function `kpi-buildup-premeetings`(verify_jwt + 기존 내부 예약 비밀 `x-kpi-cron-secret` 재사용, 직원 · 브라우저 경로 없음). CRM 토큰은 서버 비밀 `CRM_BEARER_TOKEN`. CRM 응답이 한 페이지(1000건)를 채우면 잘린 것으로 보고 실패 처리(남은 일정을 지우지 않음). 응답 · 실행 기록에는 건수와 짧은 오류 코드만.
+- 읽기: `kpi-buildup-api` `premeetings`(직원 세션 + ACTIVE 멤버십 + 빌드업 사용 가능 + 임시 비밀번호 아님) → 오늘(KST) 이후 · 사라지지 않은 일정, 마지막 성공 업데이트 시각. 이미 이 일정으로 만든 상담이 있으면 표시(누가 만들었는지 이름은 OWNER/ADMIN에게만). 연결 다리에 인자 없는 `premeetings` 한 가지만 추가. 상담 요약 허용 키에 `crm`(일정 번호) 추가.
+- 화면(인텔리전스 v4.9 웹 빌드): 「프로젝트 전체 보기」 위에 `곧 미팅할 프리미팅 N건 · 오늘 · 7일 안 · 상담 준비 전 · 마지막 업데이트` 줄, 표에 아직 상담이 없는 일정이 점선 `CRM` 줄로 미팅일 순서대로 섞여 보이고(`CRM 예정` 거르기 칩), 캘린더에도 표시. 「상담 준비」는 CRM 정보로 채운 TM 사전 입력(회사명 · 신청자 · 미팅 일시 · TM 담당 · 사전 정보 글)을 열고, 만든 상담은 일정 번호로 이어져 CRM 줄 대신 상담 줄(작은 CRM 표시)로 보인다. TM 입력의 날짜 · 시간 칸을 넓혔다.
+- 검증(로컬): `buildup-premeetings` 8개 테스트(창 · KST 경계 · 정규화 · 연락처 제외 · 정렬/중복 · 응답/동기화 형태 · 함수 인증 순서 · 마이그레이션 권한 · API/다리 경로) 포함 전체 테스트 통과(환경 실패 1 제외). 인텔리전스 웹 하네스 43/43(CRM 11개 흐름: 요약 · 3줄 · 다른 직원 준비 표시 · 날짜순 · 거르기 · 캘린더 · TM 미리 채움 2 · 서버 저장 링크 · 상담 줄로 바뀜 · 관리자 이름), 키 파일 모드 6/6, 단위 테스트 통과.
+- 운영 상태: 아래 「배포 기록」 참고.
+
+### 배포 기록 — CRM 프리미팅
+
+- 2026-10-20 19시대 KST: 마이그레이션 적용 승인 요청 2회가 승인 없이 닫혀 **운영 DB · 함수 미반영**. 코드 · 마이그레이션 · 테스트는 이 브랜치에만 있다. 승인 후 순서: 마이그레이션 → `kpi-buildup-premeetings` 배포 → `kpi-buildup-api` 재배포 → 예약 작업 명령을 한 번 실행해 오늘 목록 적재 → 건수 · 실행 기록 확인.
+
+## 빌드업 인텔리전스 v4.9 — AI 인사이트를 Claude Opus 5.5로 (2026-10-20)
+
+- 사용자 요청: 빌드업 인텔리전스의 AI 인사이트 기능을 Opus 5.5 API로 연동.
+- 자산: `src/assets/buildup-intelligence.html` = 인텔리전스 v4.9 웹 빌드(`포켓_빌드업_인텔리전스_v4.9_web.html`, CRM 프리미팅 포함 최종본) 바이트 동일 복사본, SHA-256 `60b42f2e559d0376717f2309d609729744ad10678812932f1b5ab285c8db961c`.
+- 변경: 워크스페이스(회사 키) 모드의 모든 AI 요청(녹음 중 자동·버튼 AI 인사이트, AI 대화, TM 정리, 녹음 정리, 상세 레포트)이 `claude-opus-5-5`로 고정된다(개인 설정과 무관). 대화 인텔리전스 머리말에 `Opus 5.5 연결됨`(풍선말 `회사 AI 연결됨 · Opus 5.5`)을 한 줄로 보이고, 설정 안내 문구를 바꿨다. 키 파일 모드·claude.ai 링크 모드는 그대로.
+- 서버 변경 없음: `kpi-buildup-api`는 이미 `claude-opus-5-5`를 허용하고 회사 키 `ANTHROPIC_API_KEY`(Supabase Secrets)로 Anthropic을 부른다. 키가 없으면 `aiReady=false`라 화면은 규칙 기반으로 돌고 「회사 AI 키가 아직 등록되지 않았습니다」를 안내한다. 키를 등록하면 재배포 없이 다음 요청부터 쓴다.
+- 키 등록: 2026-10-20 18:3x KST 보안 입력창(값이 대화·코드를 거치지 않음)을 요청했으나 사용자가 닫아 아직 미등록. Supabase 대시보드 Edge Functions → Secrets에서 등록하거나 입력창을 다시 요청한다.
+- 검증: 인텔리전스 웹 하네스(실제 연결 다리·녹음기·서버 규칙) 32/32 — 머리말 한 줄 표시, 녹음 뒤 자동 인사이트·버튼 인사이트(카드 표시)·AI 대화(스트리밍)·녹음 정리 모두 Opus 5.5 요청, 키 없음 상태 안내. 키 파일 모드 6/6, 단위 테스트 통과. 실제 Anthropic 호출은 키 등록 전이라 미검증.
+
 ## 빌드업 인텔리전스 v4.8 — 직원별 저장 · 관리자 보기 · 회사 AI 키 · 사이트 녹음 (2026-10-20)
 
 - 사용자 요청: 기존 GitHub Pages 주소의 `빌드업 인텔리전스` 탭을 최신 v4.8로 교체하고 Supabase에 배포. 사용자가 선택한 범위는 `직원별 저장 + 관리자 보기`와 `회사 키를 Supabase에 보관`.
