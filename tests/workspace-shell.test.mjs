@@ -6,7 +6,7 @@ import vm from 'node:vm';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { transformWithOxc } from 'vite';
-import { WORKSPACES, INITIAL_WORKSPACE, selectWorkspace, BUILDUP_SANDBOX, BUILDUP_CSP, prepareBuildupDocument } from '../src/data/workspaces.js';
+import { WORKSPACES, MARKETING_HUB, INITIAL_WORKSPACE, selectWorkspace, BUILDUP_SANDBOX, BUILDUP_CSP, prepareBuildupDocument } from '../src/data/workspaces.js';
 
 const shellSource = readFileSync(new URL('../src/WorkspaceShell.jsx', import.meta.url), 'utf8');
 const frameSource = readFileSync(new URL('../src/BuildupWorkspace.jsx', import.meta.url), 'utf8');
@@ -15,8 +15,8 @@ const source = shellSource.replace(/^import .*\r?\n/gm, '').replace('export defa
 const { code } = await transformWithOxc(source, 'WorkspaceShell.jsx', { jsx: { runtime: 'classic' } });
 const icon = () => null;
 function compile(useState, BuildupWorkspace = () => null) {
-  return new Function('React', 'useState', 'WORKSPACES', 'INITIAL_WORKSPACE', 'selectWorkspace', 'BuildupWorkspace', 'ArrowRight', 'ChartNoAxesCombined', 'Layers3', 'LayoutGrid', code + ';return WorkspaceShell;')(
-    React, useState, WORKSPACES, INITIAL_WORKSPACE, selectWorkspace, BuildupWorkspace, icon, icon, icon, icon,
+  return new Function('React', 'useState', 'WORKSPACES', 'MARKETING_HUB', 'INITIAL_WORKSPACE', 'selectWorkspace', 'BuildupWorkspace', 'ArrowRight', 'ChartNoAxesCombined', 'Layers3', 'LayoutGrid', code + ';return WorkspaceShell;')(
+    React, useState, WORKSPACES, MARKETING_HUB, INITIAL_WORKSPACE, selectWorkspace, BuildupWorkspace, icon, icon, icon, icon,
   );
 }
 function elements(node) {
@@ -61,6 +61,28 @@ test('real navigation handlers keep both visited panels mounted across home/KPI/
   assert.equal(panel(tree, 'kpi').props.children, child);
   assert.equal(selectWorkspace(state, 'unknown'), state);
   assert.equal(INITIAL_WORKSPACE.kpiOpened, false);
+});
+
+test('chooser adds a marketing hub external card without changing internal navigation or passing state', () => {
+  let state = INITIAL_WORKSPACE;
+  const Component = compile(() => [state, next => { state = next(state); }]);
+  const tree = Component({ children: React.createElement('input', { defaultValue: 'synthetic draft' }) });
+  const links = elements(tree).filter(node => node.type === 'a');
+  assert.equal(links.length, 1);
+  const link = links[0];
+  assert.equal(link.props.href, 'https://pocket-mkt.github.io/');
+  assert.equal(link.props.target, '_blank');
+  assert.equal(link.props.rel, 'noopener noreferrer');
+  assert.equal(link.props.referrerPolicy, 'no-referrer');
+  assert.match(link.props['aria-label'], /마케팅 허브.*새 탭/);
+  assert.equal(link.props.onClick, undefined);
+  assert.equal(state, INITIAL_WORKSPACE);
+  assert.equal(selectWorkspace(state, 'marketing'), state);
+  const nav = elements(tree).find(node => node.type === 'nav');
+  assert.equal(elements(nav).filter(node => node.type === 'button').length, 3);
+  const html = renderToStaticMarkup(React.createElement(compile(React.useState)));
+  assert.equal((html.match(/class="workspace-card"/g) || []).length, 3);
+  assert.match(html, /마케팅 허브 열기/);
 });
 
 test('workspace logout delegates to the existing employee signout without clearing journals', () => {

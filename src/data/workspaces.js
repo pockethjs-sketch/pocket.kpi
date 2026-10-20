@@ -3,6 +3,11 @@ export const WORKSPACES = [
   { id: 'buildup', title: '빌드업 인텔리전스', description: '고객과 함께 회사 정보를 정리하고 빌드업을 진단하는 영업 상담 화면입니다.', detail: '회사 정보 · 빌드업 진단 · 종합 레포트', action: '빌드업 화면 열기' },
 ];
 
+export const MARKETING_HUB = {
+  title: '마케팅 허브',
+  href: 'https://pocket-mkt.github.io/',
+};
+
 export const INITIAL_WORKSPACE = { active: 'home', kpiOpened: false, buildupOpened: false };
 
 export function selectWorkspace(state, target) {

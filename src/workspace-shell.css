@@ -8,11 +8,13 @@
 .workspace-switcher nav button:hover,.workspace-signout:hover{background:#f1f5f9;color:#182338}
 .workspace-switcher nav button[aria-current=page]{background:#eff5ff;color:#1d4ed8;font-weight:700}
 .workspace-shell button:focus-visible{outline:2px solid #2563eb;outline-offset:3px}
+.workspace-shell a:focus-visible{outline:2px solid #2563eb;outline-offset:3px}
 .workspace-home{max-width:1040px;margin:0 auto;padding:76px 24px 36px}
 .workspace-home-heading>p{font-size:11px;color:#2563eb;font-weight:700;letter-spacing:.12em;margin:0 0 14px}
 .workspace-home-heading h1{font-size:30px;font-weight:750;letter-spacing:-.04em;margin:0 0 12px}
 .workspace-home-heading>span{font-size:14px;line-height:1.7;color:#64748b}
-.workspace-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;margin-top:36px}
+.workspace-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:20px;margin-top:36px}
+.workspace-card:link,.workspace-card:visited{color:inherit;text-decoration:none}
 .workspace-card{text-align:left;padding:28px;border:1px solid #dfe5ed;border-radius:7px;background:#fff;display:flex;flex-direction:column;align-items:flex-start;transition:border-color .15s,background-color .15s}
 .workspace-card:hover{border-color:#7ba5f8;background:#fbfdff}
 .workspace-card-icon{color:#2563eb;margin-bottom:28px}
