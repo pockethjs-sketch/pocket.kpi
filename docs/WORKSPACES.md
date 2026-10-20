@@ -1,6 +1,12 @@
 # KPI / 빌드업 상위 작업 공간 — 2026-10-20
 
-상태: 로컬 구현·자동 검증 완료. 커밋·푸시·운영 배포 없음. 실제 직원 로그인/브라우저 조작 검증은 미실시.
+상태: 운영 배포·정적 산출물 검증 완료. 실제 직원 로그인/브라우저 조작 검증은 미실시.
+
+## 배포 증거 — 2026-10-20 11:16 KST
+
+- 릴리스 `2f5f5b98675208fb6b34533f46e41e27b4d91bb6`, GitHub Actions `39357887298`의 build/deployment 성공. 기존 파이프라인의 보안·테스트·빌드·audit 단계 모두 통과. 로컬 전체 365개 테스트와 audit0 재확인.
+- 운영 https://pockethjs-sketch.github.io/pocket.kpi/ 의 HTML 및 실제 참조 JS/CSS 9개 모두 HTTP200. entry `index-DRPXDzM8.js`, main `main-6LCXKYh6.js`에서 새 작업 공간 코드 확인. CI와 로컬의 플랫폼별 자산 파일명 차이를 제외한 main 코드는 동일하다.
+- 빌드업 지연 청크 `buildup-intelligence-v3-CEULHyV8.js`는 로컬과 바이트 일치, SHA-256 `3f5631d44b8490c69a53c8bf924780decabedff5e12d354fab3f15aa508e67f7`. 정적 파일 제공 확인이며 실제 로그인/전환/인쇄/다운로드 브라우저 검증은 아니다.
 
 ## 범위
 

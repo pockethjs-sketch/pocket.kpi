@@ -1,10 +1,10 @@
 # Employee authentication cutover — 2026-09-18
 
-## 2026-10-20 KPI / sales buildup workspace shell (local only)
+## 2026-10-20 KPI / sales buildup workspace shell (deployed; browser unverified)
 
-- Add only an employee-gated workspace chooser and persistent switcher above the existing KPI app. KPI page permissions, authenticated API/storage/journal/sync behavior and EmployeeEntry authorization-before-import remain unchanged. No database, role, RLS, API or deployment changes.
+- Add only an employee-gated workspace chooser and persistent switcher above the existing KPI app. KPI page permissions, authenticated API/storage/journal/sync behavior and EmployeeEntry authorization-before-import remain unchanged. No database, role, RLS, API or deployment-configuration changes.
 - User-supplied standalone sales document is lazy-loaded in an opaque-origin sandbox with network/form CSP restrictions, no same-origin/top-navigation/popups permission, no KPI state/session bridge, and camera/microphone/location denied. Its original bytes are preserved. This is not shared consultation persistence: in-frame localStorage is unavailable; current-window-only input and explicit file export limits are shown to users. Static bundled source is not a server-enforced confidential document store.
-- 365 synthetic tests, security lint, build/build-contract and audit0 passed. Browser UI is unverified because no controllable general browser is connected. No commit/push/production release. See WORKSPACES.md; existing unrelated local edits below remain preserved.
+- Local365 tests/security/build/audit0 passed; release2f5f5b98675208fb6b34533f46e41e27b4d91bb6 and Actions39357887298 build/deployment succeeded. At02:16UTC public HTML and all9 referenced assets were HTTP200; workspace main matched local code except platform-generated asset filenames and the lazy buildup chunk matched byte-for-byte. Browser UI remains unverified because no controllable general browser is connected. See WORKSPACES.md; existing unrelated local edits below remain preserved and excluded from release.
 
 ## 2026-10-08 Two-page supplemental editing (validated locally; activation pending)
 
