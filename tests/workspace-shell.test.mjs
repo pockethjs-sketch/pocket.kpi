@@ -6,8 +6,10 @@ import vm from 'node:vm';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { transformWithOxc } from 'vite';
-import { WORKSPACES, MARKETING_HUB, INITIAL_WORKSPACE, selectWorkspace, BUILDUP_SANDBOX, BUILDUP_CSP, prepareBuildupDocument } from '../src/data/workspaces.js';
+import { WORKSPACES, MARKETING_HUB, INITIAL_WORKSPACE, selectWorkspace, BUILDUP_SANDBOX, BUILDUP_CSP, BUILDUP_FRAME_ALLOW, BUILDUP_NOTICE, prepareBuildupDocument } from '../src/data/workspaces.js';
 
+// SHA-256 of the v4.8 web build copied from the intelligence project (see docs/WORKSPACES.md).
+const BUILDUP_ASSET_SHA256 = 'a7c65ff4fd947313434e67afd6c9b1e904f90c0234d747b7351226768d61dd47';
 const shellSource = readFileSync(new URL('../src/WorkspaceShell.jsx', import.meta.url), 'utf8');
 const frameSource = readFileSync(new URL('../src/BuildupWorkspace.jsx', import.meta.url), 'utf8');
 const main = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
@@ -91,28 +93,35 @@ test('workspace logout delegates to the existing employee signout without cleari
   const tree = Component({ onSignOut: () => { calls++; } });
   elements(tree).find(node => node.type === 'button' && node.props.children === '로그아웃').props.onClick();
   assert.equal(calls, 1);
-  assert.doesNotMatch(shellSource + frameSource, /localStorage|sessionStorage|fetch\(|employeeRequest|postMessage/);
+  assert.doesNotMatch(shellSource, /localStorage|sessionStorage|fetch\(|employeeRequest|postMessage/);
+  assert.doesNotMatch(frameSource, /localStorage|sessionStorage|fetch\(|employeeRequest|employeeHeaders/);
   assert.match(main, /<WorkspaceShell onSignOut=\{\(\) => window.kpiSignOut\(\)\}><KpiWorkspace \/><\/WorkspaceShell>/);
   const entry = readFileSync(new URL('../src/EmployeeEntry.jsx', import.meta.url), 'utf8');
   assert.ok(entry.indexOf("await employeeRequest('session')") < entry.indexOf("await import('./main.jsx')"));
   assert.match(main, /if \(!window.kpiEmployeeAccess\?\.userId\) throw new Error\('employee_login_required'\)/);
 });
 
-test('provided standalone document is byte-preserved, syntactically valid, and isolated from KPI credentials', () => {
-  const raw = readFileSync(new URL('../src/assets/buildup-intelligence-v3.html', import.meta.url));
-  assert.equal(createHash('sha256').update(raw).digest('hex'), '367d69ea4ec012cc5a28a066c6765af90f98e96b2b47a2761e8c6db9559d0a99');
+test('v4.8 web build is pinned, syntactically valid, bridge-only and isolated from KPI credentials', () => {
+  const raw = readFileSync(new URL('../src/assets/buildup-intelligence.html', import.meta.url));
+  assert.equal(createHash('sha256').update(raw).digest('hex'), BUILDUP_ASSET_SHA256);
   const html = raw.toString('utf8');
   const scripts = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)];
-  assert.equal(scripts.length, 4);
+  assert.equal(scripts.length, 1);
   for (const [index, match] of scripts.entries()) new vm.Script(match[1], { filename: 'buildup-inline-' + index + '.js' });
+  assert.match(scripts[0][1], /^\s*window\.PK_WEB = 1;/);
+  assert.doesNotMatch(html, /<script[^>]+src=|<link[^>]+href=["']https?:/i);
   const prepared = prepareBuildupDocument(html);
-  assert.ok(prepared.indexOf('Content-Security-Policy') < prepared.indexOf('<script>'));
+  assert.ok(prepared.indexOf('Content-Security-Policy') < prepared.search(/<script\b/));
   assert.equal(prepared.replace(`<meta http-equiv="Content-Security-Policy" content="${BUILDUP_CSP}">`, ''), html);
   assert.doesNotMatch(BUILDUP_SANDBOX, /allow-same-origin|allow-top-navigation|allow-popups/);
   assert.match(BUILDUP_CSP, /connect-src 'none'/);
+  assert.match(BUILDUP_CSP, /script-src 'unsafe-inline';/);
+  assert.match(BUILDUP_FRAME_ALLOW, /microphone 'none'/);
   assert.match(frameSource, /sandbox=\{BUILDUP_SANDBOX\}/);
-  assert.match(frameSource, /microphone 'none'/);
-  assert.match(frameSource, /현재 창에서만 유지/);
+  assert.match(frameSource, /allow=\{BUILDUP_FRAME_ALLOW\}/);
+  assert.match(frameSource, /createBuildupRecorder/);
+  assert.match(BUILDUP_NOTICE, /직원 계정별로 자동 저장/);
+  assert.match(BUILDUP_NOTICE, /녹음 파일\(음성\)은 서버에 남지 않/);
   assert.match(frameSource, /\.catch\(/);
   assert.throws(() => prepareBuildupDocument('invalid'), /buildup_document_invalid/);
 });
