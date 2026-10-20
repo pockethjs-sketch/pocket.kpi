@@ -1,5 +1,12 @@
 # Employee authentication cutover — 2026-09-18
 
+## 2026-10-21 PR #2 frontend released (account administration, buildup v4.9)
+
+- PR #2 merged as `6dd89d3`; the Pages deploy stopped in `npm test` because `tests/kpi-ui.test.mjs` still pinned the v4.8 buildup asset hash (the v4.9 pin had been updated only in `tests/workspace-shell.test.mjs`; the KPI UI test cannot load locally without `postcss`, so it was not caught before merge). Nothing was published by the failed run.
+- PR #3 (`7f80237`) makes the KPI UI test read the single pin from `workspace-shell.test.mjs`; test-only change. A branch dispatch of the workflow passed build (security:check, test, check, audit) and was refused deployment by the `github-pages` environment rule (main only), as intended.
+- Released 2026-10-21 00:13 KST: "Deploy Pocket KPI" run 39446212351 on `7f80237` — build and deployment succeeded (github-pages deployment 7203470830). Live: account administration and first-login password gate, buildup v4.9 asset (Opus 5.5 workspace AI, CRM premeeting overview, compact controls and left list). Server parts were already live (`kpi-account-api` v2, `kpi-buildup-api` v4, `kpi-buildup-premeetings` v1, premeeting cron).
+- Not verified in production: real MASTER/employee browser flows (no credentials used); company AI key `ANTHROPIC_API_KEY` still to be registered by the owner.
+
 ## 2026-10-20 Buildup v4.9: compact controls and left list per design mock (summary key deployed; frontend via PR #2)
 
 - User requested smaller buttons matching a design mock and the left project list restyled to match. Frame-asset change (pinned by SHA-256) plus one display key: the list summary carries the sector id, and `cleanSummary` in `kpi-buildup-api` now keeps `sector` (string, already bounded to 300 chars like every summary string). No auth, RLS, CSP, sandbox, bridge, table or grant change; older rows simply lack the key and the list omits the sector.

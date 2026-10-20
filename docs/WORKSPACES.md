@@ -17,6 +17,12 @@
 - Supabase 운영: `kpi-account-api` v2 ACTIVE(verify_jwt=true, 배포 소스 = 이 커밋 소스, 부트스트랩 경로 없음), `kpi-buildup-api` v2 ACTIVE. 합성 프로브만 사용: 형식 오류 JWT 401(`UNAUTHORIZED_INVALID_JWT_FORMAT`), 서명 위조 JWT 401(`UNAUTHORIZED_LEGACY_JWT`), 인증 헤더 없음 → 함수 401 `login_required`, 옛 부트스트랩 요청도 401. 스키마 재확인: 멤버십(organization_id,user_id)·초대(organization_id,email) 유일 제약, profiles·audit_events 열·enum 호환, auth.users 트리거 없음.
 - 미검증: 실제 MASTER 로그인 후 계정 생성, 직원 첫 로그인 비밀번호 변경, 사용 중지 후 로그인 차단(직원 자격 증명을 검증에 쓰지 않음).
 
+## 사이트 배포 기록 — PR #2 · PR #3 (2026-10-21)
+
+- PR #2 머지(`6dd89d3`) 뒤 배포가 `npm test`에서 멈춤: `tests/kpi-ui.test.mjs`가 빌드업 자산 해시를 v4.8 값으로 따로 고정하고 있었다. PR #3(`7f80237`)에서 이 테스트가 `workspace-shell.test.mjs`의 고정 값 하나를 읽게 바꿨다(테스트만 변경).
+- 2026-10-21 00:13 KST 배포 완료(Deploy Pocket KPI run 39446212351, build · deployment 성공). 사이트에 계정 관리 · 첫 로그인 비밀번호 변경 · 빌드업 인텔리전스 v4.9(Opus 5.5 · CRM 프리미팅 · 화면 크기 · 왼쪽 목록)가 반영됐다. 서버는 그 전에 반영 완료.
+- 남은 일(대표님): 계정 관리에서 직원 계정(임시 비밀번호) 만들기, Supabase Secrets에 `ANTHROPIC_API_KEY` 등록.
+
 ## 빌드업 인텔리전스 v4.9 — 곧 미팅할 CRM 프리미팅을 「프로젝트 전체 보기」에 (2026-10-20)
 
 - 사용자 요청: KPI가 CRM API로 매일 불러오는 프리미팅 기업 목록을 인텔리전스 「프로젝트 전체 보기」에 똑같이 보이게 DB 연동. 지난 미팅은 빼고 오늘 이후(곧 미팅할 기업)만, 매일 아침 8시 업데이트, 오늘 것은 바로 불러오기.
