@@ -49,6 +49,8 @@ test('save payloads are validated, bounded and summaries reduced to display fiel
   const huge = validateSave({ id: 'p1', core, summary: {}, heavy: { transcript: 'x'.repeat(BUILDUP_LIMITS.heavyBytes + 1) } });
   assert.deepEqual([huge.status, huge.error], [413, 'payload_too_large']);
   assert.equal(cleanSummary({ name: 'a'.repeat(400) }).name.length, 300);
+  // v4.9 목록 셋째 줄(업종 · 매출 구간): 업종 id는 남기고 모르는 키는 버린다
+  assert.deepEqual(cleanSummary({ name: 'x', sector: 'it', tier: '1억 미만', evil: 1 }), { name: 'x', tier: '1억 미만', sector: 'it' });
 });
 
 test('optimistic revisions stop silent overwrites from a second window', () => {

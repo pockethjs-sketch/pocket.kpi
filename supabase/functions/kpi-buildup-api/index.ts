@@ -4,6 +4,8 @@ import {
   BUILDUP_ID, UUID, BUILDUP_LIMITS, byteLength, canUseBuildup, isBuildupAdmin, canReadBuildupOwner,
   validateSave, decideSave, validateAi, aiRateLimited, aiUpstreamError, createUsageTap, memberName, listItem, usageRows,
 } from "../_shared/buildup-access.mjs";
+import { passwordChangeRequired } from "../_shared/account-access.mjs";
+import { kstDay, premeetingItem, premeetingSync } from "../_shared/premeeting-upcoming.mjs";
 
 // Sales buildup consultation workspace API.
 // - Every request: verified Supabase Auth employee session + current ACTIVE organization membership.
@@ -60,13 +62,16 @@ Deno.serve(async (req) => {
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+  let authUser: any = null;
   const access = await authorizeEmployee({ request: req, organizationId,
-    verifyUser: (jwt: string) => supabase.auth.getUser(jwt),
+    verifyUser: async (jwt: string) => { const result = await supabase.auth.getUser(jwt); authUser = result.data?.user || null; return result; },
     findMembership: (org: string, userId: string) => supabase.from("organization_memberships")
       .select("organization_id,user_id,role,state,archived_at").eq("organization_id", org).eq("user_id", userId).maybeSingle(),
   });
   if (!access.ok) return reply(req, { error: access.error }, access.status);
   if (!canUseBuildup(access)) return reply(req, { error: "permission_denied" }, 403);
+  // Accounts still on an administrator-set temporary password must choose their own first.
+  if (passwordChangeRequired(authUser)) return reply(req, { error: "password_change_required" }, 403);
 
   let body: any;
   try {
@@ -151,6 +156,45 @@ Deno.serve(async (req) => {
     if (updateError) return reply(req, { error: "buildup_delete_failed" }, 500);
     if (!updated?.length) return reply(req, { error: "conflict" }, 409);
     return reply(req, { ok: true });
+  }
+
+  // Upcoming CRM premeetings (today onward, KST) refreshed daily by kpi-buildup-premeetings. Read-only for every
+  // buildup employee; the same companies are visible to them in the KPI premeeting list. Projects already prepared
+  // from a schedule are marked so nobody prepares it twice (owner names only for OWNER/ADMIN).
+  if (action === "premeetings") {
+    const today = kstDay(new Date());
+    const [{ data: rows, error }, { data: runs, error: runError }] = await Promise.all([
+      supabase.from("buildup_premeetings")
+        .select("schedule_no,meeting_at,meeting_end_at,meeting_day,meeting_way,company,contact,sales_owner,managers,booked_by,crm_project_no,visited,client,note")
+        .eq("organization_id", organizationId).is("removed_at", null).gte("meeting_day", today)
+        .order("meeting_at", { ascending: true }).limit(BUILDUP_LIMITS.premeetingRows),
+      supabase.from("buildup_premeeting_runs").select("status,window_start,window_end,completed_at,error_code")
+        .eq("organization_id", organizationId).order("started_at", { ascending: false }).limit(10),
+    ]);
+    if (error || runError) return reply(req, { error: "premeetings_read_failed" }, 500);
+    const numbers = (rows || []).map((row: any) => row.schedule_no);
+    const links = new Map<string, any>();
+    if (numbers.length) {
+      const { data: projects, error: linkError } = await supabase.from("buildup_projects")
+        .select("project_id,owner_user_id,ms:summary->crm->>ms")
+        .eq("organization_id", organizationId).is("deleted_at", null).in("summary->crm->>ms", numbers);
+      if (linkError) return reply(req, { error: "premeetings_read_failed" }, 500);
+      for (const project of projects || []) {
+        const current = links.get(project.ms);
+        if (!current || (project.owner_user_id === me && current.owner_user_id !== me)) links.set(project.ms, project);
+      }
+    }
+    const admin = isBuildupAdmin(access);
+    const people = admin && [...links.values()].some((project) => project.owner_user_id !== me) ? await memberNames(supabase, organizationId) : null;
+    if (people?.error) return reply(req, { error: "members_read_failed" }, 500);
+    const items = (rows || []).map((row: any) => {
+      const project = links.get(row.schedule_no);
+      if (!project) return premeetingItem(row);
+      const mine = project.owner_user_id === me;
+      return premeetingItem(row, mine ? { mine: true, projectId: project.project_id }
+        : { mine: false, ...(admin ? { ownerId: project.owner_user_id, projectId: project.project_id, ownerName: people?.names?.get(project.owner_user_id) || "직원" } : {}) });
+    });
+    return reply(req, { ok: true, today, items, sync: premeetingSync(runs) });
   }
 
   if (action === "usage") {
