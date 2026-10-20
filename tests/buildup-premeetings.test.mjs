@@ -12,7 +12,9 @@ const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
 const fetcher = read('../supabase/functions/kpi-buildup-premeetings/index.ts');
 const api = read('../supabase/functions/kpi-buildup-api/index.ts');
 const crmSync = read('../supabase/functions/kpi-crm-sync/index.ts');
-const migration = read('../supabase/migrations/20261020100000_buildup_upcoming_premeetings.sql');
+const migration = ['20261020104259_buildup_upcoming_premeetings_tables', '20261020104325_buildup_upcoming_premeetings_privileges',
+  '20261020104416_buildup_store_premeetings_function', '20261020104429_buildup_premeetings_schedule']
+  .map((name) => read(`../supabase/migrations/${name}.sql`)).join('\n');
 const config = read('../supabase/config.toml');
 
 // Synthetic CRM schedule rows only (no real customers).
@@ -93,6 +95,7 @@ test('the fetcher is internal-schedule only, refuses truncated reads and returns
   assert.doesNotMatch(fetcher, /body\.crmToken|console\.(log|info|debug)/);
   assert.match(fetcher, /list\.length >= CRM_PAGE_LIMIT\) return await fail\("crm_page_limit"/);
   assert.match(fetcher, /rpc\("buildup_store_premeetings"/);
+  assert.match(fetcher, /from\("buildup_premeetings"\)\.delete\(\{ count: "exact" \}\)\s*\.eq\("organization_id", organizationId\)\.lt\("meeting_day", cutoff\)/, 'retention purge is scoped to the organization and past rows');
   const returns = [...fetcher.matchAll(/return json\(\{([^}]*)\}/g)].map((m) => m[1]).join(' ');
   assert.doesNotMatch(returns, /\b(rows|items|list|company)\s*[:,}]|normalized\.rows(?!\.length)|\blist\b(?!\.length)/, 'responses never echo schedules');
   assert.match(returns, /fetched: normalized\.rows\.length/);

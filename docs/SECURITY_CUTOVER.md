@@ -1,12 +1,12 @@
 # Employee authentication cutover — 2026-09-18
 
-## 2026-10-20 Buildup v4.9: upcoming CRM premeetings in the overview (local; production approval pending)
+## 2026-10-20 Buildup v4.9: upcoming CRM premeetings in the overview (server deployed; frontend via PR #2)
 
 - User requested the KPI premeeting company list (today onward, refreshed 08:00 KST daily, today loaded now) inside the buildup "프로젝트 전체 보기".
 - New server-only tables `buildup_premeetings` / `buildup_premeeting_runs` (RLS enable+force, no anon/authenticated grants, no phone/e-mail/address columns) and `buildup_store_premeetings()` (security invoker, execute granted to service_role only) that atomically replaces the today..+30-day window, marks schedules missing from the CRM as removed and purges rows older than 30 days. KPI leads, `crm_raw_records` and the KPI premeeting projection are not read or written.
 - New Edge Function `kpi-buildup-premeetings` (verify_jwt) accepts only the existing internal schedule secret header (`KPI_MARKETING_CRON_SECRET` reused, Vault `kpi_marketing_cron_secret`); pg_cron `pocket-buildup-premeetings` `0 23 * * *` UTC. It reads the same CRM calendar endpoint as `kpi-crm-sync` with `CRM_BEARER_TOKEN`, refuses a full 1000-row page as possibly truncated, and returns counts only. No new secrets.
 - `kpi-buildup-api` gains read-only `premeetings` after the existing employee checks; owner names of already-prepared consultations are returned only to OWNER/ADMIN. The bridge allows one argument-free `premeetings` op. Summary whitelist adds `crm` (schedule number) so prepared consultations link back.
-- Status: two production migration approval requests closed without approval; nothing deployed for this feature yet. Local tests and the 43-flow frame harness pass.
+- Deployed 2026-10-20 19:43 KST as four migrations (tables; privilege revoke — default REFERENCES/TRIGGER/TRUNCATE for anon/authenticated removed; store function without the retention DELETE, which now runs in the Edge Function scoped to the organization; schedule). Grants re-read (postgres/service_role only), function security invoker with service_role EXECUTE only, cron active. Store function verified with synthetic rows inside an exception-rolled-back block. `kpi-buildup-premeetings` v1 and `kpi-buildup-api` v3 ACTIVE; synthetic probes 401 (no/wrong cron secret, no employee session) and no run rows created by refused calls. Initial manual run: 21 fetched = 21 stored (counts only reviewed).
 
 ## 2026-10-20 Buildup v4.9: workspace AI fixed to Claude Opus 5.5 (frontend via PR #2)
 

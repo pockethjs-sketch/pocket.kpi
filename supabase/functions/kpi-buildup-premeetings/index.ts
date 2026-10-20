@@ -77,10 +77,14 @@ Deno.serve(async (req) => {
     p_organization_id: organizationId, p_start: window.start, p_end: window.end, p_rows: normalized.rows,
   });
   if (storeError || !stored?.ok) return await fail("premeeting_store_failed", 500);
+  // Retention: schedules more than 30 days in the past are not needed for "today onward".
+  const cutoff = new Date(Date.parse(window.start + "T00:00:00Z") - 30 * 86_400_000).toISOString().slice(0, 10);
+  const { count: purged, error: purgeError } = await supabase.from("buildup_premeetings").delete({ count: "exact" })
+    .eq("organization_id", organizationId).lt("meeting_day", cutoff);
   const { error: completeError } = await finish({
     status: "COMPLETED", fetched: normalized.rows.length, stored: stored.active, removed: stored.removed, skipped: normalized.skipped,
   });
   if (completeError) return json({ error: "run_complete_failed" }, 500);
   return json({ ok: true, trigger, start: window.start, end: window.end, fetched: normalized.rows.length,
-    stored: stored.active, removed: stored.removed, purged: stored.purged, skipped: normalized.skipped });
+    stored: stored.active, removed: stored.removed, purged: purgeError ? null : purged ?? 0, skipped: normalized.skipped });
 });

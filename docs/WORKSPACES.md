@@ -21,7 +21,7 @@
 
 - 사용자 요청: KPI가 CRM API로 매일 불러오는 프리미팅 기업 목록을 인텔리전스 「프로젝트 전체 보기」에 똑같이 보이게 DB 연동. 지난 미팅은 빼고 오늘 이후(곧 미팅할 기업)만, 매일 아침 8시 업데이트, 오늘 것은 바로 불러오기.
 - 출처: KPI CRM 동기화(`kpi-crm-sync`)와 같은 CRM 일정 API(`crm/v3/mr_schedules`, `state=1&page=schedule`, `mr_type=1` 프리미팅)와 같은 표시 규칙(회사 = client_rep_name → client_name → mr_name, 담당 영업 = 첫 CRM 담당자). KPI 리드 · 원본 CRM 증거(`crm_raw_records`) · KPI 프리미팅 반영 함수는 읽지도 바꾸지도 않는다(KPI 반영은 지금처럼 오늘까지만).
-- 저장(`supabase/migrations/20261020100000_buildup_upcoming_premeetings.sql`): 서버 전용 `buildup_premeetings`(일정 번호 · 미팅 일시 · 방식 · 회사 · 신청자 이름 · 담당 영업 · 예약 TM · CRM 사전 정보 요약 · CRM 메모)와 `buildup_premeeting_runs`(창 · 건수 · 오류 코드). 전화 · 이메일 · 주소는 저장하지 않는다. RLS enable+force, anon/authenticated 권한 없음. `buildup_store_premeetings()`(security invoker, service_role만 실행)가 오늘~+30일 창을 한 트랜잭션으로 바꾼다: 창 밖 행 거부, CRM에서 사라진 창 안 일정은 `removed_at`, 30일 지난 행 삭제, 저장 건수 = 받은 건수 확인.
+- 저장(`supabase/migrations/20261020104259`~`20261020104429` 네 파일): 서버 전용 `buildup_premeetings`(일정 번호 · 미팅 일시 · 방식 · 회사 · 신청자 이름 · 담당 영업 · 예약 TM · CRM 사전 정보 요약 · CRM 메모)와 `buildup_premeeting_runs`(창 · 건수 · 오류 코드). 전화 · 이메일 · 주소는 저장하지 않는다. RLS enable+force, anon/authenticated 권한 없음. `buildup_store_premeetings()`(security invoker, service_role만 실행)가 오늘~+30일 창을 한 트랜잭션으로 바꾼다: 창 밖 행 거부, CRM에서 사라진 창 안 일정은 `removed_at`, 저장 건수 = 받은 건수 확인. 30일 지난 행 삭제는 Edge Function이 조직 범위로 한다.
 - 업데이트: pg_cron `pocket-buildup-premeetings` `0 23 * * *`(UTC = 매일 08:00 KST) → Edge Function `kpi-buildup-premeetings`(verify_jwt + 기존 내부 예약 비밀 `x-kpi-cron-secret` 재사용, 직원 · 브라우저 경로 없음). CRM 토큰은 서버 비밀 `CRM_BEARER_TOKEN`. CRM 응답이 한 페이지(1000건)를 채우면 잘린 것으로 보고 실패 처리(남은 일정을 지우지 않음). 응답 · 실행 기록에는 건수와 짧은 오류 코드만.
 - 읽기: `kpi-buildup-api` `premeetings`(직원 세션 + ACTIVE 멤버십 + 빌드업 사용 가능 + 임시 비밀번호 아님) → 오늘(KST) 이후 · 사라지지 않은 일정, 마지막 성공 업데이트 시각. 이미 이 일정으로 만든 상담이 있으면 표시(누가 만들었는지 이름은 OWNER/ADMIN에게만). 연결 다리에 인자 없는 `premeetings` 한 가지만 추가. 상담 요약 허용 키에 `crm`(일정 번호) 추가.
 - 화면(인텔리전스 v4.9 웹 빌드): 「프로젝트 전체 보기」 위에 `곧 미팅할 프리미팅 N건 · 오늘 · 7일 안 · 상담 준비 전 · 마지막 업데이트` 줄, 표에 아직 상담이 없는 일정이 점선 `CRM` 줄로 미팅일 순서대로 섞여 보이고(`CRM 예정` 거르기 칩), 캘린더에도 표시. 「상담 준비」는 CRM 정보로 채운 TM 사전 입력(회사명 · 신청자 · 미팅 일시 · TM 담당 · 사전 정보 글)을 열고, 만든 상담은 일정 번호로 이어져 CRM 줄 대신 상담 줄(작은 CRM 표시)로 보인다. TM 입력의 날짜 · 시간 칸을 넓혔다.
@@ -30,7 +30,11 @@
 
 ### 배포 기록 — CRM 프리미팅
 
-- 2026-10-20 19시대 KST: 마이그레이션 적용 승인 요청 2회가 승인 없이 닫혀 **운영 DB · 함수 미반영**. 코드 · 마이그레이션 · 테스트는 이 브랜치에만 있다. 승인 후 순서: 마이그레이션 → `kpi-buildup-premeetings` 배포 → `kpi-buildup-api` 재배포 → 예약 작업 명령을 한 번 실행해 오늘 목록 적재 → 건수 · 실행 기록 확인.
+- 2026-10-20 19:43 KST 운영 반영. 하나로 묶은 마이그레이션은 승인창이 닫혀(DELETE가 든 함수 본문이 확인 대상) 네 개로 나눠 적용: `20261020104259_buildup_upcoming_premeetings_tables`, `20261020104325_buildup_upcoming_premeetings_privileges`(anon/authenticated 권한 회수 — 기본 권한으로 REFERENCES·TRIGGER·TRUNCATE가 붙어 있었음), `20261020104416_buildup_store_premeetings_function`(30일 지난 행 삭제는 함수 밖, Edge Function이 조직 범위로 수행), `20261020104429_buildup_premeetings_schedule`. 저장소 파일도 같은 네 개로 맞췄다.
+- 확인: 표 권한 postgres·service_role만, 함수 security invoker · EXECUTE는 postgres·service_role만, pg_cron `pocket-buildup-premeetings` `0 23 * * *` 활성. 합성 행으로 저장 함수 검증(2건 저장 → 1건으로 다시 저장 시 1건 removed · 창 밖 행 `premeeting_outside_window`) 후 예외로 롤백, 표 0건 확인.
+- `kpi-buildup-premeetings` v1 ACTIVE(verify_jwt), `kpi-buildup-api` v3 ACTIVE(`premeetings` · `crm` 요약 키). 합성 프로브: 비밀 없음/틀린 비밀 401 `unauthorized`(실행 기록 생기지 않음), 인증 없는 `premeetings` 401 `login_required`.
+- 오늘 목록 적재: 예약 작업 명령을 `trigger=manual`로 한 번 실행 → run #1 COMPLETED, 창 2026-10-20~2026-11-19, CRM 21건 = 저장 21건, 건너뜀 0, 2.5초. 날짜별 10/20 3 · 10/21 6 · 10/22 5 · 10/23 2 · 10/24 1 · 10/27 4. 오늘 KPI 원본(아침 동기화)의 4건 중 3건 일치, 나머지 1건은 그 뒤 CRM에서 10/22로 옮겨진 일정이라 10/22에 있다(건수 · 날짜만 확인, 회사명 미출력).
+- 미검증: 실제 직원 화면에서 목록 · 상담 준비(프런트엔드는 PR 병합 후 배포), 내일 08:00 자동 실행(다음 실행 2026-10-21 08:00 KST).
 
 ## 빌드업 인텔리전스 v4.9 — AI 인사이트를 Claude Opus 5.5로 (2026-10-20)
 
