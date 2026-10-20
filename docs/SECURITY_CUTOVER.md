@@ -1,5 +1,10 @@
 # Employee authentication cutover — 2026-09-18
 
+## 2026-10-20 KPI-only warehouse UI refinement (release pending; browser unverified)
+
+- User limited this change to existing KPI UI and selected code/automated checks only, then explicitly approved deployment. Shared presentation primitives and KPI-scoped tokens replace overlapping theme overrides. Auth/API/RLS, KPI calculations/storage/sync, chooser and external hub are unchanged. The already-deployed buildup v4.8 update on main is retained without modification; no backend or migration deployment is part of this release.
+- Latest-main integration passed386 tests/security/build/artifact checks and npm audit0 in a separate release checkout so the original dirty working tree stays intact. Nine core token contrast pairs pass4.5:1; not a whole-screen accessibility or visual QA claim. Dark receivables/frozen contract-header geometry have explicit exceptions. Poppins Latin assets include public OFL. Actual employee UI remains unverified. See KPI_UI_REFINEMENT.md.
+
 ## 2026-10-20 Buildup intelligence v4.8: per-employee storage, admin read, company AI key, page-side recording
 
 - User requested replacing the buildup tab with v4.8 and deploying to the connected GitHub/Supabase, choosing per-employee storage with admin overview and a company AI key held in Supabase. The frame stays an opaque-origin sandbox (no same-origin/top-navigation/popups) with `connect-src 'none'`; camera/microphone/location remain denied in the frame. No KPI page permission, KPI table, RLS, auth flow or existing API changes.

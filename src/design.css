@@ -1,171 +1,153 @@
+@import './kpi-tokens.css';
 @font-face{font-family:'KPI SUIT';src:url('./assets/SUIT-Variable.woff2') format('woff2');font-weight:100 900;font-display:swap}
-/* Cosmetic overrides only: no display, grid-template, order, placement or content changes. */
-html[data-ui="precision"]{
-  --lp-bg:#f7f8fa;--lp-surface:#fff;--lp-surface-soft:#fafbfc;
-  --lp-border:#e6e9ef;--lp-border-soft:#f0f2f6;
-  --lp-text:#182338;--lp-text-body:#354359;--lp-muted:#66748b;--lp-subtle:#7d8ba0;
-  --lp-brand:#2563eb;--lp-brand-strong:#1d4ed8;--lp-brand-soft:#eff5ff;
-  --lp-radius-compact:5px;--lp-radius-control:7px;--lp-radius-card:10px;
-  --lp-shadow-card:none;
-}
-html[data-ui="precision"] body{font-family:'KPI SUIT',sans-serif!important;letter-spacing:-.025em}
-html[data-ui="precision"] #root .text-\[9px\],
-html[data-ui="precision"] #root .text-\[10px\]{font-size:11px!important;line-height:1.55!important}
-html[data-ui="precision"] #root .text-\[11px\]{font-size:12px!important;line-height:1.55!important}
-html[data-ui="precision"] #root .text-xs{font-size:13px!important;line-height:1.55!important}
-html[data-ui="precision"] #root .text-sm{font-size:15px!important;line-height:1.5!important}
-html[data-ui="precision"] #root .font-black{font-weight:800!important}
-html[data-ui="precision"] #root svg.lucide{stroke-width:1.7}
-html[data-ui="precision"] #root aside svg.lucide{width:17px;height:17px}
-html[data-ui="precision"] #root aside button.bg-indigo-600,
-html[data-ui="precision"] #root aside button.bg-indigo-600 *{color:#fff!important}
-html[data-ui="precision"] #root button{transition:background-color .15s,border-color .15s;letter-spacing:-.025em}
-html[data-ui="precision"] #root button:focus-visible{outline:2px solid #6095f5;outline-offset:2px}
-html[data-ui="precision"] #root table{font-size:14px;font-variant-numeric:tabular-nums;border-collapse:collapse}
-html[data-ui="precision"] #root thead{background:#f4f6f9!important}
-html[data-ui="precision"] #root th{font-size:12px!important;font-weight:650!important;color:#6e7d95;line-height:1.5;padding-top:12px;padding-bottom:12px}
-html[data-ui="precision"] #root td{font-size:14px;line-height:1.55;padding-top:12px;padding-bottom:12px;border-color:#edf0f5}
-html[data-ui="precision"] #root td.text-right{font-weight:650;font-variant-numeric:tabular-nums}
-html[data-ui="precision"] #root tbody tr:hover{background-color:#f1f6ff!important}
-html[data-ui="precision"] #root svg text{font-family:'KPI SUIT',sans-serif!important}
-html[data-ui="precision"] #root svg polyline{stroke-linejoin:round;stroke-linecap:round}
-/* Preserve semantic warning/success colors, dark receivables surfaces and every chart's data/axes. */
-html[data-ui="precision"] #root .receivables-table th,
-html[data-ui="precision"] #root .receivables-table td{color:inherit}
-html[data-ui="precision"] #root .receivables-table{border-collapse:separate}
-html[data-ui="precision"] #root .receivables-table thead{background:var(--rt-bg)!important}
-html[data-ui="precision"] #root .receivables-table tbody tr:hover{background:#252a32!important}
-html[data-ui="precision"] #root .receivables-table td{border-color:var(--rt-line)}
-/* Keep the two sticky contract header rows aligned with their original offsets. */
-html[data-ui="precision"] #root .contract-sheet table{border-collapse:separate}
-html[data-ui="precision"] #root .contract-sheet th,
-html[data-ui="precision"] #root .contract-sheet td{padding-top:4px;padding-bottom:4px;font-size:12px}
-html[data-ui="precision"] #root .contract-sheet .contract-sheet-company{padding:0}
+@font-face{font-family:'KPI Poppins';src:url('./assets/Poppins-Regular.ttf') format('truetype');font-weight:400;font-display:swap;unicode-range:U+0000-024F,U+2000-206F}
+@font-face{font-family:'KPI Poppins';src:url('./assets/Poppins-Medium.ttf') format('truetype');font-weight:500;font-display:swap;unicode-range:U+0000-024F,U+2000-206F}
+@font-face{font-family:'KPI Poppins';src:url('./assets/Poppins-SemiBold.ttf') format('truetype');font-weight:600;font-display:swap;unicode-range:U+0000-024F,U+2000-206F}
+@font-face{font-family:'KPI Poppins';src:url('./assets/Poppins-Bold.ttf') format('truetype');font-weight:700;font-display:swap;unicode-range:U+0000-024F,U+2000-206F}
 
-/* Selected Precision Workspace. Presentation only; data semantics remain unchanged. */
+/* Existing outer workspace stays unchanged. Every refinement below is KPI-only. */
 html[data-ui="precision"]{--lp-bg:#f6f8fb;--lp-surface:#fff;--lp-border:#e5eaf2;--lp-border-soft:#edf1f6;--lp-text:#101d35;--lp-text-body:#354561;--lp-muted:#647694;--lp-subtle:#7889a3;--lp-radius-card:6px;--lp-radius-control:5px;--lp-shadow-card:none}
+html[data-ui="precision"] body{font-family:'KPI SUIT',sans-serif!important;letter-spacing:-.025em}
 html[data-ui="precision"] #root{font-weight:500}
-html[data-ui="precision"] #root .font-extrabold{font-weight:700}
-html[data-ui="precision"] #root .font-black{font-weight:750!important}
-html[data-ui="precision"] #root .text-sm{font-size:14px!important}
-html[data-ui="precision"] #root .text-xs{font-size:12px!important;line-height:1.45!important}
-html[data-ui="precision"] #root aside.bg-slate-900{background:#fff!important}
-html[data-ui="precision"] #root aside nav{padding:12px}
-html[data-ui="precision"] #root aside nav>div{margin-bottom:9px}
-html[data-ui="precision"] #root aside nav>div>button{min-height:43px;border-radius:6px!important;font-weight:650;font-size:14px!important}
-html[data-ui="precision"] #root aside nav>div>div{border-color:#e6edf7!important;margin-top:7px;padding-left:10px}
-html[data-ui="precision"] #root aside nav>div>div>button{min-height:34px;font-size:13px!important}
-html[data-ui="precision"] #root aside button.bg-indigo-600:hover{background:#1d4ed8!important;color:#fff!important}
-html[data-ui="precision"] #root header.sticky>div{min-height:66px;padding-top:10px!important;padding-bottom:10px!important}
-html[data-ui="precision"] #root main.flex-1{padding:24px!important;max-width:none}
-html[data-ui="precision"] #root .kpi-section-title{margin-bottom:22px;align-items:center;min-height:48px}
-html[data-ui="precision"] #root .kpi-section-title>div{align-items:center}
-html[data-ui="precision"] #root .kpi-section-title h2{font-size:23px;letter-spacing:-.035em;font-weight:750}
-html[data-ui="precision"] #root .kpi-section-title svg{width:19px;height:19px}
-html[data-ui="precision"] #root .kpi-card{box-shadow:none!important}
-html[data-ui="precision"] #root .kpi-stat{border:0!important;border-radius:0!important;background:transparent!important;padding:16px 22px}
-html[data-ui="precision"] #root .kpi-stat .text-2xl{font-size:30px;line-height:1.25;font-weight:750;letter-spacing:-.045em}
-html[data-ui="precision"] #root .kpi-stat>p:first-child{font-size:12px!important;font-weight:600}
-html[data-ui="precision"] #root .kpi-stat>p:nth-child(3){font-size:12px!important;margin-top:7px;line-height:1.5!important}
-html[data-ui="precision"] #root [data-kpi-view="deals"]>div>div[role="tablist"]{background:#fff}
-html[data-ui="precision"] #root #deals-panel-companies{background:#fff}
-html[data-ui="precision"] #root #deals-panel-companies>div{margin-top:0}
-html[data-ui="precision"] #root #deals-panel-companies>.kpi-card{border:0!important;border-radius:0!important}
-html[data-ui="precision"] #root #deals-panel-companies>.kpi-card:first-child{padding:18px 16px}
-html[data-ui="precision"] #root #deals-panel-companies>.flex{padding:7px 16px}
-html[data-ui="precision"] #root .kpi-owner-build{display:flex;align-items:center;flex-wrap:wrap;gap:16px 32px;padding:8px 16px 14px}
-html[data-ui="precision"] #root .kpi-owner-build>div+div{padding-left:28px;border-left:1px solid #e5eaf2}
-html[data-ui="precision"] #root .kpi-owner-build button{border-radius:5px!important;min-height:32px}
-html[data-ui="precision"] #root .kpi-owner-build button.bg-violet-600{background:#14213b!important;border-color:#14213b!important}
-html[data-ui="precision"] #root #deals-panel-companies>.flex button{border-radius:5px!important;min-height:32px}
-html[data-ui="precision"] #root #deals-panel-companies>.flex button.bg-violet-600{background:#14213b!important;border-color:#14213b!important}
-html[data-ui="precision"] #root #deals-panel-companies>.grid{gap:0;border-top:1px solid #e9edf4;border-bottom:1px solid #e9edf4;padding:16px 0;margin-top:10px;background:#fff}
-html[data-ui="precision"] #root #deals-panel-companies>.grid>*+*{border-left:1px solid #e8edf4}
-html[data-ui="precision"] #root #deals-panel-companies>.grid>.kpi-stat:not(:first-child){border-left:1px solid #e8edf4!important}
-html[data-ui="precision"] #root #deals-panel-companies>.grid .kpi-stat{height:100%;padding-top:0;padding-bottom:0}
-html[data-ui="precision"] #root #deals-panel-companies>.grid+.kpi-card>div.flex{padding-top:10px;padding-bottom:0;min-height:40px}
-html[data-ui="precision"] #root #deals-panel-companies>.grid+.kpi-card>div.flex button{border-radius:5px!important}
-html[data-ui="precision"] #root #deals-panel-companies>.grid+.kpi-card>div.flex button.bg-indigo-600{background:#13213b!important;border-color:#13213b!important}
-html[data-ui="precision"] #root #deals-panel-companies .overflow-x-auto{margin-left:0;margin-right:0}
-html[data-ui="precision"] #root #deals-panel-companies table{table-layout:fixed;background:#fff}
-html[data-ui="precision"] #root #deals-panel-companies th{height:44px;font-size:12px!important;font-weight:600!important;padding-top:10px;padding-bottom:10px;background:#f3f6fa;color:#70819e;border-top:1px solid #e8edf4;border-bottom:1px solid #e8edf4}
-html[data-ui="precision"] #root #deals-panel-companies td{height:58px;padding-top:8px;padding-bottom:8px;font-size:13px!important;border-bottom:1px solid #edf1f6;vertical-align:middle}
-html[data-ui="precision"] #root #deals-panel-companies tbody tr{background:#fff!important}
-html[data-ui="precision"] #root #deals-panel-companies tbody tr:hover{background:#f5f8fe!important}
-html[data-ui="precision"] #root #deals-panel-companies td:first-child{border-left:0!important}
-html[data-ui="precision"] #root #deals-panel-companies td:first-child>.relative{border:0!important;background:transparent!important;height:25px}
-html[data-ui="precision"] #root #deals-panel-companies td:first-child>.mt-1{display:inline-flex;background:transparent!important;color:#2563eb!important;font-size:10px!important}
-html[data-ui="precision"] #root #deals-panel-companies td select{background:#fff;border-color:#e7edf4!important;min-height:32px;padding:4px 6px;font-size:13px!important;color:#354561}
-html[data-ui="precision"] #root #deals-panel-companies td:nth-child(2) .font-bold{font-size:15px!important;font-weight:700;color:#17243c}
-html[data-ui="precision"] #root #deals-panel-companies td:nth-child(8) button{font-size:14px!important;font-weight:650}
-html[data-ui="precision"] #root #deals-panel-companies td .text-slate-400{color:#6b7c94!important}
-html[data-ui="precision"] #root #deals-panel-companies td:nth-child(8){font-variant-numeric:tabular-nums;color:#13213b}
-html[data-ui="precision"] #root #deals-panel-companies td button{font-size:12px!important;min-height:28px}
-html[data-ui="precision"] #root [data-kpi-view="performanceCheck"] .relative.overflow-hidden.text-left{background:#fff!important;border-radius:7px!important;padding:24px;box-shadow:none!important}
-html[data-ui="precision"] #root [data-kpi-view="performanceCheck"] [class*="bg-gradient"]{background-image:none!important;background-color:#2563eb}
-html[data-ui="precision"] #root [data-kpi-view="performanceCheck"] .absolute.inset-x-0.top-0{display:none}
-html[data-ui="precision"] #root [data-kpi-view="performanceCheck"] .space-y-2.mt-4>button{border:0!important;border-bottom:1px solid #edf1f6!important;border-radius:0!important;box-shadow:none!important;background:#fff!important;padding:20px 2px}
-html[data-ui="precision"] #root [data-kpi-view="performanceCheck"] .flex.flex-wrap.justify-between.-mt-2{justify-content:flex-end}
-.kpi-method-notes{margin-top:36px!important;padding:24px 0 8px;border-top:1px solid #e5eaf2;color:#71819b}
-.kpi-method-notes>h3{font-size:12px;font-weight:650;margin:0 0 10px}
-.kpi-method-notes>div,.kpi-method-notes>p{font-size:12px;line-height:1.7}
-html[data-ui="precision"] #root .kpi-method-notes>.kpi-card{border:0;background:transparent!important;padding:14px 0}
-html[data-ui="precision"] #root .kpi-method-notes .grid>div{border:0;background:transparent!important;padding-left:0}
-.kpi-connection-footer{display:flex;flex-wrap:wrap;align-items:center;gap:10px 20px;padding:20px 0 80px;margin-top:24px;border-top:1px solid #e5eaf2;font-size:12px;color:#73829b}
-.kpi-connection-label{display:flex;align-items:center;gap:7px;color:#536582}
-.kpi-connection-label strong{font-weight:600;color:#687792}
-.kpi-connection-detail{flex-basis:100%;font-size:11px;color:#8490a5}
-@media(max-width:1100px){html[data-ui="precision"] #root main.flex-1{padding:20px!important}html[data-ui="precision"] #root #deals-panel-companies>.grid>*{padding:12px 0}html[data-ui="precision"] #root #deals-panel-companies>.grid>*:nth-child(odd){border-left:0}}
-@media(max-width:640px){html[data-ui="precision"] #root aside.bg-slate-900{width:64px!important}html[data-ui="precision"] #root main.flex-1{padding:16px!important}html[data-ui="precision"] #root .kpi-section-title h2{font-size:20px}html[data-ui="precision"] #root .kpi-stat .text-2xl{font-size:24px}}
 
-/* Isolated local visual experiment. Blue is the brand; card tint identifies
-   a metric family, never whether its result passed a target. */
-html[data-ui="precision"] #root .kpi-block-icon,
-html[data-ui="precision"] #root .kpi-stage-icon {
-  display:inline-flex; flex:none; align-items:center; justify-content:center;
-  color:#2563eb; background:#edf4ff; border:1px solid #d8e6fb;
-  box-shadow:inset 0 1px 0 #ffffff; border-radius:9px;
-}
-html[data-ui="precision"] #root .kpi-block-icon { width:32px; height:32px; margin-right:3px; }
-html[data-ui="precision"] #root .kpi-block-icon[data-tone="slate"] { color:#51647e; background:#f1f5f9; border-color:#dfe7f0; }
-html[data-ui="precision"] #root .kpi-block-icon[data-tone="indigo"] { color:#5365ad; background:#f0f2fc; border-color:#dfe4f5; }
-html[data-ui="precision"] #root .kpi-block-icon[data-tone="teal"] { color:#15776e; background:#edf8f5; border-color:#d7ece6; }
-html[data-ui="precision"] #root .kpi-block-icon[data-tone="amber"] { color:#966619; background:#fff8eb; border-color:#f0e4c9; }
-html[data-ui="precision"] #root .kpi-stat {
-  border:1px solid #e0e7f0!important; border-radius:10px!important;
-  padding:18px 20px; background:#fff!important;
-  box-shadow:0 2px 4px #182b4805!important;
-}
-html[data-ui="precision"] #root .kpi-stat>p:first-child { color:#53657e!important; gap:8px; margin-bottom:13px; min-height:32px; }
-html[data-ui="precision"] #root .kpi-stat>p:nth-child(3) { color:#708099!important; }
-html[data-ui="precision"] #root #deals-panel-companies>.grid {
-  gap:12px; padding:16px; border:0; background:#f6f8fb;
-}
-html[data-ui="precision"] #root #deals-panel-companies>.grid>*+* { border-left:0; }
-html[data-ui="precision"] #root #deals-panel-companies>.grid .kpi-stat { padding:18px 20px; }
-html[data-ui="precision"] #root [data-kpi-view="performanceCheck"] .kpi-stage-block {
-  --stage-ink:#2563eb; --stage-fill:#edf4ff; --stage-line:#d8e6fb;
-  border:1px solid #dce5f1!important; border-radius:12px!important;
-  box-shadow:0 2px 5px #1e3a5f04!important; background:#fff!important;
-  padding:22px!important;
-}
-html[data-ui="precision"] #root .kpi-stage-block[data-stage="pre"] { --stage-ink:#5365ad; --stage-fill:#f0f2fc; --stage-line:#dfe4f5; }
-html[data-ui="precision"] #root .kpi-stage-block[data-stage="contract"] { --stage-ink:#15776e; --stage-fill:#edf8f5; --stage-line:#d7ece6; }
-html[data-ui="precision"] #root .kpi-stage-icon { width:46px; height:46px; border-radius:12px; color:var(--stage-ink); background:var(--stage-fill); border-color:var(--stage-line); }
-html[data-ui="precision"] #root .kpi-stage-number { display:none; }
-html[data-ui="precision"] #root .kpi-stage-block>.flex:first-of-type { padding-bottom:16px; border-bottom:1px solid #edf1f6; }
-html[data-ui="precision"] #root .kpi-stage-block .space-y-2.mt-4 { margin-top:16px; }
-html[data-ui="precision"] #root [data-kpi-view="performanceCheck"] .kpi-stage-block .space-y-2.mt-4>button {
-  border:1px solid #e6ebf2!important; border-radius:8px!important;
-  padding:15px 13px!important; background:#fff!important;
-  transition:background .15s,border-color .15s;
-}
-html[data-ui="precision"] #root [data-kpi-view="performanceCheck"] .kpi-stage-block .space-y-2.mt-4>button:hover { background:#f8faff!important; border-color:#b8cdea!important; }
-html[data-ui="precision"] #root .kpi-stage-block button:focus-visible,
-html[data-ui="precision"] #root button:has(>.kpi-stat):focus-visible { outline:2px solid #2563eb; outline-offset:3px; }
+/* G-02/G-14/PT-01: ten integer type roles, four weights, one body tracking value. */
+html[data-ui="precision"] #root .kpi-app{font-family:var(--ui-font-body)!important;font-size:var(--ui-text-body);font-weight:var(--ui-weight-body);line-height:var(--ui-leading);letter-spacing:var(--ui-tracking);color:var(--ui-ink);background:var(--ui-canvas)}
+html[data-ui="precision"] #root .kpi-app *{font-family:inherit!important;letter-spacing:var(--ui-tracking)}
+html[data-ui="precision"] #root .kpi-app :is(.font-light,.font-normal){font-weight:var(--ui-weight-description)!important}
+html[data-ui="precision"] #root .kpi-app .font-medium{font-weight:var(--ui-weight-body)!important}
+html[data-ui="precision"] #root .kpi-app .font-semibold{font-weight:var(--ui-weight-control)!important}
+html[data-ui="precision"] #root .kpi-app :is(.font-bold,.font-extrabold,.font-black,h1,h2,h3,strong,b){font-weight:var(--ui-weight-heading)!important}
+html[data-ui="precision"] #root .kpi-app :is([class~="text-[8px]"],[class~="text-[9px]"],[class~="text-[10px]"],[class~="text-[11px]"]){font-size:var(--ui-text-caption)!important;line-height:var(--ui-leading)!important}
+html[data-ui="precision"] #root .kpi-app :is(.text-xs,[class~="text-[12px]"],[class~="text-[13px]"]){font-size:var(--ui-text-label)!important;line-height:var(--ui-leading)!important}
+html[data-ui="precision"] #root .kpi-app :is(.text-sm,[class~="text-[14px]"],[class~="text-[15px]"]){font-size:var(--ui-text-body)!important;line-height:var(--ui-leading)!important}
+html[data-ui="precision"] #root .kpi-app :is(.text-base,[class~="text-[16px]"],[class~="text-[17px]"]){font-size:var(--ui-text-control)!important;line-height:var(--ui-leading)!important}
+html[data-ui="precision"] #root .kpi-app :is(.text-lg,[class~="text-[18px]"],[class~="text-[19px]"]){font-size:var(--ui-text-tab)!important;line-height:var(--ui-leading)!important}
+html[data-ui="precision"] #root .kpi-app :is(.text-xl,[class~="text-[20px]"],[class~="text-[21px]"],[class~="text-[22px]"],[class~="text-[23px]"]){font-size:var(--ui-text-section)!important;line-height:var(--ui-leading)!important}
+html[data-ui="precision"] #root .kpi-app :is(.text-2xl,[class~="text-[24px]"]){font-size:var(--ui-text-large)!important;line-height:var(--ui-leading)!important}
+html[data-ui="precision"] #root .kpi-app .text-3xl{font-size:var(--ui-text-metric)!important;line-height:var(--ui-leading)!important}
+html[data-ui="precision"] #root .kpi-app :is(.text-4xl,.text-5xl){font-size:var(--ui-text-hero)!important;line-height:var(--ui-leading)!important}
+html[data-ui="precision"] #root .kpi-app :is(.tabular-nums,.ui-number){font-family:var(--ui-font-latin)!important;font-variant-numeric:tabular-nums}
+html[data-ui="precision"] #root .kpi-app :is(.leading-relaxed,.ui-prose,.kpi-method-notes){line-height:var(--ui-leading-prose)!important}
 
-@media(max-width:640px) { html[data-ui="precision"] #root .kpi-stat { padding:14px!important; } }
+/* G-01/PT-02/PT-18: six neutral roles; dark ledgers and tooltips keep their own colors. */
+html[data-ui="precision"] #root .kpi-app :is(.text-slate-300,.text-slate-400,.text-slate-500,.text-slate-600):not(:where(.receivables-table-shell *,[role="tooltip"] *)){color:var(--ui-muted)!important}
+html[data-ui="precision"] #root .kpi-app :is(.text-indigo-300,.text-indigo-400,.text-indigo-500,.text-indigo-600,.text-indigo-700):not(:where(.receivables-table-shell *,[role="tooltip"] *)){color:var(--ui-brand)!important}
+html[data-ui="precision"] #root .kpi-app :is(.text-emerald-500,.text-emerald-600,.text-green-500,.text-green-600):not(:where(.receivables-table-shell *,[role="tooltip"] *)){color:var(--ui-success)!important}
+html[data-ui="precision"] #root .kpi-app :is(.text-amber-500,.text-amber-600,.text-yellow-600):not(:where(.receivables-table-shell *,[role="tooltip"] *)){color:var(--ui-warning)!important}
+html[data-ui="precision"] #root .kpi-app :is(.text-red-500,.text-red-600,.text-red-700):not(:where(.receivables-table-shell *,[role="tooltip"] *)){color:var(--ui-danger)!important}
+html[data-ui="precision"] #root .kpi-app svg.lucide{stroke-width:1.7;flex-shrink:0}
+html[data-ui="precision"] #root .kpi-app svg text{font-family:var(--ui-font-body)!important}
+html[data-ui="precision"] #root .kpi-app svg text:is([font-size="8"],[font-size="9"],[font-size="10"]){font-size:var(--ui-text-caption)}
+html[data-ui="precision"] #root .kpi-app svg polyline{stroke-linejoin:round;stroke-linecap:round}
 
-/* Keep marketing tables aligned despite the global type scale. */
-html[data-ui="precision"] #root .marketing-hub-table th { font-size:10px!important; padding-top:8px; padding-bottom:8px; line-height:16px!important; }
-html[data-ui="precision"] #root .marketing-hub-table td { height:40px; font-size:12px!important; padding-top:8px; padding-bottom:8px; line-height:18px!important; }
+/* G-03/PT-16/G-19: one page frame; reusable headings and surface-only cards. */
+html[data-ui="precision"] #root .kpi-app main.flex-1{width:100%;max-width:var(--ui-page-width);padding:var(--ui-page-inset)!important;margin-inline:auto}
+html[data-ui="precision"] #root .kpi-app aside.bg-slate-900{background:var(--ui-surface)!important}
+html[data-ui="precision"] #root .kpi-app aside nav{padding:var(--ui-inset-medium)}
+html[data-ui="precision"] #root .kpi-app aside nav>div{margin-bottom:var(--ui-inset-small)}
+html[data-ui="precision"] #root .kpi-app aside nav>div>button{min-height:var(--ui-control-height);border-radius:var(--ui-radius-control)!important;font-size:var(--ui-text-body)!important;font-weight:var(--ui-weight-control)}
+html[data-ui="precision"] #root .kpi-app aside nav>div>div>button{min-height:36px;font-size:var(--ui-text-label)!important}
+html[data-ui="precision"] #root .kpi-app aside button.bg-indigo-600,
+html[data-ui="precision"] #root .kpi-app aside button.bg-indigo-600 *{color:#fff!important}
+html[data-ui="precision"] #root .kpi-app header.sticky>div{min-height:66px;padding-block:var(--ui-inset-small)!important}
+html[data-ui="precision"] #root .kpi-app .kpi-section-title{align-items:center;gap:var(--ui-inset-large);margin-bottom:24px;min-height:var(--ui-control-height)}
+html[data-ui="precision"] #root .kpi-app .kpi-section-title>div{align-items:center;min-width:0}
+html[data-ui="precision"] #root .kpi-app .kpi-section-title h2{font-size:var(--ui-text-section)!important;font-weight:var(--ui-weight-heading)!important;overflow-wrap:anywhere;line-height:var(--ui-leading)!important;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+html[data-ui="precision"] #root .kpi-app .kpi-stage-connector>span{border:0!important;box-shadow:none!important;border-radius:var(--ui-radius-control)!important;background:var(--ui-canvas)!important}
+html[data-ui="precision"] #root .kpi-app :is(.ui-section-icon,.kpi-block-icon,.kpi-stage-icon){display:inline-flex;align-items:center;justify-content:center;flex:none;background:var(--ui-brand-soft)!important;color:var(--ui-brand)!important;border:0!important;border-radius:var(--ui-radius-control)!important;box-shadow:none!important}
+html[data-ui="precision"] #root .kpi-app :is(.ui-section-icon,.kpi-stage-icon){width:40px;height:40px}
+html[data-ui="precision"] #root .kpi-app .kpi-block-icon{width:32px;height:32px;margin-right:0}
+html[data-ui="precision"] #root .kpi-app .kpi-stage-number{display:none}
+html[data-ui="precision"] #root .kpi-app .kpi-card{border:0!important;border-radius:var(--ui-radius-card)!important;background:var(--ui-surface);box-shadow:none!important}
+html[data-ui="precision"] #root .kpi-app .kpi-stat{border:0!important;border-radius:var(--ui-radius-card)!important;padding:var(--ui-inset-large);background:var(--ui-surface)!important;box-shadow:none!important}
+html[data-ui="precision"] #root .kpi-app .kpi-stat>p:first-child{font-size:var(--ui-text-label)!important;color:var(--ui-muted)!important;font-weight:var(--ui-weight-description);gap:var(--ui-inset-small);margin-bottom:var(--ui-inset-medium);min-height:32px}
+html[data-ui="precision"] #root .kpi-app .kpi-stat .text-2xl{font-size:var(--ui-text-metric)!important;font-weight:var(--ui-weight-heading)!important}
+html[data-ui="precision"] #root .kpi-app .kpi-stat .ui-metric-unit{font-size:var(--ui-text-control)!important;font-weight:var(--ui-weight-description)!important;color:var(--ui-muted)!important}
+html[data-ui="precision"] #root .kpi-app .kpi-stat>p:nth-child(3){font-size:var(--ui-text-label)!important;color:var(--ui-muted)!important;margin-top:var(--ui-inset-small)}
+html[data-ui="precision"] #root .kpi-app .kpi-stage-block{border:0!important;border-radius:var(--ui-radius-card)!important;box-shadow:none!important;background:var(--ui-surface)!important;padding:var(--ui-inset-large)!important}
+html[data-ui="precision"] #root .kpi-app .kpi-stage-block .space-y-2.mt-4>button{border:0!important;border-bottom:1px solid var(--ui-line)!important;border-radius:0!important;box-shadow:none!important;background:transparent!important;padding:var(--ui-inset-medium) 0!important;min-height:var(--ui-control-height)}
+html[data-ui="precision"] #root .kpi-app .kpi-stage-block .space-y-2.mt-4>button:hover{background:var(--ui-brand-soft)!important}
+
+/* PT-06/07/08/09: action buttons, content tabs, chips and filters have distinct roles. */
+html[data-ui="precision"] #root .kpi-app .ui-button{min-height:var(--ui-control-height);min-width:24px;border-radius:var(--ui-radius-control)!important;font-size:var(--ui-text-control)!important;font-weight:var(--ui-weight-control)!important;line-height:var(--ui-leading);padding-inline:var(--ui-inset-large)}
+html[data-ui="precision"] #root .kpi-app .ui-button[data-size="xs"]{min-height:var(--ui-hit-compact);font-size:var(--ui-text-label)!important;padding-inline:var(--ui-inset-medium)}
+html[data-ui="precision"] #root .kpi-app .ui-button[data-kind="dark"]{background:transparent!important;color:var(--ui-ink)!important;border:1px solid var(--ui-line)}
+html[data-ui="precision"] #root .kpi-app .ui-button[data-kind="primary"]{background:var(--ui-brand)!important;color:#fff!important;border:1px solid transparent}
+html[data-ui="precision"] #root .kpi-app .ui-button[data-kind="primary"]:hover:not(:disabled){background:var(--ui-brand-hover)!important}
+html[data-ui="precision"] #root .kpi-app .ui-button:disabled{cursor:not-allowed}
+html[data-ui="precision"] #root .kpi-app .ui-chip{min-height:24px;border:0!important;border-radius:var(--ui-radius-tag)!important;font-size:var(--ui-text-caption)!important;font-weight:var(--ui-weight-control)!important;line-height:var(--ui-leading);padding:4px var(--ui-inset-small)}
+html[data-ui="precision"] #root .kpi-app .ui-segment{min-height:40px;border:0;border-radius:var(--ui-radius-control)!important;background:var(--ui-canvas)!important;padding:4px;gap:4px;flex-wrap:wrap}
+html[data-ui="precision"] #root .kpi-app .ui-segment>button{min-height:32px;border-radius:var(--ui-radius-control);color:var(--ui-muted)!important}
+html[data-ui="precision"] #root .kpi-app .ui-segment>button[aria-pressed="true"]{background:var(--ui-brand-soft)!important;color:var(--ui-brand)!important}
+html[data-ui="precision"] #root .kpi-app [role="tablist"]{background:transparent!important;border-radius:0!important;padding:0;gap:var(--ui-inset-medium)}
+html[data-ui="precision"] #root .kpi-app [role="tablist"]>[role="tab"]{min-height:var(--ui-control-height);border:0!important;border-bottom:2px solid transparent!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;color:var(--ui-muted)!important;font-size:var(--ui-text-tab)!important;font-weight:var(--ui-weight-control)!important;padding:var(--ui-inset-medium)}
+html[data-ui="precision"] #root .kpi-app [role="tablist"]>[role="tab"][aria-selected="true"]{border-bottom-color:var(--ui-brand)!important;color:var(--ui-brand)!important}
+
+/* G-15/PT-04: 50px form fields; dense grid editing has an explicit compact exception. */
+html[data-ui="precision"] #root .kpi-app :is(.ui-input,.ui-select){min-height:var(--ui-input-height);font-size:var(--ui-text-control)!important;border-radius:var(--ui-radius-control)!important;padding-inline:var(--ui-inset-medium);background-color:var(--ui-surface)!important}
+html[data-ui="precision"] #root .kpi-app .ui-textarea{min-height:100px;font-size:var(--ui-text-control)!important;line-height:var(--ui-leading-prose);padding:var(--ui-inset-medium);background-color:var(--ui-surface)!important}
+html[data-ui="precision"] #root .kpi-app :is(.kpi-card,.ui-dialog-panel,header.sticky) :is(.ui-input,.ui-select,.ui-textarea){background-color:var(--ui-canvas)!important}
+html[data-ui="precision"] #root .kpi-app .ui-field-label{font-size:var(--ui-text-label)!important;font-weight:var(--ui-weight-description)!important;line-height:var(--ui-leading);color:var(--ui-muted)!important;margin-bottom:var(--ui-inset-small)}
+html[data-ui="precision"] #root .kpi-app :is(input,textarea)::placeholder{color:var(--ui-muted)!important}
+html[data-ui="precision"] #root .kpi-app :is(button,a,input,textarea,select,summary,[tabindex]):focus-visible{outline:2px solid var(--ui-brand);outline-offset:3px}
+html[data-ui="precision"] #root .kpi-app button{min-width:24px;transition:background-color .15s,border-color .15s}
+
+/* PT-10: preserve sorting, frozen columns and contract-sheet header offsets. */
+html[data-ui="precision"] #root .kpi-app table{font-size:var(--ui-text-body);font-variant-numeric:tabular-nums;border-collapse:collapse}
+html[data-ui="precision"] #root .kpi-app th{color:var(--ui-muted);font-size:var(--ui-text-label)!important;font-weight:var(--ui-weight-control)!important;line-height:var(--ui-leading);background:var(--ui-canvas);padding-block:var(--ui-inset-medium)}
+html[data-ui="precision"] #root .kpi-app td{font-size:var(--ui-text-body);line-height:var(--ui-leading);padding-block:var(--ui-inset-medium);border-color:var(--ui-line)}
+html[data-ui="precision"] #root .kpi-app td.text-right{font-weight:var(--ui-weight-control);font-variant-numeric:tabular-nums}
+html[data-ui="precision"] #root .kpi-app tbody tr:hover{background:var(--ui-brand-soft)}
+html[data-ui="precision"] #root .kpi-app td :is(.ui-input,.ui-select){min-height:32px;font-size:var(--ui-text-body)!important;padding-inline:var(--ui-inset-small)}
+html[data-ui="precision"] #root .kpi-app .contract-sheet table{border-collapse:separate}
+html[data-ui="precision"] #root .kpi-app .contract-sheet :is(th,td){padding-block:4px;font-size:var(--ui-text-label)}
+html[data-ui="precision"] #root .kpi-app .contract-sheet .contract-sheet-company{padding:0}
+html[data-ui="precision"] #root .kpi-app .contract-sheet :is(h2,.contract-sheet-total,.contract-sheet-owner-total){font-weight:var(--ui-weight-heading)}
+html[data-ui="precision"] #root .kpi-app .contract-sheet .contract-sheet-money{font-weight:var(--ui-weight-control);letter-spacing:var(--ui-tracking)}
+html[data-ui="precision"] #root .kpi-app .contract-monthly small{font-size:var(--ui-text-caption)}
+html[data-ui="precision"] #root .kpi-app .contract-customer-type{font-size:var(--ui-text-caption)}
+html[data-ui="precision"] #root .kpi-app .contract-sheet-title h2{font-size:var(--ui-text-tab)}
+html[data-ui="precision"] #root .kpi-app :is(.contract-sheet-owners th span:first-child,.contract-sheet-company button,.contract-sheet tfoot td,.contract-sheet-total,.contract-monthly .monthly-total,.contract-monthly-scroll th button){font-weight:var(--ui-weight-heading)!important}
+html[data-ui="precision"] #root .kpi-app .marketing-hub-table th{font-size:var(--ui-text-caption)!important;padding-block:var(--ui-inset-small)}
+html[data-ui="precision"] #root .kpi-app .marketing-hub-table td { height:40px; font-size:12px!important; padding-top:8px; padding-bottom:8px; line-height:var(--ui-leading)!important; }
+
+/* Preserved dark-surface exception: PT-18/C-DARKICON. */
+html[data-ui="precision"] #root .kpi-app .receivables-table :is(th,td){color:inherit}
+html[data-ui="precision"] #root .kpi-app .receivables-table{border-collapse:separate}
+html[data-ui="precision"] #root .kpi-app .receivables-table thead{background:var(--rt-bg)!important}
+html[data-ui="precision"] #root .kpi-app .receivables-table th{background:var(--rt-bg);color:var(--rt-muted)}
+html[data-ui="precision"] #root .kpi-app .receivables-table tbody tr:hover{background:#252a32!important}
+html[data-ui="precision"] #root .kpi-app .receivables-table td{border-color:var(--rt-line)}
+html[data-ui="precision"] #root .kpi-app .receivables-table :is(button,a,input,textarea,select):focus-visible{outline-color:#8fcaff}
+html[data-ui="precision"] #root .kpi-app .receivables-table :is(input,textarea)::placeholder{color:var(--rt-muted)!important}
+html[data-ui="precision"] #root .kpi-app .receivables-company{font-weight:var(--ui-weight-control)}
+
+.kpi-app .kpi-method-notes{margin-top:32px!important;padding:var(--ui-inset-large) 0;border-top:1px solid var(--ui-line);color:var(--ui-muted);font-size:var(--ui-text-label)}
+.kpi-app .kpi-method-notes>h3{font-size:var(--ui-text-label);font-weight:var(--ui-weight-control);margin-bottom:var(--ui-inset-small)}
+.kpi-app .kpi-method-notes>.kpi-card{background:transparent!important;padding:var(--ui-inset-medium) 0}
+.kpi-app .kpi-connection-footer{display:flex;flex-wrap:wrap;gap:var(--ui-inset-small) var(--ui-inset-large);padding:var(--ui-inset-large) 0 80px;margin-top:24px;border-top:1px solid var(--ui-line);font-size:var(--ui-text-label);color:var(--ui-muted)}
+.kpi-app .kpi-connection-label{display:flex;align-items:center;gap:var(--ui-inset-small)}
+.kpi-app .kpi-connection-label strong{font-weight:var(--ui-weight-control)}
+.kpi-app .kpi-connection-detail{flex-basis:100%;font-size:var(--ui-text-caption)}
+.kpi-app .ui-dialog-backdrop{z-index:70}
+.kpi-app .ui-dialog-panel{border-radius:var(--ui-radius-dialog)!important;box-shadow:0 16px 48px #0f172a26}
+.kpi-app .ui-dialog-close{display:inline-flex;align-items:center;justify-content:center;min-width:var(--ui-hit-compact);min-height:var(--ui-hit-compact)}
+
+@media(max-width:1023px){.kpi-app{--ui-page-inset:20px}}
+@media(max-width:640px){
+  .kpi-app{--ui-page-inset:16px}
+  html[data-ui="precision"] #root .kpi-app :is(button,[role="tab"],.ui-segment>button,.ui-button[data-size="xs"]){min-height:var(--ui-hit-touch);min-width:var(--ui-hit-touch)}
+  html[data-ui="precision"] #root .kpi-app aside nav>div>div>button{min-height:var(--ui-hit-touch)}
+  html[data-ui="precision"] #root .kpi-app .kpi-section-title{align-items:flex-start}
+  html[data-ui="precision"] #root .kpi-app .kpi-section-title>div:last-child{flex-wrap:wrap}
+  html[data-ui="precision"] #root .kpi-app [role="tablist"]>[role="tab"]{font-size:var(--ui-text-control)!important}
+  html[data-ui="precision"] #root .kpi-app .kpi-stat .text-2xl{font-size:var(--ui-text-large)!important}
+  html[data-ui="precision"] #root .kpi-app .kpi-stat .ui-metric-unit{font-size:var(--ui-text-label)!important}
+  html[data-ui="precision"] #root .kpi-app td :is(.ui-input,.ui-select){min-height:var(--ui-hit-touch)}
+  /* Frozen contract headings keep their 38px/29px geometry; only body editors grow. */
+  html[data-ui="precision"] #root .kpi-app .contract-sheet th button{min-height:24px;min-width:24px}
+  html[data-ui="precision"] #root .kpi-app .kpi-stage-flow{grid-template-columns:minmax(0,1fr);min-width:0}
+  html[data-ui="precision"] #root .kpi-app .kpi-stage-connector svg{transform:rotate(90deg)}
+  html[data-ui="precision"] #root .kpi-app .kpi-stage-block{min-width:0}
+}
+@media(prefers-reduced-motion:reduce){html[data-ui="precision"] #root .kpi-app *{scroll-behavior:auto!important;transition:none!important;animation:none!important}}

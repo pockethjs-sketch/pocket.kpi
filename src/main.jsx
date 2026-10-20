@@ -5,6 +5,7 @@ import { calendarActivityLeads, calendarPeriodEntries } from "./data/calendarAct
 import { CalendarConsistencyNotice } from './components/CalendarConsistencyNotice.jsx';
 import "./design.css";
 import "./styles.css";
+import { Chip, Btn, Inp, Ta, Sel, Fld, Card, SecTitle, Seg } from './components/KpiUi.jsx';
 import WorkspaceShell from './WorkspaceShell.jsx';
 import { ExcelExportProvider, ExcelExportButton, useExcelExport } from './ExcelExport.jsx';
 import { excelTable } from './data/excelTable.js';
@@ -2630,34 +2631,7 @@ function useDB() {
 }
 
 /* --- 공용 UI --- */
-const Chip = ({ cls, children }) => <span className={"inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-medium whitespace-nowrap " + (cls || "bg-slate-100 text-slate-600 border-slate-200")}>{children}</span>;
 const BChip = ({ b }) => <Chip cls={(BSTYLE[b] || {}).chip}><span className={"w-1.5 h-1.5 rounded-full " + ((BSTYLE[b] || {}).dot || "bg-slate-400")} />{b}</Chip>;
-const Btn = ({ onClick, kind = "ghost", size = "sm", disabled, children, cls = "" }) => {
-  const base = "inline-flex items-center gap-1.5 rounded-lg font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ";
-  const k = { primary: "bg-indigo-600 text-white hover:bg-indigo-700", dark: "bg-slate-900 text-white hover:bg-slate-800", ghost: "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50", danger: "border border-red-200 bg-white text-red-600 hover:bg-red-50", soft: "bg-indigo-50 text-indigo-700 hover:bg-indigo-100" }[kind];
-  const s = { xs: "px-2 py-1 text-xs", sm: "px-3 py-1.5 text-xs", md: "px-4 py-2 text-sm" }[size];
-  return <button onClick={onClick} disabled={disabled} className={base + k + " " + s + " " + cls}>{children}</button>;
-};
-const Inp = (p) => <input {...p} className={"w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-sm text-slate-800 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 " + (p.className || "")} />;
-const Ta = (p) => <textarea {...p} className={"w-full px-2.5 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-800 leading-relaxed placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 " + (p.className || "")} />;
-const Sel = ({ value, onChange, options, className, disabled }) => (
-  <select value={value} onChange={onChange} disabled={disabled} className={"px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed " + (className || "")}>
-    {options.map((o) => { const v = o && typeof o === "object" ? o.value : o; const l = o && typeof o === "object" ? o.label : o; return <option key={v} value={v}>{l}</option>; })}
-  </select>
-);
-const Fld = ({ label, children }) => <label className="block"><span className="block text-xs font-semibold text-slate-500 mb-1">{label}</span>{children}</label>;
-const Card = ({ children, cls = "" }) => <div className={"kpi-card bg-white rounded-xl border border-slate-200 shadow-sm " + cls}>{children}</div>;
-const SecTitle = ({ icon: I, title, right }) => (
-  <div className="kpi-section-title flex items-start justify-between gap-3 mb-5 flex-wrap">
-    <div className="flex items-start gap-3">
-      {I && <div className="w-9 h-9 rounded-xl bg-slate-900 text-white flex items-center justify-center shrink-0 shadow-sm"><I size={16} /></div>}
-      <div>
-        <h2 className="text-lg font-extrabold text-slate-900 leading-tight">{title}</h2>
-      </div>
-    </div>
-    {right && <div className="flex items-center gap-2 flex-wrap">{right}</div>}
-  </div>
-);
 const Modal = ({ open, onClose, title, children, wide }) => {
   useEffect(() => {
     if (!open) return;
@@ -2668,11 +2642,11 @@ const Modal = ({ open, onClose, title, children, wide }) => {
   }, [open, onClose]);
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center p-3 sm:p-6 overflow-y-auto" style={{ background: "rgba(15,23,42,.45)" }} onClick={onClose}>
-      <div className={"bg-white rounded-2xl shadow-2xl w-full my-4 " + (wide ? "max-w-4xl" : "max-w-xl")} onClick={(e) => e.stopPropagation()}>
+    <div className="ui-dialog-backdrop fixed inset-0 z-50 flex items-start justify-center p-3 sm:p-6 overflow-y-auto" style={{ background: "rgba(15,23,42,.45)" }} onClick={onClose}>
+      <div role="dialog" aria-modal="true" aria-label={title} className={"ui-dialog-panel bg-white rounded-2xl shadow-2xl w-full my-4 " + (wide ? "max-w-4xl" : "max-w-xl")} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 sticky top-0 bg-white rounded-t-2xl z-10">
           <h3 className="font-bold text-slate-900 text-sm">{title}</h3>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X size={16} /></button>
+          <button type="button" aria-label="창 닫기" onClick={onClose} className="ui-dialog-close p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X size={16} /></button>
         </div>
         <div className="p-5">{children}</div>
       </div>
@@ -2713,11 +2687,6 @@ const DangerBtn = ({ onConfirm, children, size = "xs", label2 = "한 번 더 클
 
 
 /* ---- v2 추가 공용 컴포넌트 ---- */
-const Seg = ({ value, onChange, options }) => (
-  <div className="flex rounded-lg border border-slate-200 overflow-hidden bg-white">
-    {options.map(([k, label]) => <button key={k} onClick={() => onChange(k)} className={"px-3 py-1.5 text-xs font-semibold transition-colors " + (value === k ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-50")}>{label}</button>)}
-  </div>
-);
 const Delta = ({ cur, prev, suffix = "", goodUp = true }) => {
   if (prev == null) return null;
   if (!prev && !cur) return <span className="text-xs text-slate-300">—</span>;
@@ -2744,7 +2713,7 @@ const StatBig = ({ label, value, unit, prev, cur, sub, accent = "border-indigo-5
     </p>
     <div className="flex items-end gap-1.5 mt-1 flex-wrap">
       <span className="text-2xl font-extrabold tabular-nums text-slate-900 leading-none">{value}</span>
-      {unit && <span className="text-xs font-semibold text-slate-400 mb-0.5">{unit}</span>}
+      {unit && <span className="ui-metric-unit text-xs font-semibold text-slate-400 mb-0.5">{unit}</span>}
       <span className="mb-0.5 ml-1"><Delta cur={cur} prev={prev} /></span>
     </div>
     <p className="text-xs text-slate-400 mt-1.5">{prev != null && prevLabel ? prevLabel + " " + (typeof prev === "number" ? prev.toLocaleString() : prev) + (unit || "") + (sub ? " · " + sub : "") : (sub || "")}</p>
@@ -6564,19 +6533,18 @@ useExcelExport(() => [excelTable('통합 성과', ['지표', '값', '단위'], [
           ))}
         </div>
       </div>
-      <div className="overflow-x-auto pb-2">
-        <div className="grid grid-cols-[minmax(300px,1fr)_56px_minmax(300px,1fr)_56px_minmax(300px,1fr)] gap-3 items-stretch min-w-[1080px]">
+      <div className="kpi-stage-scroll overflow-x-auto pb-2" role="region" aria-label="마케팅·프리미팅·계약 단계별 지표" tabIndex={0}>
+        <div className="kpi-stage-flow grid grid-cols-[minmax(300px,1fr)_56px_minmax(300px,1fr)_56px_minmax(300px,1fr)] gap-3 items-stretch min-w-[1080px]">
           {stageDefs.map((s, i) => (
             <React.Fragment key={s.id}>
               {i > 0 && (
-                <div className="flex items-center justify-center py-1">
+                <div className="kpi-stage-connector flex items-center justify-center py-1" aria-hidden="true">
                   <span className="w-9 h-9 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center">
                     <ArrowRight size={16} className="text-slate-400" />
                   </span>
                 </div>
               )}
               <div data-stage={s.id} className="kpi-stage-block relative overflow-hidden text-left rounded-3xl border border-slate-200 bg-slate-50/80 p-4 shadow-sm">
-              <div className={"absolute inset-x-0 top-0 h-1 bg-gradient-to-r " + (s.tone === "sky" ? "from-sky-400 to-cyan-400" : s.tone === "indigo" ? "from-indigo-500 to-violet-500" : "from-emerald-400 to-teal-500")} />
               <div className="flex items-center justify-between gap-2 px-1 pt-1">
                 <div className="flex items-center gap-2.5">
                   <span className="kpi-stage-icon"><StageIcon stage={s.id} /><span className="kpi-stage-number">{s.no}</span></span>
@@ -9652,8 +9620,8 @@ function KpiWorkspace() {
   const Cur = ['accessControl','settings'].includes(effectiveView) ? EmployeeAdministration : (VIEWS[effectiveView] || IntegratedPerformanceView);
   const activeSection = permittedSections.find((section) => section.home === effectiveView || section.items.some((item) => item.id === effectiveView)) || permittedSections[0];
   return (
-    <ExcelExportProvider><Ctx.Provider value={ctx}>
-      <style>{`*{font-family:'Pretendard Variable','Pretendard',sans-serif;} @keyframes pcToast{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}`}</style>
+    <ExcelExportProvider><Ctx.Provider value={ctx}><div className="kpi-app">
+      <style>{`@keyframes pcToast{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}`}</style>
       <div className="min-h-screen bg-slate-50 flex">
         <aside className={"flex flex-col shrink-0 bg-slate-900 text-slate-300 sticky top-0 h-screen overflow-y-auto overflow-x-hidden transition-all duration-200 " + (navOpen ? "w-60" : "w-16")}>
           <div className={"pt-4 pb-3 flex items-center " + (navOpen ? "px-3 gap-2" : "px-0 flex-col gap-2")}>
@@ -9747,7 +9715,7 @@ function KpiWorkspace() {
       </div>
       <LeadModal />
       {toastMsg && <div className="fixed bottom-5 left-1/2 -translate-x-1/2" style={{ zIndex: 60 }}><div className="bg-slate-900 text-white text-sm font-medium px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-2" style={{ animation: "pcToast .18s ease-out" }}><Check size={13} className="text-emerald-400 shrink-0" />{toastMsg}</div></div>}
-    </Ctx.Provider></ExcelExportProvider>
+    </div></Ctx.Provider></ExcelExportProvider>
   );
 }
 
