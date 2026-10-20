@@ -1,5 +1,11 @@
 # Employee authentication cutover — 2026-09-18
 
+## 2026-10-20 Buildup v4.9: compact controls and left list per design mock (summary key deployed; frontend via PR #2)
+
+- User requested smaller buttons matching a design mock and the left project list restyled to match. Frame-asset change (pinned by SHA-256) plus one display key: the list summary carries the sector id, and `cleanSummary` in `kpi-buildup-api` now keeps `sector` (string, already bounded to 300 chars like every summary string). No auth, RLS, CSP, sandbox, bridge, table or grant change; older rows simply lack the key and the list omits the sector.
+- Deployed 2026-10-20 21:45 KST: `kpi-buildup-api` v4 ACTIVE (verify_jwt), deployed source re-read and spot-checked (regex and allowlist lines identical to the repository). Synthetic probes only: no session → function 401 `login_required`, malformed bearer → gateway 401 `UNAUTHORIZED_INVALID_JWT_FORMAT`. Logs show an employee request served 200 by v4 right after the deploy (status codes and counts only reviewed).
+- Local: buildup tests 22/22 (summary test asserts `sector` kept, unknown keys dropped), full suite 379 pass with the two environment-only failures (`postcss`, `lucide-react` not installed here), security lint pass, bundle check pass; `npm run check`/`npm run audit` need packages/registry access not available in this session and run in CI on merge.
+
 ## 2026-10-20 Buildup v4.9: upcoming CRM premeetings in the overview (server deployed; frontend via PR #2)
 
 - User requested the KPI premeeting company list (today onward, refreshed 08:00 KST daily, today loaded now) inside the buildup "프로젝트 전체 보기".
