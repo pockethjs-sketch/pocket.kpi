@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.kpi-master-auth]
 verify_jwt = false
+
+[functions.kpi-buildup-api]
+verify_jwt = true

@@ -1,6 +1,6 @@
 @import "tailwindcss" source(none);
 @source "./";
-@source not "./assets/buildup-intelligence-v3.html";
+@source not "./assets/buildup-intelligence.html";
 @source "../index.html";
 
 /* Preserve v3 defaults while moving off the vulnerable build dependency tree. */
