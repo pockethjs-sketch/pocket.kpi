@@ -22,7 +22,7 @@ export const BUILDUP_LIMITS = Object.freeze({
 
 export const BUILDUP_AI_MODELS = Object.freeze(['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5']);
 
-const SUMMARY_KEYS = ['id', 'name', 'ceo', 'date', 'time', 'status', 'tier', 'total', 'updatedAt', 'saveId', 'tm', 'bm1', 'deal', 'recSec', 'trN', 'final', 'crm'];
+const SUMMARY_KEYS = ['id', 'name', 'ceo', 'date', 'time', 'status', 'tier', 'sector', 'total', 'updatedAt', 'saveId', 'tm', 'bm1', 'deal', 'recSec', 'trN', 'final', 'crm'];
 const ROLES = ['OWNER', 'ADMIN', 'EDITOR', 'VIEWER'];
 
 const plainObject = (value) => !!value && typeof value === 'object' && !Array.isArray(value);
