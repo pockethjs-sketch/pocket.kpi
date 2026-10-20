@@ -5,6 +5,7 @@ import { calendarActivityLeads, calendarPeriodEntries } from "./data/calendarAct
 import { CalendarConsistencyNotice } from './components/CalendarConsistencyNotice.jsx';
 import "./design.css";
 import "./styles.css";
+import WorkspaceShell from './WorkspaceShell.jsx';
 import { ExcelExportProvider, ExcelExportButton, useExcelExport } from './ExcelExport.jsx';
 import { excelTable } from './data/excelTable.js';
 // This module is imported only after server-verified employee authorization.
@@ -9525,7 +9526,7 @@ function DataConnectionFooter({ view, db, saveState }) {
     </div>
   );
 }
-export default function App() {
+function KpiWorkspace() {
   const { db, setDb, up, reset, saveState } = useDB();
   const [view, setView] = useState(window.kpiEmployeeAccess?.menuPages?.[0] || (window.kpiEmployeeAccess?.scope === 'premeeting' ? 'deals' : 'performanceCheck'));
   const [leadId, setLeadId] = useState(null);
@@ -9748,6 +9749,10 @@ export default function App() {
       {toastMsg && <div className="fixed bottom-5 left-1/2 -translate-x-1/2" style={{ zIndex: 60 }}><div className="bg-slate-900 text-white text-sm font-medium px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-2" style={{ animation: "pcToast .18s ease-out" }}><Check size={13} className="text-emerald-400 shrink-0" />{toastMsg}</div></div>}
     </Ctx.Provider></ExcelExportProvider>
   );
+}
+
+export default function App() {
+  return <WorkspaceShell onSignOut={() => window.kpiSignOut()}><KpiWorkspace /></WorkspaceShell>;
 }
 
 /* ==================== 원본 remixed-7962a458.tsx 끝 ==================== */

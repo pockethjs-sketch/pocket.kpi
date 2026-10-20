@@ -1,5 +1,11 @@
 # Employee authentication cutover — 2026-09-18
 
+## 2026-10-20 KPI / sales buildup workspace shell (local only)
+
+- Add only an employee-gated workspace chooser and persistent switcher above the existing KPI app. KPI page permissions, authenticated API/storage/journal/sync behavior and EmployeeEntry authorization-before-import remain unchanged. No database, role, RLS, API or deployment changes.
+- User-supplied standalone sales document is lazy-loaded in an opaque-origin sandbox with network/form CSP restrictions, no same-origin/top-navigation/popups permission, no KPI state/session bridge, and camera/microphone/location denied. Its original bytes are preserved. This is not shared consultation persistence: in-frame localStorage is unavailable; current-window-only input and explicit file export limits are shown to users. Static bundled source is not a server-enforced confidential document store.
+- 365 synthetic tests, security lint, build/build-contract and audit0 passed. Browser UI is unverified because no controllable general browser is connected. No commit/push/production release. See WORKSPACES.md; existing unrelated local edits below remain preserved.
+
 ## 2026-10-08 Two-page supplemental editing (validated locally; activation pending)
 
 - User authorized the existing two-menu employee to edit premeeting companies and receivables. Keep ACTIVE/VIEWER membership, direct-table RLS, invitations, other staff and administrator permissions unchanged. Add a server-only per-organization/user grant; each mutation revalidates the active membership, grant, current revision, eligible existing lead and allowed fields before the existing atomic commit.
