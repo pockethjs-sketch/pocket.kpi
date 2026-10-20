@@ -6,7 +6,7 @@
 
 - 선택 홈에 세 번째 `마케팅 허브` 카드만 추가. 지정 주소 `https://pocket-mkt.github.io/`를 새 탭으로 열어 기존 KPI/상담 창을 유지한다. 내부 작업 공간과 상단 전환 메뉴는 KPI/빌드업 두 개를 그대로 유지한다.
 - `noopener noreferrer`/`no-referrer` 적용. 세션·고객·상담 값이나 쿼리스트링은 전달하지 않으며 외부 사이트의 인증/권한을 변경하지 않는다.
-- 링크 HTTP200, 전체366개 테스트·보안·빌드·audit0 통과. 이 카드 추가의 운영 배포는 아직 대기이며 기존 아래 릴리스와 구분한다. 실제 브라우저 클릭은 미검증.
+- 링크 HTTP200, 전체366개 테스트·보안·빌드·audit0 통과. 후속 릴리스 `eb04c840a475da1fdaeff6d47b08f1f917a6f1ec`, Actions `39359969857` build/deployment 성공. 02:39UTC 운영 entry `index-D8uxBo6y.js`/main `main-DS9Z2cnf.js` 및 참조9개 자산 HTTP200; 지정URL·새탭·noopener 설정 확인, 자산명 제외 main 코드 로컬 일치. 실제 브라우저 클릭은 미검증.
 
 ## 배포 증거 — 2026-10-20 11:16 KST
 
