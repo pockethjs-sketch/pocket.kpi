@@ -6,6 +6,7 @@ import {
 } from "../_shared/buildup-access.mjs";
 import { passwordChangeRequired } from "../_shared/account-access.mjs";
 import { kstDay, premeetingItem, premeetingSync } from "../_shared/premeeting-upcoming.mjs";
+import { crmLeadView } from "../_shared/crm-lead-tm.mjs";
 
 // Sales buildup consultation workspace API.
 // - Every request: verified Supabase Auth employee session + current ACTIVE organization membership.
@@ -195,6 +196,33 @@ Deno.serve(async (req) => {
         : { mine: false, ...(admin ? { ownerId: project.owner_user_id, projectId: project.project_id, ownerName: people?.names?.get(project.owner_user_id) || "직원" } : {}) });
     });
     return reply(req, { ok: true, today, items, sync: premeetingSync(runs) });
+  }
+
+  // TM memo, first inquiry and TM diagnosis that the TM team keeps on the KPI lead of a CRM premeeting company.
+  // Resolved from the stored premeeting schedule (client number, then project number); returns only those fields.
+  if (action === "crmLead") {
+    const scheduleNo = String(body.scheduleNo ?? "");
+    const projectNo = body.projectNo === undefined || body.projectNo === "" ? "" : String(body.projectNo);
+    if (!/^[0-9]{1,20}$/.test(scheduleNo) || (projectNo && !/^[0-9]{1,20}$/.test(projectNo))) return reply(req, { error: "invalid_schedule" }, 400);
+    const { data: schedule, error: scheduleError } = await supabase.from("buildup_premeetings").select("crm_client_no,crm_project_no")
+      .eq("organization_id", organizationId).eq("schedule_no", scheduleNo).maybeSingle();
+    if (scheduleError) return reply(req, { error: "crm_lead_read_failed" }, 500);
+    const clientNo = schedule?.crm_client_no || "";
+    const project = schedule?.crm_project_no || projectNo;
+    // One unambiguous active lead only; two matches are never guessed between.
+    const findOne = async (column: string, value: string) => {
+      const { data, error } = await supabase.from("leads").select("source_payload")
+        .eq("organization_id", organizationId).is("archived_at", null).eq(column, value).limit(2);
+      if (error) throw new Error("crm_lead_read_failed");
+      return data?.length === 1 ? data[0] : null;
+    };
+    let row: any = null;
+    try {
+      if (clientNo) row = await findOne("source_payload->>id", "crm-" + clientNo) || await findOne("source_payload->crmSheet->>clientNo", clientNo);
+      if (!row && project) row = await findOne("source_payload->>projNo", project);
+    } catch { return reply(req, { error: "crm_lead_read_failed" }, 500); }
+    if (!row) return reply(req, { ok: true, found: false });
+    return reply(req, { ok: true, found: true, lead: crmLeadView(row.source_payload) });
   }
 
   if (action === "usage") {

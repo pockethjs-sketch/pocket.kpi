@@ -1042,7 +1042,9 @@ button.ctx:hover,button.actx:hover{background:var(--tint)}
 .mtab.on::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--blue)}
 .mtab.add{flex-direction:row;align-items:center;gap:4px;color:var(--blue);font-size:var(--fs-14);font-weight:var(--w-s);margin-left:auto}
 .mrow{display:grid;grid-template-columns:168px minmax(0,1fr) auto;gap:8px;align-items:stretch}
-.mtext{min-height:260px}
+/* 미팅 기록 · TM 통화 글 칸 — TM 메모처럼 긴 글이 한눈에 보이게(textarea.in보다 앞서도록 · 낮은 화면에서는 창 안에서 스크롤) */
+textarea.in.mtext{min-height:clamp(220px,46vh,460px)}
+textarea.in#tmText{min-height:clamp(180px,32vh,340px)}
 .att{display:flex;align-items:center;gap:12px;flex-wrap:wrap;border-radius:var(--r-card);background:var(--well);padding:12px 16px;font-size:var(--fs-13);font-weight:var(--w-r);color:var(--sub)}
 .alist{display:flex;flex-direction:column;gap:8px}
 .alist .att span{flex:1;min-width:0;color:var(--ink);font-weight:var(--w-s)}
@@ -2191,6 +2193,10 @@ body.inkon .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
 .ag .crmtag{margin-top:1px;flex:none}
 .tmcrm{display:flex;align-items:flex-start;gap:8px;margin:0 0 12px;padding:8px 12px;border-radius:var(--r-box);background:var(--tint);color:var(--blue-deep);font-size:var(--fs-13);line-height:var(--lh-txt)}
 .tmcrm svg{flex:none;margin-top:2px}
+/* KPI TM 메모 불러오기 상태(TM 사전 입력 안내 줄 · 미팅 기록 TM) */
+.tmcrm #tmKpi{display:block;margin-top:2px;font-size:var(--fs-12);color:var(--blue-deep)}
+.tmcrm #tmKpi:empty{display:none}
+.tmcrm #tmKpi .lnk{font-size:var(--fs-12)}
 
 </style>
 </head>
@@ -4599,6 +4605,27 @@ window.PK_VIS = {
         return web.pm;
       }).then(v => { web.pmAt = Date.now(); web.pmBusy = null; return v; });
       return web.pmBusy;
+    },
+    /* KPI에 있는 그 회사의 TM 메모 · 최초 문의 · TM 진단(CRM 프리미팅 일정 번호로 서버가 찾음) · 5분 안에 다시 부르면 받아 둔 값
+     * (사람이 「다시 불러오기」를 누르면 fresh로 새로 받음)
+     * 돌려주는 값: { clientNo, detailMemo, inquiry, tmChecks:[{label,value}] } · KPI에 없으면 { none:true } · 실패 { err } */
+    tmLeads: {},
+    crmLead(ms, proj, fresh) {
+      const dg = v => /^[0-9]{1,20}$/.test(String(v || ''));
+      if (!web.bridge || !dg(ms)) return Promise.resolve(null);
+      const key = String(ms), c = web.tmLeads[key];
+      if (!fresh && c && Date.now() - c.at < 300000) return Promise.resolve(c.v);
+      const str = (v, n) => typeof v === 'string' ? v.slice(0, n) : '';
+      const args = { scheduleNo: key }; if (dg(proj)) args.projectNo = String(proj);
+      return web.bridge.call('crmLead', args, { timeout: 20000 }).then(r => {
+        const l = r && r.found && r.lead && typeof r.lead === 'object' ? r.lead : null;
+        const v = l ? {
+          clientNo: dg(l.clientNo) ? String(l.clientNo) : '', detailMemo: str(l.detailMemo, 8000), inquiry: str(l.inquiry, 4000),
+          tmChecks: (Array.isArray(l.tmChecks) ? l.tmChecks : []).filter(x => x && typeof x.label === 'string' && typeof x.value === 'string').slice(0, 10).map(x => ({ label: x.label.slice(0, 40), value: x.value.slice(0, 60) }))
+        } : { none: true };
+        web.tmLeads[key] = { at: Date.now(), v };
+        return v;
+      }).catch(e => ({ err: (e && e.code) || 'error' }));
     },
     subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); }
   };
@@ -8586,7 +8613,9 @@ function openModal(html, o) {
     '<div class="mb" id="mBody">' + html + '</div>' + (o.foot ? '<footer class="mf" id="mFoot">' + o.foot + '</footer>' : '') + '</section>';
   box.hidden = false;
   modalClose = o.onClose || null;
-  const f = box.querySelector(o.focus || '.mb input, .mb textarea, .mb button, .mf button'); if (f) setTimeout(() => f.focus(), 30);
+  const sel = o.focus || '.mb input, .mb textarea, .mb button, .mf button';
+  /* 그 사이 내용이 다시 그려졌으면(예: KPI TM 메모 불러오는 중) 지금 있는 칸에 둔다 */
+  if (box.querySelector(sel)) setTimeout(() => { const f = box.hidden ? null : box.querySelector(sel); if (f) f.focus(); }, 30);
 }
 function closeModal(silent, keepFocus) {
   const box = $('#modal'); if (!box || box.hidden) return;
@@ -8682,7 +8711,7 @@ function normP(p) {
   if (!h.intel.cards) h.intel.cards = []; if (!h.intel.chat) h.intel.chat = [];
   if (!h.docs || typeof h.docs !== 'object' || Array.isArray(h.docs)) h.docs = {};
   Object.keys(h.docs).forEach(k => { if (!['buildup', 'dev', 'marketing'].includes(k) || !h.docs[k] || typeof h.docs[k].pack !== 'object') delete h.docs[k]; });
-  h.meetings.forEach(m => { if (typeof m.text !== 'string') m.text = ''; if (!Array.isArray(m.applied)) m.applied = []; m.no = Math.max(0, parseInt(m.no, 10) || 0); });
+  h.meetings.forEach(m => { if (typeof m.text !== 'string') m.text = ''; if (!Array.isArray(m.applied)) m.applied = []; m.no = Math.max(0, parseInt(m.no, 10) || 0); if (typeof m.kpiTm === 'string') m.kpiTm = m.kpiTm.slice(0, 12000); else delete m.kpiTm; });
   const okId = v => typeof v === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(v);
   [h.meetings, h.intel.cards, h.intel.chat].forEach(list => list.forEach(x => { if (x && !okId(x.id)) x.id = uid(); }));
   h.audio.forEach(a => { if (a && !okId(a.key)) a.key = 'x' + uid(); if (a && a.mid && !okId(a.mid)) a.mid = null; });
@@ -12180,9 +12209,11 @@ function openMeetings(id) {
   if (!S.p.heavy.meetings.length) addMeeting();
   S.mtg = id && S.p.heavy.meetings.some(m => m.id === id) ? id : (curMeeting() || {}).id;
   S.ana = null;
+  S.kpiTmMsg = null;
   openModal(meetingsBody(), { title: '미팅 기록', cls: 'lg', onClose: pruneMeetings, focus: '#mtgText' });
-  loadAtt();
+  loadAtt(); kpiTmAuto();
 }
+function kpiTmAuto() { const m = curMeeting(); if (kpiTmMeeting(m) && !m.kpiTm && !(S.kpiTried || {})[m.id]) mtgKpiTm(true); }
 function pruneMeetings() {
   const hv = S.p && S.p.heavy; if (!hv) return;
   const before = hv.meetings.length;
@@ -12202,16 +12233,42 @@ function meetingsBody() {
   const att = hv.audio.filter(a => a.mid === m.id || (m === last && !hv.meetings.some(x => x.id === a.mid)));
   if (att.length) h += att.map(a => '<div class="att">' + ic('mic', 'sm') + '<span>' + esc(a.name) + '</span><audio controls preload="none" data-akey="' + esc(a.key) + '"></audio></div>').join('');
   const newTr = hv.transcript.length - (m.trUpTo || 0);
+  const kpi = kpiTmMeeting(m);
   h += '<div class="ana-h">' + (newTr > 0 ? '<button type="button" class="btn sm" data-act="mtg-tr">' + ic('text', 'sm') + '받아쓰기 붙이기 · ' + newTr + '줄</button>' : '') +
-    '<button type="button" class="btn sm ghost" data-act="mtg-file">' + ic('upload', 'sm') + '파일 붙이기</button><span class="sp"></span>' +
+    '<button type="button" class="btn sm ghost" data-act="mtg-file">' + ic('upload', 'sm') + '파일 붙이기</button>' +
+    (kpi ? '<button type="button" class="btn sm ghost" data-act="mtg-kpitm"' + (S.kpiTmBusy ? ' disabled' : '') + '>' + ic('sync', 'sm') + (m.kpiTm ? 'KPI TM 메모 다시 불러오기' : 'KPI TM 메모 불러오기') + '</button>' +
+      (S.kpiTmMsg && S.kpiTmMsg.mid === m.id ? '<span class="hint" role="status">' + esc(S.kpiTmMsg.text) + '</span>' : '') : '') +
+    '<span class="sp"></span>' +
     (m.appliedAt ? '<span class="hint">반영 ' + m.applied.length + '개 · ' + esc(fmtDT(m.appliedAt)) + '</span>' : '') +
     '<button type="button" class="btn pri" id="anaBtn" data-act="mtg-ana"' + (m.text.trim() ? '' : ' disabled') + '>' + ic('spark', 'sm') + '내용 분석</button></div>';
   h += '<div id="anaBox">' + (S.ana && S.ana.mid === m.id ? anaHtml(S.ana, 'ana-apply') : '') + '</div>';
   return h;
 }
+/* 이 미팅 기록에 KPI TM 메모를 넣을 수 있는가: 웹 · CRM 프리미팅에서 만든 내 상담의 TM 기록 */
+function kpiTmMeeting(m) { return !!(m && m.kind === 'tm' && kpiTmOn() && S.p && S.p.crm && S.p.crm.ms && !S.sample && !S.readOnly); }
+async function mtgKpiTm(auto) {
+  const m = curMeeting(); if (!kpiTmMeeting(m) || S.kpiTmBusy) return;
+  const p = S.p; S.kpiTmBusy = true; S.kpiTmMsg = { mid: m.id, text: 'KPI TM 메모를 불러오는 중' }; refreshMeetings();
+  const v = await ST.web.crmLead(p.crm.ms, p.crm.proj, !auto);
+  S.kpiTmBusy = false;
+  if (S.p !== p) return;
+  if (v && !v.err && !v.none) {
+    const ta = $('#mtgText'); if (ta && curMeeting() === m) m.text = ta.value;
+    const block = kpiTmText(v), next = crmTidy(mergeKpiTm(m.text, m.kpiTm, block)), same = next === m.text && m.kpiTm === block;
+    m.text = next; m.kpiTm = block;
+    if (!same) { touchHeavy(); saveSoon(); }
+    S.kpiTmMsg = { mid: m.id, text: same ? 'KPI TM 메모가 이미 최신입니다' : 'KPI TM 메모를 넣었습니다' };
+  } else S.kpiTmMsg = { mid: m.id, text: v && v.none ? 'KPI에서 이 회사의 TM 메모를 찾지 못했습니다' : 'KPI TM 메모를 불러오지 못했습니다 · 다시 눌러 주세요' };
+  if (!auto || (v && !v.err)) S.kpiTried = Object.assign(S.kpiTried || {}, { [m.id]: true });
+  refreshMeetings();
+}
 function refreshMeetings() {
   const b = $('#mBody'); if (!b) return;
+  /* 적던 칸(글 · 날짜 · 제목)은 다시 그려도 커서 · 스크롤을 그 자리에 둔다(KPI TM 메모가 들어올 때 등) */
+  const a = document.activeElement, keep = a && b.contains(a) && a.dataset && a.dataset.mk ? { mk: a.dataset.mk, s: a.selectionStart, e: a.selectionEnd, st: a.scrollTop } : null;
   const y = b.scrollTop; b.innerHTML = meetingsBody(); b.scrollTop = y; loadAtt();
+  const n = keep && b.querySelector('[data-mk="' + keep.mk + '"]');
+  if (n) { n.focus({ preventScroll: true }); n.scrollTop = keep.st; try { if (keep.s != null) n.setSelectionRange(keep.s, keep.e); } catch (e) { /* 날짜 칸 */ } }
 }
 /* 첨부 녹음 미리듣기 URL은 화면을 다시 그리거나 창을 닫을 때 돌려준다 */
 function freeAtt() { (S.attUrls || []).forEach(u => { try { URL.revokeObjectURL(u); } catch (e) { /* 무시 */ } }); S.attUrls = []; }
@@ -12276,7 +12333,8 @@ function freshTm() { return { by: ST.lsGet('tmBy') || '', date: '', time: '', na
 function tmHasDraft(f) { return !!(f && (f.name || f.ceo || f.text || f.audio.length || f.res)); }
 function tmBody() {
   const f = S.tmf;
-  let h = f.crm ? '<p class="tmcrm">' + ic('cal', 'sm') + '<span>CRM 프리미팅에서 가져왔습니다 · 일정 #' + esc(f.crm.ms) + (f.crm.owner ? ' · 담당 ' + esc(f.crm.owner) : '') + ' · 「자동 정리」로 회사 정보 · 진단에 넣을 수 있습니다</span></p>' : '';
+  let h = f.crm ? '<p class="tmcrm">' + ic('cal', 'sm') + '<span>CRM 프리미팅에서 가져왔습니다 · 일정 #' + esc(f.crm.ms) + (f.crm.owner ? ' · 담당 ' + esc(f.crm.owner) : '') + ' · 「자동 정리」로 회사 정보 · 진단에 넣을 수 있습니다' +
+    (kpiTmOn() ? '<small id="tmKpi" role="status" aria-live="polite">' + (f.crm.tm ? '<span class="' + (f.crm.tm === 'busy' ? 'busy' : '') + '">' + esc(kpiTmMsg(f.crm.tm)) + '</span>' + (f.crm.tm === 'err' ? ' <button type="button" class="lnk" data-act="tm-kpitm">다시 불러오기</button>' : '') : '') + '</small>' : '') + '</span></p>' : '';
   h += '<div class="tmgrid"><div class="fld"><label for="tmName">회사명</label><input class="in" id="tmName" data-tk="name" value="' + esc(f.name) + '" autocomplete="off" aria-describedby="tmNameErr"><small class="ferr" id="tmNameErr" hidden>회사명을 넣어 주세요</small></div>' +
     '<div class="fld"><label for="tmCeo">대표자</label><input class="in" id="tmCeo" data-tk="ceo" value="' + esc(f.ceo) + '" autocomplete="off"></div>' +
     '<div class="fld"><label for="tmDate">미팅 예정일 · 시간</label><div class="dtpair"><input class="in" type="date" id="tmDate" data-tk="date" value="' + esc(f.date) + '"><input class="in" type="time" step="600" id="tmTime" data-tk="time" value="' + esc(f.time || '') + '" aria-label="미팅 시간"></div></div>' +
@@ -12339,7 +12397,7 @@ async function tmCreate() {
   p.company.name = f.name.trim() || p.company.name; p.company.ceo = f.ceo.trim() || p.company.ceo;
   p.tm = { by: f.by.trim().slice(0, 40), at: now, summary: f.summary.trim().slice(0, 3000), ask: f.ask.split('\n').map(s => s.trim().slice(0, 200)).filter(Boolean).slice(0, 20) };
   if (f.crm && /^[0-9]{1,20}$/.test(String(f.crm.ms || ''))) p.crm = { ms: String(f.crm.ms), proj: String(f.crm.proj || ''), at: String(f.crm.at || '') };
-  if (f.text.trim()) p.heavy.meetings.push({ id: uid(), kind: 'tm', no: 0, date: today(), title: 'TM 통화', text: f.text.trim(), applied: f.res ? Object.keys(f.checked).filter(k => f.checked[k]) : [], appliedAt: f.res ? now : null, trUpTo: 0 });
+  if (f.text.trim()) p.heavy.meetings.push(Object.assign({ id: uid(), kind: 'tm', no: 0, date: today(), title: 'TM 통화', text: f.text.trim(), applied: f.res ? Object.keys(f.checked).filter(k => f.checked[k]) : [], appliedAt: f.res ? now : null, trUpTo: 0 }, f.kpiTm && f.text.includes(f.kpiTm) ? { kpiTm: f.kpiTm } : {}));
   if (f.by.trim()) ST.lsSet('tmBy', f.by.trim());
   const tmMid = (p.heavy.meetings[0] || {}).id;
   for (const a of f.audio) await keepAudio(p, a, tmMid);
@@ -12356,8 +12414,19 @@ function crmTime(iso) {
   const k = new Date(d.getTime() + 9 * 3600000);
   return String(k.getUTCHours()).padStart(2, '0') + ':' + String(k.getUTCMinutes()).padStart(2, '0');
 }
+/* CRM 체크값은 「제품/서비스로_인한_매출_발생」처럼 밑줄로 이어져 온다 → 띄어 쓴다(자유 글 · 주소는 그대로) */
+function crmHum(v) { return String(v || '').replace(/_/g, ' ').replace(/\s+/g, ' ').trim(); }
+/* 예전에 만든 TM 기록의 [CRM 프리미팅] 블록에 남은 밑줄 체크값을 띄어 쓴다 — crmText가 만든 체크값 줄(매출 · 인원 · 설립 · 필요한 빌드업 · 투자 · 업종)만,
+ * 사업 내용 · 홈페이지 · CRM 메모 같은 자유 글과 블록 밖의 글은 건드리지 않는다 */
+function crmTidy(text) {
+  const s = String(text || ''), i = s.indexOf('[CRM 프리미팅 · 일정 #'); if (i < 0) return s;
+  let j = s.indexOf('\n\n', i); if (j < 0) j = s.length;
+  const fix = s.slice(i, j).split('\n').map(l => /^(최근 매출 |예상 매출 |인원 |설립 |필요한 빌드업: |투자 · 지원 경험: |업종: )/.test(l) ? l.replace(/_/g, ' ').replace(/ {2,}/g, ' ') : l).join('\n');
+  return s.slice(0, i) + fix + s.slice(j);
+}
 function crmText(x) {
-  const c = x.client || {}, L = ['[CRM 프리미팅 · 일정 #' + x.scheduleNo + ']'];
+  const c0 = x.client || {}, c = Object.assign({}, c0, { annualSales: crmHum(c0.annualSales), expectedSales: crmHum(c0.expectedSales), members: crmHum(c0.members), founded: crmHum(c0.founded), needBuildup: crmHum(c0.needBuildup), sectorText: crmHum(c0.sectorText), financing: (c0.financing || []).map(crmHum).filter(Boolean) });
+  const L = ['[CRM 프리미팅 · 일정 #' + x.scheduleNo + ']'];
   L.push('미팅: ' + x.meetingDay + ' ' + crmTime(x.meetingAt) + (CRM_WAY[x.way] ? ' · ' + CRM_WAY[x.way] : ''));
   const mg = (x.managers || []).filter(Boolean);
   if (mg.length || x.salesOwner) L.push('담당 영업: ' + (mg.length ? mg.join(', ') : x.salesOwner));
@@ -12372,6 +12441,48 @@ function crmText(x) {
   if (c.homepage) L.push('홈페이지: ' + c.homepage);
   if (x.note) L.push('CRM 메모: ' + x.note);
   return L.join('\n');
+}
+/* ---------- KPI TM 메모(웹 워크스페이스) ----------
+ * CRM 프리미팅으로 이어진 상담이면 KPI 리드에 TM팀이 적어 둔 TM 메모 · 최초 문의 · TM 진단을 서버에서 받아
+ * TM 사전 입력 · 미팅 기록(TM)에 [KPI TM] 블록으로 넣는다. 다시 불러오면 넣었던 블록만 새 내용으로 바꾼다 */
+function kpiTmOn() { return S.mode === 'web' && !!(ST.web && ST.web.bridge); }
+function kpiTmText(v) {
+  const L = ['[KPI TM' + (v.clientNo ? ' · CRM 기업 #' + v.clientNo : '') + ']'];
+  if (v.tmChecks && v.tmChecks.length) L.push('TM 진단: ' + v.tmChecks.map(c => c.label + ' ' + c.value).join(' · '));
+  if (v.detailMemo) L.push('TM 메모:\n' + v.detailMemo);
+  if (v.inquiry) L.push('최초 문의:\n' + v.inquiry);
+  if (L.length === 1) L.push('KPI에 적힌 TM 메모 · 최초 문의 · TM 진단이 아직 없습니다');
+  return L.join('\n');
+}
+/* 글에 넣었던 블록(prev)이 그대로 있으면 그 자리를 바꾸고, 없으면 맨 뒤에 붙인다 */
+function mergeKpiTm(text, prev, block) {
+  text = String(text || '');
+  if (prev && text.includes(prev)) return text.replace(prev, block);
+  if (text.includes(block)) return text;
+  return text.trim() ? text.replace(/\s+$/, '') + '\n\n' + block : block;
+}
+function kpiTmMsg(st) {
+  return st === 'busy' ? 'KPI TM 메모를 불러오는 중' : st === 'ok' ? 'KPI TM 메모 · 최초 문의 · TM 진단을 아래 글에 넣었습니다'
+    : st === 'none' ? 'KPI에서 이 회사의 TM 메모를 찾지 못했습니다' : st === 'err' ? 'KPI TM 메모를 불러오지 못했습니다' : '';
+}
+async function crmTmFill(f, fresh) {
+  if (!f || !f.crm || !kpiTmOn()) return;
+  f.crm.tm = 'busy'; paintTmCrm(f);
+  const v = await ST.web.crmLead(f.crm.ms, f.crm.proj, fresh);
+  if (S.tmDraft !== f) return;
+  const ta = S.tmf === f ? $('#tmText') : null;
+  if (ta) f.text = ta.value;
+  if (v && !v.err && !v.none) {
+    const block = kpiTmText(v);
+    f.text = mergeKpiTm(f.text, f.kpiTm, block); f.kpiTm = block; f.crm.tm = 'ok';
+    if (ta) { const a = ta.selectionStart, b = ta.selectionEnd, focused = document.activeElement === ta; ta.value = f.text; if (focused) { try { ta.setSelectionRange(a, b); } catch (e) { /* 무시 */ } } }
+  } else f.crm.tm = v && v.none ? 'none' : 'err';
+  paintTmCrm(f);
+}
+function paintTmCrm(f) {
+  const el = S.tmf === f ? $('#tmKpi') : null; if (!el) return;
+  const st = f.crm && f.crm.tm;
+  el.innerHTML = st ? '<span class="' + (st === 'busy' ? 'busy' : '') + '">' + esc(kpiTmMsg(st)) + '</span>' + (st === 'err' ? ' <button type="button" class="lnk" data-act="tm-kpitm">다시 불러오기</button>' : '') : '';
 }
 async function crmPrep(x) {
   if (!x) return;
@@ -12391,6 +12502,8 @@ async function crmPrep(x) {
   }
   if (S.pipe) closePipe();
   openTm();
+  const f2 = S.tmDraft;
+  if (f2 && f2.crm && !f2.kpiTm && f2.crm.tm !== 'busy') crmTmFill(f2);
 }
 
 /* ---------- 프로젝트 파일(.json) ---------- */
@@ -12703,7 +12816,7 @@ function crmStrip(pm, crm) {
 }
 function crmRowHtml(r, adminAll) {
   const it = r.it, c = it.client || {}, dd = ddayTxt(r.date), nm = it.company, no = esc(it.scheduleNo);
-  const facts = [c.annualSales ? '매출 ' + c.annualSales : '', c.members || '', c.needBuildup ? '필요 ' + c.needBuildup : ''].filter(Boolean).join(' · ');
+  const facts = [c.annualSales ? '매출 ' + crmHum(c.annualSales) : '', crmHum(c.members), c.needBuildup ? '필요 ' + crmHum(c.needBuildup) : ''].filter(Boolean).join(' · ');
   const other = it.linked && !it.linked.mine ? (it.linked.ownerName ? it.linked.ownerName + ' 님이 준비함' : '다른 직원이 준비함') : '';
   const way = CRM_WAY_SHORT[it.way] ? CRM_WAY_SHORT[it.way] + ' 미팅' : '미팅';
   return '<tr class="crm">' +
@@ -13272,7 +13385,8 @@ async function act(name, arg, el, ev) {
     }
     case 'tr-attach': attachTranscript(); renderRight(); return;
     /* 미팅 기록 */
-    case 'mtg': S.mtg = arg; S.ana = null; S.mtgDel = null; refreshMeetings(); return;
+    case 'mtg': S.mtg = arg; S.ana = null; S.mtgDel = null; refreshMeetings(); kpiTmAuto(); return;
+    case 'mtg-kpitm': mtgKpiTm(false); return;
     case 'mtg-new': addMeeting(); S.mtgDel = null; refreshMeetings(); { const t = $('#mtgText'); if (t) t.focus(); } return;
     case 'mtg-del': {
       if (S.mtgDel !== arg) { S.mtgDel = arg; if (el) { el.classList.remove('ghost'); el.classList.add('dark'); el.innerHTML = '정말 지우기'; el.style.width = 'auto'; el.style.padding = '0 12px'; } return; }
@@ -13293,6 +13407,7 @@ async function act(name, arg, el, ev) {
     /* TM */
     case 'tm-file': { const fs = await pickFile('.txt,.md,.docx,.srt,.vtt,.json,.csv,audio/*', true); tmFiles(fs); return; }
     case 'tm-ana': tmAnalyze(); return;
+    case 'tm-kpitm': if (S.tmf && S.tmf.crm) crmTmFill(S.tmf, true); return;
     case 'tm-create': tmCreate(); return;
     case 'tm-clear': S.tmDraft = freshTm(); S.tmf = S.tmDraft; { const b = $('#mBody'); if (b) b.innerHTML = tmBody(); const f = $('#mFoot'); if (f) f.innerHTML = tmFoot(); const n = $('#tmName'); if (n) n.focus(); } return;
     /* 설정 */
