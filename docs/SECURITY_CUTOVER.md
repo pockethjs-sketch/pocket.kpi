@@ -25,6 +25,7 @@
 
 - User asked to switch the model to Haiku: every workspace (company-key) AI request — automatic and button insights, chat, TM organizing, recap, detailed report, recording correction — now asks for `claude-haiku-5-5`, already on the server allowlist. Frame-asset change only (pinned SHA-256 updated); no server, auth, table, grant, CORS, CSP or sandbox change. Key-file and claude.ai link modes keep their own model settings.
 - `kpi-account-api` v4 deployed 17:32 KST (verify_jwt) after PR #5 merged: same function source as v3 with `account-access.mjs` `tempMin` 12 (matching the Supabase Auth password policy and the merged screen); deployed files re-read. The PR #5 merge deploy stopped at `npm run audit` (Vite 8.2.2 advisory), so the site still serves the previous frontend until Dependabot PR #6 (Vite 8.3.5) is merged.
+- Frontend deployed 2026-10-21 17:48 KST: PR #6 (Vite 8.3.5) and #7 merged; Actions run 39571985960 passed `npm ci`, security lint, `npm test`, `npm run check`, `npm run audit` and the Pages deploy (the #6-only run was cancelled in favour of it). The pinned asset SHA-256 on main `aaae450` is the Haiku build; the deployed site/artifact could not be fetched from this environment (proxy policy), so the evidence is the CI run.
 
 ## 2026-10-21 Buildup v4.9: AI cost controls — Haiku for automatic analysis, thinking effort (server deployed; frontend via PR #5)
 
