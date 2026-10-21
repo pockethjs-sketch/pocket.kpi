@@ -10,7 +10,7 @@ import { WORKSPACES, MARKETING_HUB, INITIAL_WORKSPACE, ACCOUNT_WORKSPACE, canMan
 import { BUILDUP_AI_MODELS } from '../supabase/functions/_shared/buildup-access.mjs';
 
 // SHA-256 of the v4.9 web build copied from the intelligence project (see docs/WORKSPACES.md).
-const BUILDUP_ASSET_SHA256 = '0115a4cd5e22ee1c3140c11e5dcb00e6e76f7e49649e5b90c1e14dd6a8828195';
+const BUILDUP_ASSET_SHA256 = '289875905f06383b4898011603c9da2a6a4e4dd04a330d88da66ca5f7012aa3c';
 const shellSource = readFileSync(new URL('../src/WorkspaceShell.jsx', import.meta.url), 'utf8');
 const frameSource = readFileSync(new URL('../src/BuildupWorkspace.jsx', import.meta.url), 'utf8');
 const main = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
@@ -110,10 +110,13 @@ test('v4.9 web build is pinned, syntactically valid, bridge-only and isolated fr
   assert.equal(scripts.length, 1);
   for (const [index, match] of scripts.entries()) new vm.Script(match[1], { filename: 'buildup-inline-' + index + '.js' });
   assert.match(scripts[0][1], /^\s*window\.PK_WEB = 1;/);
-  // Workspace AI (insights, chat, recap, report) always asks the server for Claude Opus 5.5 with the company key.
+  // Workspace AI (insight button, chat, recap, report) asks the server for Claude Opus 5.5 with the company key;
+  // only the 20-second automatic analysis uses Haiku 5.5 and the recording correction Sonnet 5.5 (cost decision 2026-10-21).
   assert.match(scripts[0][1], /const WEB_MODEL = 'claude-opus-5-5';/);
-  assert.match(scripts[0][1], /const body = \{ model: WEB_MODEL, max_tokens:/);
-  assert.ok(BUILDUP_AI_MODELS.includes('claude-opus-5-5'));
+  assert.match(scripts[0][1], /const WEB_AUTO_MODEL = 'claude-haiku-5-5';/);
+  assert.match(scripts[0][1], /const WEB_FIX_MODEL = 'claude-sonnet-5-5';/);
+  assert.match(scripts[0][1], /const body = \{ model: WEB_MODELS\.includes\(o\.webModel\) \? o\.webModel : WEB_MODEL, max_tokens:/);
+  for (const model of ['claude-opus-5-5', 'claude-haiku-5-5', 'claude-sonnet-5-5']) assert.ok(BUILDUP_AI_MODELS.includes(model), model);
   // Upcoming CRM premeetings reach the frame only through the bridge op (no network in the frame).
   assert.match(scripts[0][1], /web\.bridge\.call\('premeetings', \{\}/);
   assert.doesNotMatch(html, /<script[^>]+src=|<link[^>]+href=["']https?:/i);
@@ -128,7 +131,8 @@ test('v4.9 web build is pinned, syntactically valid, bridge-only and isolated fr
   assert.match(frameSource, /allow=\{BUILDUP_FRAME_ALLOW\}/);
   assert.match(frameSource, /createBuildupRecorder/);
   assert.match(BUILDUP_NOTICE, /직원 계정별로 자동 저장/);
-  assert.match(BUILDUP_NOTICE, /녹음 파일\(음성\)은 서버에 남지 않/);
+  assert.match(BUILDUP_NOTICE, /녹음 파일은 회사 전용 저장소에 보관/);
+  assert.match(BUILDUP_NOTICE, /고객께 녹음을 알려/);
   assert.match(frameSource, /\.catch\(/);
   assert.throws(() => prepareBuildupDocument('invalid'), /buildup_document_invalid/);
 });

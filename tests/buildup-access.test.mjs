@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  BUILDUP_LIMITS, BUILDUP_AI_MODELS, canUseBuildup, isBuildupAdmin, canReadBuildupOwner, canWriteBuildupOwner,
+  BUILDUP_LIMITS, BUILDUP_AI_MODELS, BUILDUP_AI_EFFORTS, canUseBuildup, isBuildupAdmin, canReadBuildupOwner, canWriteBuildupOwner,
   validateSave, decideSave, validateAi, aiRateLimited, aiUpstreamError, createUsageTap, memberName, listItem, usageRows, cleanSummary,
 } from '../supabase/functions/_shared/buildup-access.mjs';
 
@@ -74,6 +74,14 @@ test('AI requests are limited to approved models, text messages and bounded size
   assert.equal(validateAi({ ...base, messages: [{ role: 'user', content: [{ type: 'image' }] }] }).ok, false);
   assert.equal(validateAi({ ...base, messages: [{ role: 'user', content: 'a' }, { role: 'assistant', content: 'b' }] }).ok, false);
   assert.equal(validateAi({ ...base, messages: [{ role: 'user', content: 'x'.repeat(BUILDUP_LIMITS.aiInputBytes) }] }).error, 'payload_too_large');
+  // Thinking depth: only low/medium/high, forwarded as output_config.effort; nothing else from the browser is forwarded.
+  const cheap = validateAi({ ...base, model: 'claude-haiku-5-5', effort: 'low', output_config: { effort: 'max', format: 'x' }, thinking: { type: 'enabled' } });
+  assert.equal(cheap.ok, true);
+  assert.deepEqual(cheap.value.output_config, { effort: 'low' });
+  assert.equal(cheap.value.thinking, undefined);
+  assert.equal(validateAi({ ...base, output_config: { effort: 'max' } }).value.output_config, undefined);
+  for (const effort of ['max', 'xhigh', 'LOW', '', 1, null]) assert.equal(validateAi({ ...base, effort }).ok, false, String(effort));
+  assert.deepEqual(BUILDUP_AI_EFFORTS, ['low', 'medium', 'high']);
   assert.equal(aiRateLimited(BUILDUP_LIMITS.aiCallsPerHour - 1), false);
   assert.equal(aiRateLimited(BUILDUP_LIMITS.aiCallsPerHour), true);
   assert.equal(aiRateLimited(null), true);

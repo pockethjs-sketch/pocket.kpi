@@ -4700,8 +4700,14 @@ window.PK_VIS = {
   'use strict';
   const API = 'https://api.anthropic.com/v1/messages';
   const DEF = { chatModel: 'claude-sonnet-5-5', quickModel: 'claude-haiku-5-5', docModel: 'claude-opus-5-5', auto: true, every: 20 };
-  /* 포켓 KPI 워크스페이스(회사 키)는 AI 인사이트 · AI 대화 · 녹음 정리 · 상세 레포트를 모두 Claude Opus 5.5로 부른다(회사 정책 · 개인 설정과 무관) */
+  /* 포켓 KPI 워크스페이스(회사 키)는 AI 인사이트(버튼) · AI 대화 · 녹음 정리 · 상세 레포트를 Claude Opus 5.5로 부른다(회사 정책 · 개인 설정과 무관)
+   * 비용 때문에 녹음 중 20초 자동 분석만 Haiku 5.5, 녹음 AI 보정(정밀 받아쓰기 교정)은 Sonnet 5.5 (2026. 10. 21. 결정) */
   const WEB_MODEL = 'claude-opus-5-5';
+  const WEB_AUTO_MODEL = 'claude-haiku-5-5';
+  const WEB_FIX_MODEL = 'claude-sonnet-5-5';
+  const WEB_MODELS = [WEB_MODEL, WEB_AUTO_MODEL, WEB_FIX_MODEL];
+  /* 생각 깊이(Opus 5.5는 생각을 끌 수 없고 생각도 출력 한도 · 비용에 든다) — 서버가 low/medium/high만 받는다 */
+  const EFFORTS = ['low', 'medium', 'high'];
   /* 화면에 보일 모델 이름: 'claude-opus-5-5' → 'Opus 5.5' */
   function modelLabel(id) {
     const m = String(id || '').match(/claude-(opus|sonnet|haiku|fable|mythos)-(\d+)(?:-(\d+))?/i);
@@ -4715,11 +4721,13 @@ window.PK_VIS = {
     setConfig(c) { A.cfg = Object.assign({}, DEF, c || {}); A.refresh(); },
     refresh() { A.mode = A.sample ? 'claude' : A.web ? 'web' : (A.cfg.key ? 'key' : 'none'); },
     ready() { return A.mode !== 'none'; },
-    label() { return A.mode === 'claude' ? 'Claude 연결됨' : A.mode === 'web' ? '회사 AI 연결됨 · ' + modelLabel(WEB_MODEL) + (A.paused ? ' · 자동 분석 멈춤: ' + A.errText({ code: A.paused }) : '') : A.mode === 'key' ? 'API 키로 연결됨' : 'AI 미연결 · 규칙 기반'; },
+    label() { return A.mode === 'claude' ? 'Claude 연결됨' : A.mode === 'web' ? '회사 AI 연결됨 · ' + modelLabel(WEB_MODEL) + ' · 녹음 중 자동 분석 ' + modelLabel(WEB_AUTO_MODEL) + (A.paused ? ' · 자동 분석 멈춤: ' + A.errText({ code: A.paused }) : '') : A.mode === 'key' ? 'API 키로 연결됨' : 'AI 미연결 · 규칙 기반'; },
     /* 대화 인텔리전스 머리말의 짧은 표시(좁은 패널에서도 한 줄) */
     chip() { return A.mode === 'web' ? modelLabel(WEB_MODEL) + (A.paused ? ' · 자동 분석 멈춤' : ' 연결됨') : A.label(); },
     modelLabel,
     webModel: WEB_MODEL,
+    webAutoModel: WEB_AUTO_MODEL,
+    webFixModel: WEB_FIX_MODEL,
     /* 상세 레포트(Word)에 쓰는 모델 — 기본 Claude Opus 5.5 */
     docModel() { return A.cfg.docModel || DEF.docModel; },
     /* 자동(타이머) 분석은 API 키 · 회사 키 모드에서만 — claude.ai 링크는 사람의 요청으로만 부른다 */
@@ -4776,10 +4784,12 @@ window.PK_VIS = {
     }
     return { text, model, truncated };
   }
-  /* 웹 워크스페이스: 부모 창이 직원 세션으로 서버를 부르고, 서버가 회사 키로 Anthropic을 부른다(키는 이 화면에 없다) · 모델은 언제나 Opus 5.5 */
+  /* 웹 워크스페이스: 부모 창이 직원 세션으로 서버를 부르고, 서버가 회사 키로 Anthropic을 부른다(키는 이 화면에 없다)
+   * 모델은 Opus 5.5 — 부르는 곳이 o.webModel로 자동 분석(Haiku) · 녹음 보정(Sonnet)만 바꾼다. o.effort = 생각 깊이 */
   async function viaWeb(system, turns, o) {
-    const body = { model: WEB_MODEL, max_tokens: o.maxTokens || 1200, messages: turns, stream: !!o.onText };
+    const body = { model: WEB_MODELS.includes(o.webModel) ? o.webModel : WEB_MODEL, max_tokens: o.maxTokens || 1200, messages: turns, stream: !!o.onText };
     if (system) body.system = system;
+    if (!A.noEffort && EFFORTS.includes(o.effort)) body.effort = o.effort;
     let last = '';
     const r = await A.web.call('ai', body, {
       signal: o.signal, timeout: 0,
@@ -4817,7 +4827,14 @@ window.PK_VIS = {
         return { text: r.text, model: r.modelApplied || '', tierApplied: r.modelTierApplied || '', truncated: !!r.truncated };
       } catch (e) { claudeOff(e); throw e; }
     }
-    if (A.mode === 'web') { try { return await viaWeb(system, turns, o); } catch (e) { webOff(e); throw e; } }
+    if (A.mode === 'web') {
+      try { return await viaWeb(system, turns, o); }
+      catch (e) {
+        /* 생각 깊이(effort)를 받지 않는 경우를 대비해 한 번만 빼고 다시 부르고, 이 창에서는 더 보내지 않는다 */
+        if (e && e.code === 'invalid_ai_request' && o.effort && !A.noEffort) { A.noEffort = true; return A.ask(system, turns, Object.assign({}, o, { effort: '' })); }
+        webOff(e); throw e;
+      }
+    }
     if (A.mode === 'key') return viaKey(system, turns, o);
     throw { code: 'no_ai', message: 'AI가 연결되지 않았습니다' };
   };
@@ -11687,7 +11704,9 @@ async function runInsight(manual) {
   const waiting = bizQs().filter(qWaiting).sort((a, b) => (qAsked(b) ? 1 : 0) - (qAsked(a) ? 1 : 0)).slice(0, 10);
   const qmap = {}, openQs = waiting.map((c, i) => { qmap['Q' + (i + 1)] = c.id; return 'Q' + (i + 1) + ' · ' + c.text + (qAsked(c) ? ' (물어봄)' : ''); });
   try {
-    const j = await AI.json(AI.prompts.system(), AI.prompts.insight(S.p, M(), recent, prevQs, openQs), { tier: 'quick', maxTokens: 1800 });
+    /* 녹음 중 자동(20초) = Haiku 5.5(회사 키) · 버튼 = Opus 5.5 — 둘 다 생각을 얕게(low), 생각까지 들어가는 출력 한도는 넉넉히(답이 잘리면 카드가 안 나온다) */
+    const j = await AI.json(AI.prompts.system(), AI.prompts.insight(S.p, M(), recent, prevQs, openQs),
+      manual ? { tier: 'quick', maxTokens: 6000, effort: 'low' } : { tier: 'quick', maxTokens: 4000, effort: 'low', webModel: AI.webAutoModel });
     if (!S.p || S.p.id !== pid) return;
     addAiCards(j || {}, qmap);
   } catch (e) {
@@ -11793,7 +11812,7 @@ async function sendChat(text, label, tab, ruleText) {
   while (turns.length && turns[0].role !== 'user') turns.shift();
   const pid = S.p.id, sys = tab === 'biz' ? AI.prompts.bizChat(S.p) : AI.prompts.chat(S.p, M());
   try {
-    const r = await AI.ask(sys, turns, { onText: o => { ai.text = o.text; paintMsg(ai); }, signal: S.intel.ctl.signal, tier: 'default', maxTokens: 1400 });
+    const r = await AI.ask(sys, turns, { onText: o => { ai.text = o.text; paintMsg(ai); }, signal: S.intel.ctl.signal, tier: 'default', maxTokens: 4000 });
     ai.text = r.text;
   } catch (e) { ai.text = e && e.code === 'refused' ? '' : (e && e.text) || ai.text || ''; if (!(e && e.code === 'cancelled')) ai.err = AI.errText(e); else ai.err = '멈춤'; }
   finally {
@@ -12075,9 +12094,10 @@ async function recapAi(p, signal, onProg) {
   let res;
   if (RC.needsParts(p)) {
     const ps = RC.parts(p), partials = [];
-    for (let i = 0; i < ps.length; i++) { const r = await ask(RC.partPrompt(p, ps[i], i, ps.length), 4000, (i + 1) + '/' + ps.length + ' 부분'); partials.push(RC.norm(r.raw)); }
-    res = await ask(RC.mergePrompt(p, partials), 6000, '합치는 중');
-  } else res = await ask(RC.prompt(p), 6000, '');
+    /* Opus 5.5는 생각도 출력 한도에 든다 — 한도는 넉넉히(쓴 만큼만 과금) */
+    for (let i = 0; i < ps.length; i++) { const r = await ask(RC.partPrompt(p, ps[i], i, ps.length), 8000, (i + 1) + '/' + ps.length + ' 부분'); partials.push(RC.norm(r.raw)); }
+    res = await ask(RC.mergePrompt(p, partials), 12000, '합치는 중');
+  } else res = await ask(RC.prompt(p), 12000, '');
   const rc = RC.norm(res.raw);
   return Object.assign(rc, { at: new Date().toISOString(), by: AI.mode, model: res.model || (AI.mode === 'key' ? want : ''), sig: RC.sigOf(p) });
 }
@@ -12388,7 +12408,7 @@ function ruleRes(text) {
 }
 async function analyzeText(text) {
   if (AI.ready()) {
-    try { const j = await AI.json(null, AI.prompts.extract(text), { tier: 'default', maxTokens: 2000 }); const r = resFromAi(j); r.src = 'ai'; return r; }
+    try { const j = await AI.json(null, AI.prompts.extract(text), { tier: 'default', maxTokens: 6000, effort: 'low' }); const r = resFromAi(j); r.src = 'ai'; return r; }
     catch (e) { toast(AI.errText(e) + ' · 규칙으로 정리합니다'); }
   }
   const r = ruleRes(text); r.src = 'rule'; return r;
@@ -12766,7 +12786,7 @@ async function exportAll() {
 }
 
 /* ===== ui_stt — 녹음 파일 서버 보관 · 정밀 받아쓰기(CLOVA 화자 구분) · AI 보정(Opus) — 웹 워크스페이스 전용 =====
- * 녹음이 끝나면: 서버(회사 전용 저장소)에 올림 → (설정: 자동) 정밀 받아쓰기 시작 → 몇 분 뒤 화자별 문장 도착 → Opus가 잘못 들은 말 · 화자 이름 보정
+ * 녹음이 끝나면: 서버(회사 전용 저장소)에 올림 → (설정: 자동) 정밀 받아쓰기 시작 → 몇 분 뒤 화자별 문장 도착 → AI(회사 키: Sonnet 5.5)가 잘못 들은 말 · 화자 이름 보정
  * 녹음 항목(heavy.audio[]): rid(서버 녹음 id) · up('ing' | 'ok' | 'fail' | 'big') · base(이 녹음이 받아쓰기 시간선에서 시작한 초)
  * 정밀본(heavy.stt[녹음 키]): PK.stt 머리말 참고 */
 const STT = PK.stt;
@@ -12928,7 +12948,7 @@ async function sttFix(p, key, again) {
   const cancelled = () => Object.assign(new Error('cancelled'), { code: 'cancelled' });
   async function run(job) {
     const r = await AI.ask('', STT.prompt(p, x, job.from, job.to, job.first, sectorName(p.company.sector)) + '\n\nJSON 하나만 답한다(설명 없이).',
-      { model: AI.docModel(), tier: 'complex', maxTokens: STT.FIX_MAX_TOKENS, signal: ctl.signal, onText: () => {} });
+      { model: AI.docModel(), webModel: AI.webFixModel, effort: 'low', tier: 'complex', maxTokens: STT.FIX_MAX_TOKENS, signal: ctl.signal, onText: () => {} });
     if (ctl.signal.aborted) throw cancelled();
     let j = null;
     try { j = AI.parseJSON(r.text); } catch (e) { j = null; }
@@ -13493,7 +13513,7 @@ function openSettings() {
   let h = '';
   if (web) h += '<div class="set"><h3>계정</h3><p>' + esc((S.web.name || '로그인한 직원') + ' · ' + (({ OWNER: '소유자', ADMIN: '관리자', EDITOR: '직원(편집)', VIEWER: '직원(보기)' })[S.web.role] || '직원')) + (S.web.admin ? ' · 전체 직원 상담을 볼 수 있습니다' : '') + '</p></div>';
   h += '<div class="set"><h3>AI 연결</h3>';
-  if (web) h += '<p>회사 AI 키로 연결됩니다(서버에 보관 · 키 입력 없음). AI 인사이트 · AI 대화 · 녹음 정리 · 상세 레포트(Word)를 모두 Claude Opus 5.5로 씁니다.</p><div class="line"><span class="' + (AI.ready() ? 'okmsg' : 'errmsg') + '">' + esc(AI.ready() ? AI.label() : '회사 AI 키가 아직 등록되지 않았습니다 · 관리자에게 요청하세요') + '</span></div>' +
+  if (web) h += '<p>회사 AI 키로 연결됩니다(서버에 보관 · 키 입력 없음). AI 인사이트(버튼) · AI 대화 · 녹음 정리 · 상세 레포트(Word)는 Claude Opus 5.5, 녹음 중 20초 자동 분석은 Haiku 5.5(비용 절약), 녹음 AI 보정은 Sonnet 5.5로 씁니다.</p><div class="line"><span class="' + (AI.ready() ? 'okmsg' : 'errmsg') + '">' + esc(AI.ready() ? AI.label() : '회사 AI 키가 아직 등록되지 않았습니다 · 관리자에게 요청하세요') + '</span></div>' +
       '<div class="line" style="margin-top:12px"><label class="toggle"><input type="checkbox" id="setAuto"' + (c.auto !== false ? ' checked' : '') + '> 녹음 중 자동 인사이트</label>' +
       '<select class="in" id="setEvery" style="width:auto;height:40px" aria-label="자동 인사이트 간격">' + [20, 30, 60, 90].map(n => '<option value="' + n + '"' + (+c.every === n ? ' selected' : '') + '>' + n + '초마다</option>').join('') + '</select></div>';
   else if (shared) h += '<p>이 링크에서는 Claude에 바로 연결됩니다(키 필요 없음). 처음 물어볼 때 한 번 허용을 묻습니다. 상세 레포트(Word) 문장은 Claude Opus 5.5로 씁니다(계정에서 쓸 수 없으면 가장 성능 좋은 모델).</p><div class="line"><span class="okmsg">' + esc(AI.label()) + '</span></div>';
@@ -13509,7 +13529,7 @@ function openSettings() {
       '<select class="in" id="setEvery" style="width:auto;height:40px" aria-label="자동 인사이트 간격">' + [20, 30, 60, 90].map(n => '<option value="' + n + '"' + (+c.every === n ? ' selected' : '') + '>' + n + '초마다</option>').join('') + '</select></div>';
   }
   h += '</div><div class="set"><h3>받아쓰기</h3><p>녹음하면서 한국어로 바로 받아씁니다(Chrome).</p><label class="toggle"><input type="checkbox" id="setSr"' + (REC.srOn ? ' checked' : '') + (REC.srSupported() ? '' : ' disabled') + '> 실시간 받아쓰기' + (REC.srSupported() ? '' : ' · 이 브라우저는 지원하지 않음') + '</label>' +
-    (web ? '<p style="margin-top:12px">정밀 받아쓰기: 녹음 파일을 회사 전용 저장소에 보관하고, CLOVA Speech로 다시 받아써 화자를 나눕니다(영업 · 대표님). 끝나면 Opus 5.5가 잘못 들은 말과 화자 이름을 바로잡습니다.</p>' +
+    (web ? '<p style="margin-top:12px">정밀 받아쓰기: 녹음 파일을 회사 전용 저장소에 보관하고, CLOVA Speech로 다시 받아써 화자를 나눕니다(영업 · 대표님). 끝나면 Sonnet 5.5가 잘못 들은 말과 화자 이름을 바로잡습니다.</p>' +
       '<div class="line"><label class="toggle"><input type="checkbox" id="setStt"' + (sttAuto() ? ' checked' : '') + '> 녹음이 끝나면 정밀 받아쓰기 자동 시작</label>' +
       '<select class="in" id="setSttSpk" style="width:auto;height:40px" aria-label="화자 수">' + STT.SPEAKERS.map(n => '<option value="' + n + '"' + (n === sttSpk() ? ' selected' : '') + '>화자 ' + (n ? n + '명' : '자동') + '</option>').join('') + '</select></div>' : '') + '</div>';
   const th = ST.lsGet('theme') || 'auto';

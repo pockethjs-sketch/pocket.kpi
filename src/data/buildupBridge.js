@@ -60,6 +60,7 @@ const RULES = {
     && Array.isArray(a.messages) && a.messages.length >= 1 && a.messages.length <= 200
     && a.messages.every((m) => plainObject(m) && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
     && (a.system === undefined || typeof a.system === 'string') && bool(a.stream)
+    && (a.effort === undefined || ['low', 'medium', 'high'].includes(a.effort))
     && sizeOf(a) <= BUILDUP_BRIDGE_LIMITS.aiBytes,
   abort: (a) => REQUEST_ID.test(String(a.target || '')),
   'prefs.get': () => true,

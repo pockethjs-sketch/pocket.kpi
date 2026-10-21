@@ -21,6 +21,8 @@ export const BUILDUP_LIMITS = Object.freeze({
 });
 
 export const BUILDUP_AI_MODELS = Object.freeze(['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5']);
+// Thinking depth (Anthropic `output_config.effort`); omitted = the model's default. Lower effort = fewer billed thinking tokens.
+export const BUILDUP_AI_EFFORTS = Object.freeze(['low', 'medium', 'high']);
 
 const SUMMARY_KEYS = ['id', 'name', 'ceo', 'date', 'time', 'status', 'tier', 'sector', 'total', 'updatedAt', 'saveId', 'tm', 'bm1', 'deal', 'recSec', 'trN', 'final', 'crm'];
 const ROLES = ['OWNER', 'ADMIN', 'EDITOR', 'VIEWER'];
@@ -102,8 +104,10 @@ export function validateAi(body) {
   }
   if (messages[messages.length - 1].role !== 'user') return fail(400, 'invalid_ai_request');
   if (body.system !== undefined && typeof body.system !== 'string') return fail(400, 'invalid_ai_request');
+  if (body.effort !== undefined && !BUILDUP_AI_EFFORTS.includes(body.effort)) return fail(400, 'invalid_ai_request');
   const value = { model, max_tokens: maxTokens, messages: messages.map(({ role, content }) => ({ role, content })), stream: body.stream === true };
   if (body.system) value.system = body.system;
+  if (body.effort) value.output_config = { effort: body.effort };
   if (byteLength(value) > BUILDUP_LIMITS.aiInputBytes) return fail(413, 'payload_too_large');
   return { ok: true, value };
 }
