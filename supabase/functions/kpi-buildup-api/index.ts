@@ -6,6 +6,11 @@ import {
 } from "../_shared/buildup-access.mjs";
 import { passwordChangeRequired } from "../_shared/account-access.mjs";
 import { kstDay, premeetingItem, premeetingSync } from "../_shared/premeeting-upcoming.mjs";
+import { crmLeadView } from "../_shared/crm-lead-tm.mjs";
+import {
+  AUDIO_BUCKET, AUDIO_KEY, AUDIO_LIMITS, RECORDING_ID, audioPath, validateAudioUpload, validateTranscribe, clovaRequest, clovaStartError,
+  recordingItem, transcribeRateLimited, processingIsStale, newCallbackSecret, secretHash,
+} from "../_shared/buildup-audio.mjs";
 
 // Sales buildup consultation workspace API.
 // - Every request: verified Supabase Auth employee session + current ACTIVE organization membership.
@@ -91,7 +96,7 @@ Deno.serve(async (req) => {
   if (action === "list") {
     const all = body.scope === "all";
     if (all && !isBuildupAdmin(access)) return reply(req, { error: "admin_required" }, 403);
-    let query = supabase.from("buildup_projects").select("project_id,owner_user_id,revision,updated_at,summary")
+    let query = supabase.from("buildup_projects").select("project_id,owner_user_id,revision,updated_at,created_at,summary")
       .eq("organization_id", organizationId).is("deleted_at", null);
     if (!all) query = query.eq("owner_user_id", me);
     const { data, error } = await query.order("updated_at", { ascending: false }).limit(BUILDUP_LIMITS.listRows);
@@ -197,6 +202,168 @@ Deno.serve(async (req) => {
     return reply(req, { ok: true, today, items, sync: premeetingSync(runs) });
   }
 
+  // TM memo, first inquiry and TM diagnosis that the TM team keeps on the KPI lead of a CRM premeeting company.
+  // Resolved from the stored premeeting schedule (client number, then project number); returns only those fields.
+  if (action === "crmLead") {
+    const scheduleNo = String(body.scheduleNo ?? "");
+    const projectNo = body.projectNo === undefined || body.projectNo === "" ? "" : String(body.projectNo);
+    if (!/^[0-9]{1,20}$/.test(scheduleNo) || (projectNo && !/^[0-9]{1,20}$/.test(projectNo))) return reply(req, { error: "invalid_schedule" }, 400);
+    const { data: schedule, error: scheduleError } = await supabase.from("buildup_premeetings").select("crm_client_no,crm_project_no")
+      .eq("organization_id", organizationId).eq("schedule_no", scheduleNo).maybeSingle();
+    if (scheduleError) return reply(req, { error: "crm_lead_read_failed" }, 500);
+    const clientNo = schedule?.crm_client_no || "";
+    const project = schedule?.crm_project_no || projectNo;
+    // One unambiguous active lead only; two matches are never guessed between.
+    const findOne = async (column: string, value: string) => {
+      const { data, error } = await supabase.from("leads").select("source_payload")
+        .eq("organization_id", organizationId).is("archived_at", null).eq(column, value).limit(2);
+      if (error) throw new Error("crm_lead_read_failed");
+      return data?.length === 1 ? data[0] : null;
+    };
+    let row: any = null;
+    try {
+      if (clientNo) row = await findOne("source_payload->>id", "crm-" + clientNo) || await findOne("source_payload->crmSheet->>clientNo", clientNo);
+      if (!row && project) row = await findOne("source_payload->>projNo", project);
+    } catch { return reply(req, { error: "crm_lead_read_failed" }, 500); }
+    if (!row) return reply(req, { ok: true, found: false });
+    return reply(req, { ok: true, found: true, lead: crmLeadView(row.source_payload) });
+  }
+
+  // Meeting recordings: kept in the private bucket (signed URLs only), transcribed by CLOVA Speech on request.
+  // Employees upload and transcribe their own recordings; OWNER/ADMIN may list, play and read others' (read-only).
+  if (action === "audioUpload") {
+    const checked = validateAudioUpload(body);
+    if (!checked.ok) return reply(req, { error: checked.error }, checked.status);
+    const value = checked.value;
+    const { data: project, error: projectError } = await supabase.from("buildup_projects").select("project_id")
+      .eq("organization_id", organizationId).eq("owner_user_id", me).eq("project_id", value.projectId).is("deleted_at", null).maybeSingle();
+    if (projectError) return reply(req, { error: "audio_prepare_failed" }, 500);
+    if (!project) return reply(req, { error: "project_not_found" }, 404);
+    const { data: existing, error: existingError } = await supabase.from("buildup_recordings").select("id,status,storage_path,bytes")
+      .eq("organization_id", organizationId).eq("owner_user_id", me).eq("project_id", value.projectId).eq("audio_key", value.audioKey).maybeSingle();
+    if (existingError) return reply(req, { error: "audio_prepare_failed" }, 500);
+    if (existing && existing.status !== "uploading") return reply(req, { ok: true, recordingId: existing.id, already: true, bytes: Number(existing.bytes) || 0 });
+    let row: any = existing;
+    if (!row) {
+      const id = crypto.randomUUID();
+      const { data: inserted, error: insertError } = await supabase.from("buildup_recordings").insert({
+        id, organization_id: organizationId, owner_user_id: me, project_id: value.projectId, audio_key: value.audioKey,
+        storage_path: audioPath(organizationId, me, value.projectId, id, value.mime), mime: value.mime, bytes: value.bytes, duration_sec: value.duration,
+      }).select("id,storage_path").single();
+      if (insertError) return insertError.code === "23505" ? reply(req, { error: "conflict" }, 409) : reply(req, { error: "audio_prepare_failed" }, 500);
+      row = inserted;
+    }
+    const { data: signed, error: signError } = await supabase.storage.from(AUDIO_BUCKET).createSignedUploadUrl(row.storage_path, { upsert: true });
+    if (signError || !signed?.token) return reply(req, { error: "audio_prepare_failed" }, 500);
+    return reply(req, { ok: true, recordingId: row.id, path: row.storage_path, token: signed.token });
+  }
+
+  if (action === "audioUploaded") {
+    const recordingId = String(body.recordingId || "");
+    if (!RECORDING_ID.test(recordingId)) return reply(req, { error: "invalid_recording" }, 400);
+    const { data: row, error } = await supabase.from("buildup_recordings").select("id,status,storage_path")
+      .eq("organization_id", organizationId).eq("owner_user_id", me).eq("id", recordingId).maybeSingle();
+    if (error) return reply(req, { error: "audio_read_failed" }, 500);
+    if (!row) return reply(req, { error: "not_found" }, 404);
+    const cut = row.storage_path.lastIndexOf("/"), folder = row.storage_path.slice(0, cut), name = row.storage_path.slice(cut + 1);
+    const { data: files, error: listError } = await supabase.storage.from(AUDIO_BUCKET).list(folder, { search: name, limit: 10 });
+    if (listError) return reply(req, { error: "audio_read_failed" }, 500);
+    const file = (files || []).find((item: any) => item.name === name);
+    if (!file) return reply(req, { error: "audio_missing" }, 409);
+    const bytes = Math.max(0, Math.round(Number(file.metadata?.size) || 0));
+    const patch: Record<string, unknown> = { bytes, updated_at: new Date().toISOString() };
+    if (row.status === "uploading") patch.status = "uploaded";
+    const { error: updateError } = await supabase.from("buildup_recordings").update(patch)
+      .eq("organization_id", organizationId).eq("owner_user_id", me).eq("id", recordingId);
+    if (updateError) return reply(req, { error: "audio_read_failed" }, 500);
+    return reply(req, { ok: true, recordingId, bytes });
+  }
+
+  if (action === "recordings" || action === "audioUrl" || action === "transcript") {
+    const ownerId = body.ownerId ? String(body.ownerId) : me;
+    if (!UUID.test(ownerId)) return reply(req, { error: "invalid_recording" }, 400);
+    if (!canReadBuildupOwner(access, ownerId)) return reply(req, { error: "permission_denied" }, 403);
+    if (action === "recordings") {
+      const projectId = String(body.projectId || "");
+      if (!BUILDUP_ID.test(projectId)) return reply(req, { error: "invalid_recording" }, 400);
+      const { data, error } = await supabase.from("buildup_recordings")
+        .select("id,audio_key,status,bytes,duration_sec,speakers,error_code,requested_at,completed_at,created_at")
+        .eq("organization_id", organizationId).eq("owner_user_id", ownerId).eq("project_id", projectId)
+        .order("created_at", { ascending: true }).limit(AUDIO_LIMITS.listRows);
+      if (error) return reply(req, { error: "audio_read_failed" }, 500);
+      return reply(req, { ok: true, items: (data || []).map(recordingItem) });
+    }
+    if (action === "audioUrl") {
+      const projectId = String(body.projectId || ""), audioKey = String(body.audioKey || "");
+      if (!BUILDUP_ID.test(projectId) || !AUDIO_KEY.test(audioKey)) return reply(req, { error: "invalid_recording" }, 400);
+      const { data: row, error } = await supabase.from("buildup_recordings").select("status,storage_path,mime")
+        .eq("organization_id", organizationId).eq("owner_user_id", ownerId).eq("project_id", projectId).eq("audio_key", audioKey).maybeSingle();
+      if (error) return reply(req, { error: "audio_read_failed" }, 500);
+      if (!row || row.status === "uploading") return reply(req, { error: "not_found" }, 404);
+      const { data: signed, error: signError } = await supabase.storage.from(AUDIO_BUCKET).createSignedUrl(row.storage_path, AUDIO_LIMITS.playUrlSec);
+      if (signError || !signed?.signedUrl) return reply(req, { error: "audio_read_failed" }, 500);
+      return reply(req, { ok: true, url: signed.signedUrl, mime: row.mime });
+    }
+    const recordingId = String(body.recordingId || "");
+    if (!RECORDING_ID.test(recordingId)) return reply(req, { error: "invalid_recording" }, 400);
+    const { data: row, error } = await supabase.from("buildup_recordings").select("id,status,speakers,error_code,completed_at,result")
+      .eq("organization_id", organizationId).eq("owner_user_id", ownerId).eq("id", recordingId).maybeSingle();
+    if (error) return reply(req, { error: "audio_read_failed" }, 500);
+    if (!row) return reply(req, { error: "not_found" }, 404);
+    const done = row.status === "done" && row.result && typeof row.result === "object";
+    return reply(req, { ok: true, recordingId, status: row.status, speakers: row.speakers ?? null, errorCode: row.error_code || null, completedAt: row.completed_at || null,
+      ...(done ? { segments: Array.isArray(row.result.segments) ? row.result.segments : [], labels: Array.isArray(row.result.speakers) ? row.result.speakers : [] } : {}) });
+  }
+
+  if (action === "transcribe") {
+    const checked = validateTranscribe(body);
+    if (!checked.ok) return reply(req, { error: checked.error }, checked.status);
+    const invokeUrl = (Deno.env.get("CLOVA_SPEECH_INVOKE_URL") || "").trim().replace(/\/+$/, "");
+    const sttSecret = (Deno.env.get("CLOVA_SPEECH_SECRET") || "").trim();
+    if (!/^https:\/\/[^\s]+$/.test(invokeUrl) || !sttSecret) return reply(req, { error: "stt_not_configured" }, 503);
+    const value = checked.value;
+    const { data: row, error } = await supabase.from("buildup_recordings").select("id,status,storage_path,requested_at")
+      .eq("organization_id", organizationId).eq("owner_user_id", me).eq("id", value.recordingId).maybeSingle();
+    if (error) return reply(req, { error: "audio_read_failed" }, 500);
+    if (!row) return reply(req, { error: "not_found" }, 404);
+    if (row.status === "uploading") return reply(req, { error: "audio_missing" }, 409);
+    if (row.status === "processing" && !processingIsStale(row.requested_at)) return reply(req, { ok: true, recordingId: row.id, status: "processing" });
+    const since = new Date(Date.now() - 3_600_000).toISOString();
+    const { count, error: countError } = await supabase.from("buildup_recordings").select("id", { count: "exact", head: true })
+      .eq("organization_id", organizationId).eq("owner_user_id", me).gte("requested_at", since);
+    if (countError) return reply(req, { error: "audio_read_failed" }, 500);
+    if (transcribeRateLimited(count)) return reply(req, { error: "stt_rate_limited" }, 429);
+    const { data: media, error: mediaError } = await supabase.storage.from(AUDIO_BUCKET).createSignedUrl(row.storage_path, AUDIO_LIMITS.mediaUrlSec);
+    if (mediaError || !media?.signedUrl) return reply(req, { error: "audio_missing" }, 409);
+    // The job is marked first so that a fast callback finds its (hashed) secret.
+    const callbackSecret = newCallbackSecret();
+    const now = new Date().toISOString();
+    const { error: markError } = await supabase.from("buildup_recordings").update({
+      status: "processing", stt_provider: "clova", stt_token: null, callback_hash: await secretHash(callbackSecret), speakers: value.speakers,
+      error_code: null, result: null, requested_at: now, completed_at: null, updated_at: now,
+    }).eq("organization_id", organizationId).eq("owner_user_id", me).eq("id", row.id);
+    if (markError) return reply(req, { error: "audio_read_failed" }, 500);
+    const callback = `${Deno.env.get("SUPABASE_URL")}/functions/v1/kpi-buildup-stt-callback?r=${row.id}&k=${callbackSecret}`;
+    let upstream: Response | null = null, started: any = null;
+    try {
+      upstream = await fetch(`${invokeUrl}/recognizer/url`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Accept": "application/json", "X-CLOVASPEECH-API-KEY": sttSecret },
+        body: JSON.stringify(clovaRequest({ url: media.signedUrl, callback, speakers: value.speakers, keywords: value.keywords })),
+      });
+      try { started = await upstream.json(); } catch { started = null; }
+    } catch { upstream = null; }
+    const jobToken = typeof started?.token === "string" ? started.token.slice(0, 200) : "";
+    if (!upstream || !upstream.ok || !jobToken) {
+      const mapped = upstream ? clovaStartError(upstream.ok ? 502 : upstream.status) : { status: 502, error: "stt_upstream_error" };
+      await supabase.from("buildup_recordings").update({ status: "failed", callback_hash: null, error_code: mapped.error, completed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .eq("organization_id", organizationId).eq("owner_user_id", me).eq("id", row.id);
+      return reply(req, { error: mapped.error }, mapped.status);
+    }
+    await supabase.from("buildup_recordings").update({ stt_token: jobToken }).eq("organization_id", organizationId).eq("owner_user_id", me).eq("id", row.id).eq("status", "processing");
+    return reply(req, { ok: true, recordingId: row.id, status: "processing" });
+  }
+
   if (action === "usage") {
     if (!isBuildupAdmin(access)) return reply(req, { error: "admin_required" }, 403);
     const days = Math.min(BUILDUP_LIMITS.usageDays, Math.max(1, Math.round(Number(body.days) || 30)));
@@ -240,7 +407,7 @@ Deno.serve(async (req) => {
       let message = "";
       try { message = String((await upstream.json())?.error?.message || "").slice(0, 200); } catch { /* no body */ }
       await settle("failed");
-      const mapped = aiUpstreamError(upstream.status);
+      const mapped = aiUpstreamError(upstream.status, message);
       return reply(req, { error: mapped.error, message }, mapped.status);
     }
     if (!checked.value.stream) {

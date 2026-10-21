@@ -47,7 +47,9 @@ test('MASTER, OWNER, SERVICE and one\'s own account are never managed from the s
 });
 
 test('temporary and personal passwords are validated without being echoed', () => {
-  assert.equal(validateTempPassword('abcd1234').ok, true);
+  assert.equal(validateTempPassword('abcd1234wxyz').ok, true);
+  // Supabase Auth on this project requires 12+ characters, so shorter temporary passwords are refused before the Auth call.
+  for (const short of ['abcd1234', 'abcd1234wxy']) assert.equal(validateTempPassword(short).error, 'invalid_temp_password');
   for (const bad of ['short1', ' padded12', 'padded12 ', 'line\nbreak1', 'x'.repeat(73), undefined]) assert.equal(validateTempPassword(bad).ok, false);
   assert.equal(validateNewPassword('my-own-password').ok, true);
   for (const bad of ['eleven-char', 'aaaaaaaaaaaaaa', '            ', 'tab\there-long-pw']) assert.equal(validateNewPassword(bad).error, 'weak_password');
@@ -59,11 +61,11 @@ test('account creation and updates are validated against the caller', () => {
   assert.equal(normalizeEmail('nope'), null);
   assert.equal(displayName('design@pocket.company', ''), 'design');
   assert.equal(displayName('x@y.z', '  디자인팀  '), '디자인팀');
-  const created = validateCreate(access('OWNER'), { email: 'CEO@pocket.company', role: 'EDITOR', password: 'temporary1' });
-  assert.deepEqual(created.value, { email: 'ceo@pocket.company', role: 'EDITOR', password: 'temporary1', name: 'ceo' });
-  assert.equal(validateCreate(access('ADMIN'), { email: 'a@b.co', role: 'ADMIN', password: 'temporary1' }).error, 'role_not_allowed');
-  assert.equal(validateCreate(access('OWNER'), { email: 'a@b.co', role: 'OWNER', password: 'temporary1' }).error, 'role_not_allowed');
-  assert.equal(validateCreate(access('OWNER'), { email: 'bad', password: 'temporary1' }).error, 'invalid_email');
+  const created = validateCreate(access('OWNER'), { email: 'CEO@pocket.company', role: 'EDITOR', password: 'temporary123' });
+  assert.deepEqual(created.value, { email: 'ceo@pocket.company', role: 'EDITOR', password: 'temporary123', name: 'ceo' });
+  assert.equal(validateCreate(access('ADMIN'), { email: 'a@b.co', role: 'ADMIN', password: 'temporary123' }).error, 'role_not_allowed');
+  assert.equal(validateCreate(access('OWNER'), { email: 'a@b.co', role: 'OWNER', password: 'temporary123' }).error, 'role_not_allowed');
+  assert.equal(validateCreate(access('OWNER'), { email: 'bad', password: 'temporary123' }).error, 'invalid_email');
   const target = { userId: OTHER, role: 'EDITOR', master: false };
   assert.deepEqual(validateUpdate(access('OWNER'), target, { role: 'VIEWER', active: false, name: ' 디자인 ' }).value, { role: 'VIEWER', active: false, name: '디자인' });
   assert.equal(validateUpdate(access('OWNER'), target, {}).error, 'invalid_account_update');

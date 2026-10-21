@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { BUILDUP_SANDBOX, BUILDUP_FRAME_ALLOW, BUILDUP_NOTICE, prepareBuildupDocument } from './data/workspaces.js';
 import { BUILDUP_BRIDGE_VERSION, createBuildupBridge } from './data/buildupBridge.js';
 import { createBuildupRecorder } from './data/buildupRecorder.js';
-import { buildupAiStream, buildupCall, buildupPrefs } from './data/buildupApi.js';
+import { buildupAiStream, buildupAudioGet, buildupAudioPut, buildupCall, buildupPrefs } from './data/buildupApi.js';
 
 export default function BuildupWorkspace() {
   const [html, setHtml] = useState('');
@@ -37,7 +37,7 @@ export default function BuildupWorkspace() {
     port.current = channel.port1;
     link.current = createBuildupBridge({
       post: (message, transfer) => channel.port1.postMessage(message, transfer),
-      call: buildupCall, aiStream: buildupAiStream, recorder: rec, prefs: buildupPrefs,
+      call: buildupCall, aiStream: buildupAiStream, recorder: rec, prefs: buildupPrefs, audio: { put: buildupAudioPut, get: buildupAudioGet },
       onUiState: state => { busy.current = state; },
     });
     channel.port1.onmessage = event => link.current?.handle(event.data);

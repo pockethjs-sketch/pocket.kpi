@@ -22,7 +22,7 @@ export async function accountRequest(action, body = {}) {
 
 export const ACCOUNT_ERROR_TEXT = {
   weak_password: '비밀번호는 12자 이상이어야 하고 같은 글자만 반복할 수 없습니다.',
-  invalid_temp_password: '임시 비밀번호는 8자 이상이어야 합니다(앞뒤 공백 없이).',
+  invalid_temp_password: '임시 비밀번호는 12자 이상이어야 합니다(앞뒤 공백 없이).',
   invalid_email: '이메일 형식을 확인하세요.',
   account_exists: '이미 가입된 이메일입니다. 기존 직원 등록(설정)에서 권한을 주거나 다른 이메일을 쓰세요.',
   role_not_allowed: '이 권한은 MASTER만 지정할 수 있습니다.',

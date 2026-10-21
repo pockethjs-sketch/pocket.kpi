@@ -1,4 +1,4 @@
-import { SUPABASE_URL, employeeHeaders } from '../employeeSession.js';
+import { SUPABASE_URL, employeeAuth, employeeHeaders } from '../employeeSession.js';
 
 // Calls the kpi-buildup-api Edge Function with the current employee session.
 // The session token is attached here, in the KPI page, and never handed to the buildup frame.
@@ -78,6 +78,37 @@ export async function buildupAiStream(args, signal, onText) {
     throw codeError(error?.name === 'AbortError' ? 'cancelled' : 'network');
   }
   return { text, model, truncated };
+}
+
+// Meeting recordings (private bucket `buildup-audio`). The server checks the employee and project, then hands out a
+// one-time signed upload URL for this recording's own path; the bytes go straight to Storage from this page.
+// The frame gets back only the recording id. Playback uses a short-lived signed download URL the same way.
+const AUDIO_BUCKET = 'buildup-audio';
+
+export async function buildupAudioPut({ projectId, audioKey, mime, duration }, buffer, signal) {
+  const type = String(mime || 'audio/webm').split(';')[0].trim().toLowerCase();
+  const prepared = await buildupCall('audioUpload', { projectId, audioKey, mime: type, bytes: buffer.byteLength, duration }, signal);
+  if (prepared.already) return { recordingId: prepared.recordingId, bytes: Number(prepared.bytes) || buffer.byteLength, already: true };
+  let uploaded;
+  try {
+    uploaded = await employeeAuth.storage.from(AUDIO_BUCKET).uploadToSignedUrl(prepared.path, prepared.token, new Blob([buffer], { type }), { contentType: type, upsert: true });
+  } catch (error) {
+    throw codeError(error?.name === 'AbortError' ? 'cancelled' : 'audio_upload_failed');
+  }
+  if (uploaded?.error) {
+    const text = `${uploaded.error.statusCode || ''} ${uploaded.error.message || ''}`;
+    throw codeError(/413|too large|exceed|maximum allowed size/i.test(text) ? 'audio_too_large' : 'audio_upload_failed');
+  }
+  const done = await buildupCall('audioUploaded', { recordingId: prepared.recordingId }, signal);
+  return { recordingId: prepared.recordingId, bytes: Number(done.bytes) || buffer.byteLength };
+}
+
+export async function buildupAudioGet({ projectId, audioKey, ownerId }, signal) {
+  const { url, mime } = await buildupCall('audioUrl', { projectId, audioKey, ...(ownerId ? { ownerId } : {}) }, signal);
+  let response;
+  try { response = await fetch(url, { signal, cache: 'no-store' }); } catch (error) { throw codeError(error?.name === 'AbortError' ? 'cancelled' : 'network'); }
+  if (!response.ok) throw codeError('audio_read_failed');
+  return { buffer: await response.arrayBuffer(), mime: String(mime || response.headers.get('content-type') || '') };
 }
 
 // Per-employee screen preferences (panel layout, theme, last consultation) in this browser.

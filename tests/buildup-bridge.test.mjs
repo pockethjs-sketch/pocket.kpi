@@ -31,6 +31,7 @@ test('only known operations with well-formed arguments pass the bridge', () => {
     { op: 'save', args: { id: 'p1', core: { id: 'p2' }, summary: {} } },
     { op: 'save', args: { id: 'p1', core: { id: 'p1' }, summary: {}, baseRevision: 1.5 } },
     { op: 'ai', args: { model: 'm', max_tokens: 10, messages: [{ role: 'system', content: 'x' }] } },
+    { op: 'ai', args: { model: 'm', max_tokens: 10, messages: [{ role: 'user', content: 'x' }], effort: 'max' } },
     { op: 'prefs.set', args: { prefs: { big: 'x'.repeat(BUILDUP_BRIDGE_LIMITS.prefsBytes) } } },
     { op: 'rec.sr', args: { on: 'yes' } },
     { op: 'list', args: { scope: 'everyone' } },
@@ -38,6 +39,7 @@ test('only known operations with well-formed arguments pass the bridge', () => {
   const big = { id: 'p1', core: { id: 'p1' }, summary: {}, heavy: { t: 'x'.repeat(BUILDUP_BRIDGE_LIMITS.saveBytes) } };
   assert.equal(validateBridgeMessage({ id: 'r2', op: 'save', args: big }), null);
   assert.equal(validateBridgeMessage({ id: 'r3', op: 'get', args: { id: 'p1', ownerId: OTHER } }).args.ownerId, OTHER);
+  assert.equal(validateBridgeMessage({ id: 'r4', op: 'ai', args: { model: 'claude-haiku-5-5', max_tokens: 4000, messages: [{ role: 'user', content: 'x' }], effort: 'low' } }).args.effort, 'low');
 });
 
 test('server operations are forwarded without credentials and answered by request id', async () => {

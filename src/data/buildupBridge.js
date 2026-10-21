@@ -10,13 +10,18 @@ export const BUILDUP_BRIDGE_LIMITS = Object.freeze({
   saveBytes: 7_000_000,
   aiBytes: 1_000_000,
   prefsBytes: 64_000,
+  audioBytes: 500 * 1024 * 1024,
+  keywords: 300,
   deltaIntervalMs: 120,
 });
 
 const ID = /^[A-Za-z0-9_-]{1,80}$/;
 const REQUEST_ID = /^[A-Za-z0-9_-]{1,40}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const SERVER_OPS = new Set(['session', 'list', 'get', 'save', 'delete', 'usage', 'premeetings']);
+const SERVER_OPS = new Set(['session', 'list', 'get', 'save', 'delete', 'usage', 'premeetings', 'crmLead', 'recordings', 'transcribe', 'transcript']);
+const AUDIO_KEY = /^[A-Za-z0-9_-]{1,120}$/;
+const AUDIO_MIME = /^(audio|video)\/[a-z0-9.+-]{1,30}(;[ a-z0-9=.,-]{0,60})?$/i;
+const only = (a, keys) => Object.keys(a).every((k) => keys.includes(k));
 const ERROR_FIELDS = ['revision', 'name', 'detail', 'perm', 'message'];
 
 const plainObject = (value) => !!value && typeof value === 'object' && !Array.isArray(value)
@@ -36,10 +41,26 @@ const RULES = {
   usage: (a) => a.days === undefined || (Number.isInteger(a.days) && a.days >= 1 && a.days <= 90),
   // Upcoming CRM premeetings for the overview (read-only, no arguments).
   premeetings: (a) => Object.keys(a).length === 0,
+  // KPI TM memo · first inquiry · TM diagnosis of a CRM premeeting company, looked up by schedule number.
+  crmLead: (a) => Object.keys(a).every((k) => k === 'scheduleNo' || k === 'projectNo') && /^[0-9]{1,20}$/.test(String(a.scheduleNo ?? ''))
+    && (a.projectNo === undefined || a.projectNo === '' || /^[0-9]{1,20}$/.test(String(a.projectNo))),
+  // Meeting recordings: the frame hands over the finished audio (transferred ArrayBuffer); the KPI page uploads it to the
+  // private bucket with a one-time signed URL from the server and returns only the recording id. Playback comes back the same way.
+  'audio.put': (a) => only(a, ['projectId', 'audioKey', 'mime', 'duration', 'buffer']) && ID.test(String(a.projectId || '')) && AUDIO_KEY.test(String(a.audioKey || ''))
+    && AUDIO_MIME.test(String(a.mime || '')) && typeof a.duration === 'number' && Number.isFinite(a.duration) && a.duration >= 0 && a.duration <= 86_400
+    && a.buffer instanceof ArrayBuffer && a.buffer.byteLength > 0 && a.buffer.byteLength <= BUILDUP_BRIDGE_LIMITS.audioBytes,
+  'audio.get': (a) => only(a, ['projectId', 'audioKey', 'ownerId']) && ID.test(String(a.projectId || '')) && AUDIO_KEY.test(String(a.audioKey || ''))
+    && (a.ownerId === undefined || UUID.test(String(a.ownerId))),
+  recordings: (a) => only(a, ['projectId', 'ownerId']) && ID.test(String(a.projectId || '')) && (a.ownerId === undefined || UUID.test(String(a.ownerId))),
+  transcribe: (a) => only(a, ['recordingId', 'speakers', 'keywords']) && UUID.test(String(a.recordingId || ''))
+    && (a.speakers === undefined || [0, 2, 3, 4].includes(a.speakers))
+    && (a.keywords === undefined || (Array.isArray(a.keywords) && a.keywords.length <= BUILDUP_BRIDGE_LIMITS.keywords && a.keywords.every((w) => typeof w === 'string' && w.length <= 40))),
+  transcript: (a) => only(a, ['recordingId', 'ownerId']) && UUID.test(String(a.recordingId || '')) && (a.ownerId === undefined || UUID.test(String(a.ownerId))),
   ai: (a) => typeof a.model === 'string' && a.model.length <= 80 && Number.isInteger(a.max_tokens) && a.max_tokens >= 1
     && Array.isArray(a.messages) && a.messages.length >= 1 && a.messages.length <= 200
     && a.messages.every((m) => plainObject(m) && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
     && (a.system === undefined || typeof a.system === 'string') && bool(a.stream)
+    && (a.effort === undefined || ['low', 'medium', 'high'].includes(a.effort))
     && sizeOf(a) <= BUILDUP_BRIDGE_LIMITS.aiBytes,
   abort: (a) => REQUEST_ID.test(String(a.target || '')),
   'prefs.get': () => true,
@@ -77,7 +98,7 @@ export function bridgeError(error) {
   return out;
 }
 
-export function createBuildupBridge({ post, call, aiStream, recorder, prefs, onUiState, now = () => Date.now() }) {
+export function createBuildupBridge({ post, call, aiStream, recorder, prefs, onUiState, audio, now = () => Date.now() }) {
   const running = new Map();
   let closed = false;
   const send = (message, transfer) => { if (!closed) post(message, transfer || []); };
@@ -118,6 +139,24 @@ export function createBuildupBridge({ post, call, aiStream, recorder, prefs, onU
         stream.done();
         answer(id, { text: String(result?.text || ''), model: String(result?.model || ''), truncated: !!result?.truncated });
       } catch (error) { stream.done(); refuse(id, error); }
+      finally { running.delete(id); }
+      return;
+    }
+    if (op === 'audio.put' || op === 'audio.get') {
+      const controller = new AbortController();
+      if (id !== undefined) running.set(id, controller);
+      try {
+        if (!audio?.put || !audio?.get) throw { code: 'not_supported' };
+        if (op === 'audio.put') {
+          const { buffer, ...meta } = args;
+          const result = await audio.put(meta, buffer, controller.signal);
+          answer(id, { recordingId: String(result?.recordingId || ''), bytes: Number(result?.bytes) || 0, already: !!result?.already });
+        } else {
+          const result = await audio.get(args, controller.signal);
+          if (!(result?.buffer instanceof ArrayBuffer)) throw { code: 'audio_read_failed' };
+          if (id !== undefined) send({ id, ok: true, data: { buffer: result.buffer, mime: String(result.mime || '') } }, [result.buffer]);
+        }
+      } catch (error) { refuse(id, error); }
       finally { running.delete(id); }
       return;
     }

@@ -55,7 +55,7 @@ export default function AccountWorkspace() {
         <label>권한<select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
           <option value="EDITOR">{ROLE_NAME.EDITOR}</option><option value="VIEWER">{ROLE_NAME.VIEWER}</option>{owner && <option value="ADMIN">{ROLE_NAME.ADMIN}</option>}
         </select></label>
-        <label>임시 비밀번호<input type="text" required minLength={8} autoComplete="off" spellCheck={false} placeholder="8자 이상" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></label>
+        <label>임시 비밀번호<input type="text" required minLength={12} autoComplete="off" spellCheck={false} placeholder="12자 이상" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></label>
         <button className="account-primary" disabled={!!busy}>{busy === 'create' ? '만드는 중…' : '계정 만들기'}</button>
       </div>
       <p className="account-hint">임시 비밀번호는 직원에게 따로 전달하세요. 직원이 처음 로그인하면 본인만 아는 비밀번호(12자 이상)를 정해야 업무 화면이 열립니다. 이메일 인증은 필요 없습니다.</p>
@@ -85,8 +85,8 @@ export default function AccountWorkspace() {
                   if (editing.kind === 'password') run(account.userId, 'reset_password', { userId: account.userId, password: editing.value }, `${account.email} 비밀번호를 임시 비밀번호로 바꿨습니다. 다음 로그인 때 새 비밀번호를 정하게 됩니다.`);
                   else run(account.userId, 'update_account', { userId: account.userId, name: editing.value }, `${account.email} 이름을 바꿨습니다.`);
                 }}>
-                  <input autoFocus type="text" spellCheck={false} autoComplete="off" required minLength={editing.kind === 'password' ? 8 : 1} maxLength={editing.kind === 'password' ? 72 : 40}
-                    aria-label={editing.kind === 'password' ? '새 임시 비밀번호' : '이름'} placeholder={editing.kind === 'password' ? '새 임시 비밀번호(8자 이상)' : '이름'} value={editing.value} onChange={(e) => setEdit({ ...editing, value: e.target.value })} />
+                  <input autoFocus type="text" spellCheck={false} autoComplete="off" required minLength={editing.kind === 'password' ? 12 : 1} maxLength={editing.kind === 'password' ? 72 : 40}
+                    aria-label={editing.kind === 'password' ? '새 임시 비밀번호' : '이름'} placeholder={editing.kind === 'password' ? '새 임시 비밀번호(12자 이상)' : '이름'} value={editing.value} onChange={(e) => setEdit({ ...editing, value: e.target.value })} />
                   <button className="account-primary sm" disabled={!!busy}>{editing.kind === 'password' ? '초기화' : '저장'}</button>
                   <button type="button" className="account-ghost sm" onClick={() => setEdit(null)}>취소</button>
                 </form>

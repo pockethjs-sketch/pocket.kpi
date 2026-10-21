@@ -1,12 +1,13 @@
 // Employee account administration rules (kpi-account-api).
 // MASTER/OWNER and ADMIN manage employee accounts; nobody manages OWNER accounts or themselves here.
 // Temporary passwords are set by an administrator and must be replaced by the employee at first login.
+// Both temporary and own passwords need 12+ characters: Supabase Auth on this project rejects shorter ones.
 // Passwords are never stored, logged or returned by these helpers. Pure helpers only.
 
 export const ACCOUNT_ROLES = Object.freeze(['ADMIN', 'EDITOR', 'VIEWER']);
 export const PASSWORD_FLAG = 'pk_password_change';
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-export const ACCOUNT_LIMITS = Object.freeze({ bodyBytes: 64_000, tempMin: 8, newMin: 12, passwordMaxBytes: 72, nameMax: 40 });
+export const ACCOUNT_LIMITS = Object.freeze({ bodyBytes: 64_000, tempMin: 12, newMin: 12, passwordMaxBytes: 72, nameMax: 40 });
 
 const bytes = (value) => new TextEncoder().encode(String(value)).length;
 const fail = (status, error) => ({ ok: false, status, error });
