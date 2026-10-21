@@ -10,7 +10,7 @@ import { WORKSPACES, MARKETING_HUB, INITIAL_WORKSPACE, ACCOUNT_WORKSPACE, canMan
 import { BUILDUP_AI_MODELS } from '../supabase/functions/_shared/buildup-access.mjs';
 
 // SHA-256 of the v4.9 web build copied from the intelligence project (see docs/WORKSPACES.md).
-const BUILDUP_ASSET_SHA256 = '42f7234b05db823e7609c28dc19086ec2f5fc3ec5eaae0a75089045e8b225164';
+const BUILDUP_ASSET_SHA256 = '0115a4cd5e22ee1c3140c11e5dcb00e6e76f7e49649e5b90c1e14dd6a8828195';
 const shellSource = readFileSync(new URL('../src/WorkspaceShell.jsx', import.meta.url), 'utf8');
 const frameSource = readFileSync(new URL('../src/BuildupWorkspace.jsx', import.meta.url), 'utf8');
 const main = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');

@@ -1,7 +1,9 @@
 // Microphone recording and live Korean transcription for the buildup consultation frame.
 // The isolated frame cannot open the microphone (opaque origin), so the KPI page records here
 // and forwards only transcript text, recorder state and the finished audio file to the frame.
-// Audio and transcript stay in this browser; nothing here is uploaded.
+// Nothing is uploaded here; the frame may then ask the bridge to keep the file in the private
+// recordings bucket (audio.put) for precise transcription. Speech is recorded at 32 kbps Opus
+// (about 14 MB per hour) so long meetings stay within the storage upload limit.
 
 export function createBuildupRecorder({ win = globalThis, onEvent = () => {} } = {}) {
   const SR = win.SpeechRecognition || win.webkitSpeechRecognition;
@@ -85,7 +87,7 @@ export function createBuildupRecorder({ win = globalThis, onEvent = () => {} } =
       }
       R.stream = stream; R.chunks = []; R.finished = false;
       R.mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].find((type) => win.MediaRecorder.isTypeSupported?.(type)) || '';
-      const recorder = R.mr = R.mime ? new win.MediaRecorder(stream, { mimeType: R.mime }) : new win.MediaRecorder(stream);
+      const recorder = R.mr = new win.MediaRecorder(stream, { ...(R.mime ? { mimeType: R.mime } : {}), audioBitsPerSecond: 32_000 });
       recorder.ondataavailable = (event) => { if (event.data?.size) R.chunks.push(event.data); };
       recorder.onstop = () => { finalize(recorder); };
       stream.getAudioTracks().forEach((track) => {

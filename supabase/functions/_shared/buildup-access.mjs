@@ -113,7 +113,11 @@ export function aiRateLimited(callsInLastHour) {
 }
 
 // Anthropic HTTP failures mapped to codes the consultation screen explains. Never forwards credentials.
-export function aiUpstreamError(status) {
+// Billing refusals arrive as HTTP 400 with an explanatory message; only a fixed code reaches the browser.
+export function aiUpstreamError(status, message = '') {
+  const text = String(message || '');
+  if (status === 400 && /credit balance/i.test(text)) return { status: 503, error: 'ai_credit_low' };
+  if (status === 400 && /usage limit/i.test(text)) return { status: 503, error: 'ai_limit_reached' };
   if (status === 401 || status === 403) return { status: 503, error: 'ai_key_invalid' };
   if (status === 429) return { status: 429, error: 'rate_limited' };
   if (status === 404) return { status: 400, error: 'model' };
@@ -163,6 +167,7 @@ export function listItem(row, names) {
     ownerName: names?.get(row.owner_user_id) || '',
     revision: row.revision,
     updatedAt: row.updated_at,
+    createdAt: row.created_at || null,
     summary: plainObject(row.summary) ? row.summary : {},
   };
 }

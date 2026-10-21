@@ -79,6 +79,11 @@ test('AI requests are limited to approved models, text messages and bounded size
   assert.equal(aiRateLimited(null), true);
   assert.deepEqual(aiUpstreamError(401), { status: 503, error: 'ai_key_invalid' });
   assert.deepEqual(aiUpstreamError(529), { status: 502, error: 'upstream_error' });
+  // Billing refusals (HTTP 400 + message) become fixed codes; the provider message itself is not needed by the browser.
+  assert.deepEqual(aiUpstreamError(400, 'Your credit balance is too low to access the Anthropic API.'), { status: 503, error: 'ai_credit_low' });
+  assert.deepEqual(aiUpstreamError(400, 'You have reached your specified workspace API usage limits.'), { status: 503, error: 'ai_limit_reached' });
+  assert.deepEqual(aiUpstreamError(400, 'messages: text content blocks must be non-empty'), { status: 400, error: 'invalid_ai_request' });
+  assert.deepEqual(aiUpstreamError(400), { status: 400, error: 'invalid_ai_request' });
 });
 
 test('usage tap reads token counts from the event stream without altering it', () => {
@@ -95,7 +100,9 @@ test('list rows expose owner names to admins without email addresses', () => {
   assert.equal(memberName(null), '직원');
   const row = { project_id: 'p1', owner_user_id: OTHER, revision: 2, updated_at: '2026-10-20T00:00:00Z', summary: { name: '테스트상사' }, core: { secret: 1 } };
   const item = listItem(row, new Map([[OTHER, '김영업']]));
-  assert.deepEqual(item, { id: 'p1', ownerId: OTHER, ownerName: '김영업', revision: 2, updatedAt: '2026-10-20T00:00:00Z', summary: { name: '테스트상사' } });
+  assert.deepEqual(item, { id: 'p1', ownerId: OTHER, ownerName: '김영업', revision: 2, updatedAt: '2026-10-20T00:00:00Z', createdAt: null, summary: { name: '테스트상사' } });
+  // v4.9 왼쪽 목록은 만든 날짜로 묶는다: 서버가 저장한 생성 시각을 그대로 준다
+  assert.equal(listItem({ ...row, created_at: '2026-10-19T01:00:00Z' }, null).createdAt, '2026-10-19T01:00:00Z');
   assert.deepEqual(usageRows([{ user_id: OTHER, input_tokens: 10, output_tokens: 5, created_at: '2026-10-19' }, { user_id: OTHER, input_tokens: null, output_tokens: 2, created_at: '2026-10-20' }]),
     [{ userId: OTHER, calls: 2, inputTokens: 10, outputTokens: 7, lastAt: '2026-10-20' }]);
 });

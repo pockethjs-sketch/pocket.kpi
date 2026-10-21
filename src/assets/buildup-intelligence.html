@@ -2087,6 +2087,32 @@ body.inkon .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
 .trpin .tx span{font-size:var(--fs-12);font-weight:var(--w-r);line-height:var(--lh-ui);color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .trpin .btn{flex:none}
 .trpin .btn.acc{background:var(--panel)}
+/* 정밀 받아쓰기(서버 보관 · CLOVA 화자 구분 · AI 보정) */
+.sttbox{margin:8px 12px 0 16px;padding:12px 12px 12px 16px;border-radius:var(--r-card);border:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;gap:10px}
+.sttbox-h{display:flex;align-items:center;gap:8px;min-width:0}
+.sttbox-h b{font-size:var(--fs-14);font-weight:var(--w-s);color:var(--ink);line-height:var(--lh-ui)}
+.sttbox-h>span:not(.sp){font-size:var(--fs-12);color:var(--sub)}
+.sttbox-h .sp{flex:1}
+.sttspk{display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-12);color:var(--sub)}
+.sttspk select,.sttsp select{height:var(--h-xs);border:1px solid var(--line);border-radius:var(--r-box);background:var(--panel);color:var(--ink);font-size:var(--fs-12);padding:0 4px}
+.sttrow{display:flex;flex-direction:column;gap:6px;padding-top:10px;border-top:1px solid var(--line-2)}
+.sttrow:first-of-type{border-top:0;padding-top:0}
+.sttname{display:flex;align-items:center;gap:6px;min-width:0;color:var(--sub)}
+.sttname b{font-size:var(--fs-13);font-weight:var(--w-s);color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.sttname small{font-size:var(--fs-12);color:var(--mute)}
+.sttline{font-size:var(--fs-12);line-height:var(--lh-txt);color:var(--sub)}
+.sttline .errmsg{font-size:var(--fs-12)}
+.sttsp{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px}
+.sttsp label{display:inline-flex;align-items:center;gap:4px}
+.sttsp .sw{width:8px;height:8px;border-radius:50%;background:var(--mute)}
+.sttsp .sw.s1{background:var(--blue)}.sttsp .sw.s2{background:var(--ok)}.sttsp .sw.s3{background:#C27C0E}.sttsp .sw.s4{background:#8E4EC6}
+.sttacts{display:flex;flex-wrap:wrap;gap:6px}
+.sttfoot{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:var(--fs-12)}
+.sttfoot .lnk{font-size:var(--fs-12)}
+.sttbox>.hint{margin:0;font-size:var(--fs-12)}
+.trlist b.spk{display:inline-block;margin-right:6px;padding:0 6px;border-radius:var(--r-tag);background:color-mix(in srgb,var(--ok) 12%,transparent);color:var(--ok);font-size:var(--fs-12);font-weight:var(--w-s);line-height:20px;vertical-align:1px}
+.trlist b.spk.me{background:color-mix(in srgb,var(--blue) 12%,transparent);color:var(--blue-deep)}
+.trlist div.u p{text-decoration:underline dotted color-mix(in srgb,var(--warn-ink) 60%,transparent);text-underline-offset:3px}
 /* 녹음 정리 창 */
 .rcp{display:flex;flex-direction:column;gap:4px;font-size:var(--fs-14);line-height:var(--lh-txt);color:var(--text)}
 .rcp .notice{margin-bottom:8px}
@@ -2191,6 +2217,20 @@ body.inkon .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
 .ag.crm{background:var(--panel);border:1px dashed var(--blue-soft)}
 .ag.crm:hover{background:var(--tint)}
 .ag .crmtag{margin-top:1px;flex:none}
+/* CRM 일정에서 이미 만든 프로젝트 — 「프로젝트 생성됨」 */
+.madechip{display:inline-flex;align-items:center;gap:2px;height:18px;padding:0 6px 0 4px;margin-left:4px;border-radius:var(--r-tag);background:color-mix(in srgb,var(--ok) 12%,transparent);color:var(--ok);font-size:var(--fs-11);font-weight:var(--w-s);line-height:var(--lh-ui);vertical-align:middle;white-space:nowrap}
+.madechip svg{width:12px;height:12px;flex:none}
+.pnext .madechip{margin-left:0;height:24px;padding:0 8px 0 6px;font-size:var(--fs-12)}
+.pnext .madechip+small{display:block;margin-top:4px;color:var(--sub);font-size:var(--fs-12)}
+/* 왼쪽 목록: 만든 날짜별 묶음(누르면 접고 펼침) */
+.pgroup.tog{width:100%;border:0;background:none;text-align:left;cursor:pointer;border-radius:0}
+.pgroup.tog>span:first-child{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pgroup.tog .n{flex:none;color:var(--sub);font-size:var(--fs-12)}
+.pgroup.tog svg{flex:none;transform:rotate(-90deg);transition:transform .15s ease;color:var(--mute)}
+.pgroup.tog.on svg{transform:none}
+.pgroup.tog:hover{color:var(--ink)}
+.pgroup.tog:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
+@media (prefers-reduced-motion:reduce){.pgroup.tog svg{transition:none}}
 .tmcrm{display:flex;align-items:flex-start;gap:8px;margin:0 0 12px;padding:8px 12px;border-radius:var(--r-box);background:var(--tint);color:var(--blue-deep);font-size:var(--fs-13);line-height:var(--lh-txt)}
 .tmcrm svg{flex:none;margin-top:2px}
 /* KPI TM 메모 불러오기 상태(TM 사전 입력 안내 줄 · 미팅 기록 TM) */
@@ -4529,7 +4569,7 @@ window.PK_VIS = {
       web.all = items.filter(x => x && typeof x.id === 'string').map(x => {
         const sum = x.summary && typeof x.summary === 'object' ? x.summary : {};
         if (x.ownerId === web.me) web.seenRev[x.id] = x.revision;
-        return Object.assign({}, sum, { id: web.keyOf(x.id, x.ownerId), pid: x.id, ownerId: x.ownerId, ownerName: x.ownerName || '', revision: x.revision, updatedAt: sum.updatedAt || x.updatedAt || '' });
+        return Object.assign({}, sum, { id: web.keyOf(x.id, x.ownerId), pid: x.id, ownerId: x.ownerId, ownerName: x.ownerName || '', revision: x.revision, updatedAt: sum.updatedAt || x.updatedAt || '', createdAt: x.createdAt || sum.createdAt || '' });
       }).sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
       if (Array.isArray(r && r.members)) web.members = r.members;
       web.loadedAt = Date.now();
@@ -4570,9 +4610,9 @@ window.PK_VIS = {
       }
       web.rev[id] = r.revision; web.seenRev[id] = r.revision;
       delete web.cache[id];
-      const row = Object.assign({}, summary, { id, pid: id, ownerId: web.me, ownerName: '', revision: r.revision, updatedAt: summary.updatedAt || r.updatedAt || '' });
+      const row = Object.assign({}, summary, { id, pid: id, ownerId: web.me, ownerName: '', revision: r.revision, updatedAt: summary.updatedAt || r.updatedAt || '', createdAt: summary.createdAt || new Date().toISOString() });
       const at = web.all.findIndex(x => x.id === id);
-      if (at >= 0) { row.ownerName = web.all[at].ownerName; web.all.splice(at, 1); }
+      if (at >= 0) { row.ownerName = web.all[at].ownerName; row.createdAt = web.all[at].createdAt || row.createdAt; web.all.splice(at, 1); }
       web.all.unshift(row);
       emit();
     },
@@ -4585,10 +4625,26 @@ window.PK_VIS = {
       emit();
     },
     forget(id) { delete web.rev[id]; delete web.cache[id]; },
-    /* 녹음 파일(음성)은 서버에 두지 않는다 → 이 창에 있는 동안만 내려받을 수 있다 */
+    /* 녹음 파일: 이 창에서는 메모리에 두고, 서버(회사 전용 저장소)에도 계속 보관한다(audioUp) — 다른 PC · 새로고침 뒤에는 audioDown으로 받아 온다 */
     async putAudio(key, blob) { web.audio.set(key, blob); return true; },
     async getAudio(key) { return web.audio.get(key); },
     async delAudio(key) { web.audio.delete(key); },
+    audioUp(pid, key, blob, meta) {
+      if (!web.bridge || !blob || !blob.size) return Promise.reject({ code: 'no_audio' });
+      return blob.arrayBuffer().then(buffer => web.bridge.call('audio.put', { projectId: pid, audioKey: key, mime: String((meta && meta.mime) || blob.type || 'audio/webm'), duration: Math.max(0, +(meta && meta.duration) || 0), buffer }, { timeout: 600000, transfer: [buffer] }));
+    },
+    async audioDown(pid, key, ownerId) {
+      const hit = web.audio.get(key); if (hit) return hit;
+      const r = await web.bridge.call('audio.get', Object.assign({ projectId: pid, audioKey: key }, ownerId && ownerId !== web.me ? { ownerId } : {}), { timeout: 300000 });
+      if (!r || !(r.buffer instanceof ArrayBuffer)) return null;
+      const blob = new Blob([r.buffer], { type: r.mime || 'audio/webm' });
+      web.audio.set(key, blob);
+      return blob;
+    },
+    /* 정밀 받아쓰기(CLOVA · 화자 구분): 시작 · 이 상담의 녹음 상태 · 끝난 결과 */
+    transcribe(rid, speakers, keywords) { return web.bridge.call('transcribe', { recordingId: rid, speakers, keywords: (keywords || []).slice(0, 300) }, { timeout: 60000 }); },
+    recordings(pid, ownerId) { return web.bridge.call('recordings', Object.assign({ projectId: pid }, ownerId && ownerId !== web.me ? { ownerId } : {}), { timeout: 30000 }); },
+    transcript(rid, ownerId) { return web.bridge.call('transcript', Object.assign({ recordingId: rid }, ownerId && ownerId !== web.me ? { ownerId } : {}), { timeout: 60000 }); },
     async usage(days) { return web.bridge.call('usage', { days: days || 30 }); },
     /* 곧 미팅할 CRM 프리미팅(오늘 이후 · 서버가 매일 아침 8시에 CRM에서 업데이트) · 5분 안에 다시 부르면 받아 둔 값 */
     pm: null, pmAt: 0, pmBusy: null,
@@ -4659,15 +4715,18 @@ window.PK_VIS = {
     setConfig(c) { A.cfg = Object.assign({}, DEF, c || {}); A.refresh(); },
     refresh() { A.mode = A.sample ? 'claude' : A.web ? 'web' : (A.cfg.key ? 'key' : 'none'); },
     ready() { return A.mode !== 'none'; },
-    label() { return A.mode === 'claude' ? 'Claude 연결됨' : A.mode === 'web' ? '회사 AI 연결됨 · ' + modelLabel(WEB_MODEL) : A.mode === 'key' ? 'API 키로 연결됨' : 'AI 미연결 · 규칙 기반'; },
+    label() { return A.mode === 'claude' ? 'Claude 연결됨' : A.mode === 'web' ? '회사 AI 연결됨 · ' + modelLabel(WEB_MODEL) + (A.paused ? ' · 자동 분석 멈춤: ' + A.errText({ code: A.paused }) : '') : A.mode === 'key' ? 'API 키로 연결됨' : 'AI 미연결 · 규칙 기반'; },
     /* 대화 인텔리전스 머리말의 짧은 표시(좁은 패널에서도 한 줄) */
-    chip() { return A.mode === 'web' ? modelLabel(WEB_MODEL) + ' 연결됨' : A.label(); },
+    chip() { return A.mode === 'web' ? modelLabel(WEB_MODEL) + (A.paused ? ' · 자동 분석 멈춤' : ' 연결됨') : A.label(); },
     modelLabel,
     webModel: WEB_MODEL,
     /* 상세 레포트(Word)에 쓰는 모델 — 기본 Claude Opus 5.5 */
     docModel() { return A.cfg.docModel || DEF.docModel; },
     /* 자동(타이머) 분석은 API 키 · 회사 키 모드에서만 — claude.ai 링크는 사람의 요청으로만 부른다 */
-    canAuto() { return (A.mode === 'key' || A.mode === 'web') && A.cfg.auto !== false; }
+    canAuto() { return (A.mode === 'key' || A.mode === 'web') && A.cfg.auto !== false && !A.paused; },
+    /* 크레딧 · 사용 한도 · 키 문제로 거절되면 이 창에서는 자동 분석을 멈춘다(20초마다 실패만 쌓이지 않게 · 새로 열면 다시) */
+    paused: '',
+    pauseOn(e) { const c = e && e.code; if (['ai_credit_low', 'ai_limit_reached', 'ai_key_invalid', 'auth'].includes(c) && !A.paused) { A.paused = c; return true; } return false; }
   };
 
   async function viaKey(system, turns, o) {
@@ -4789,6 +4848,8 @@ window.PK_VIS = {
     return c === 'auth' ? 'API 키가 맞지 않습니다. 설정에서 키를 확인하세요'
       : c === 'ai_not_configured' ? '회사 AI 키가 아직 등록되지 않았습니다 · 관리자에게 등록을 요청하세요'
       : c === 'ai_key_invalid' ? '회사 AI 키가 맞지 않습니다 · 관리자에게 키 확인을 요청하세요'
+      : c === 'ai_credit_low' ? '회사 AI 크레딧이 부족합니다 · 관리자에게 Anthropic 콘솔(Billing) 충전을 요청하세요'
+      : c === 'ai_limit_reached' ? '회사 AI 사용 한도에 도달했습니다 · 관리자에게 Anthropic 콘솔(Limits) 한도 조정을 요청하세요'
       : c === 'ai_rate_limited' ? '최근 1시간 AI 사용 한도를 넘었습니다 · 잠시 뒤 다시 시도하세요'
       : c === 'model_not_allowed' ? '이 화면에서 쓸 수 없는 모델입니다 · 설정의 모델을 기본값으로 두세요'
       : c === 'payload_too_large' ? '보낼 내용이 너무 깁니다 · 받아쓰기를 나눠 정리하세요'
@@ -6738,6 +6799,132 @@ window.PK_VIS = {
 })(window.PK = window.PK || {});
 
 /* ================================================================
+ * PK.stt — 정밀 받아쓰기(녹음 파일 → 회사 전용 저장소 → CLOVA Speech 화자 구분) · AI 보정 · 받아쓰기 합치기
+ *  · 웹 워크스페이스(포켓 KPI 사이트)에서만 서버를 쓴다. 녹음 파일은 서버에 계속 보관된다
+ *  · 정밀본: heavy.stt[녹음 키] = { rid, status('processing' | 'raw' | 'done' | 'failed'), at, spk, speakers:{번호:이름},
+ *            segs:[{ t, t1, sp, text, raw?, u? }], fixed, fixedAt, model, err }
+ *    t · t1은 그 녹음 안에서의 초, raw는 AI가 고치기 전 원문, u는 AI가 짚은 불확실한 곳
+ *  · 녹음 정리 · 받아쓰기 탭은 정밀본이 있으면 그 녹음 시간대의 실시간 자막 대신 정밀본(화자 이름 붙음)을 쓴다
+ * ================================================================ */
+(function (PK) {
+  'use strict';
+  const str = v => String(v === null || v === undefined ? '' : v).replace(/\s+/g, ' ').trim();
+  const pad = n => (n < 10 ? '0' : '') + n;
+  function mmss(sec) { sec = Math.max(0, Math.round(+sec || 0)); const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60); return (h ? h + ':' + pad(m) : pad(m)) + ':' + pad(sec % 60); }
+  const SPEAKERS = [2, 3, 4, 0];   /* 0 = 엔진이 알아서 */
+  const CHUNK = 2500;              /* AI 보정 한 번에 보내는 글자 수 — 고친 줄을 그대로 돌려받으므로 답도 이만큼 길다 */
+  const FIX_MAX_TOKENS = 12000;    /* Opus 5.5는 생각(끌 수 없음)도 출력 한도에 들어간다 — 넉넉히(쓴 만큼만 과금) */
+  const FIX_PARALLEL = 3;          /* 첫 묶음(화자 이름) 다음 묶음들은 셋씩 함께 */
+  /* 미팅에 자주 나오는 말(받아쓰기 엔진에 미리 알려 줘 잘 알아듣게) — 한글 · 영문만 */
+  const TERMS = ['포켓', '포켓컴퍼니', '빌드업', '사업계획서', '지원사업', '정부지원사업', '예비창업패키지', '초기창업패키지', '창업도약패키지', '정책자금', '바우처',
+    '투자유치', '피치덱', '데모데이', '팁스', '시드', '프리에이', '시리즈에이', '밸류에이션', '액셀러레이터', '벤처캐피탈', '엔젤투자',
+    '마케팅', '퍼포먼스 마케팅', '상세페이지', '랜딩페이지', '스마트스토어', '자사몰', '메타 광고', '인스타그램', '네이버 광고', '구글 광고', '유튜브', '전환율', '리타겟팅',
+    '앱 개발', '웹 개발', '외주', '와이어프레임', '브랜딩', '비즈니스 모델', '객단가', '재구매율', '구독', '플랫폼', '손익분기', '영업이익', '견적', '부가세',
+    'IR', 'TIPS', 'ROAS', 'GA', 'MVP', 'SaaS', 'BM', 'KPI', 'PSST', 'CAC', 'LTV'];
+
+  /* 받아쓰기 엔진에 알려 줄 말: 회사명 · 대표자 · 업종 + 자주 나오는 말 */
+  function keywords(p, sectorName) {
+    const c = (p && p.company) || {}, out = [];
+    const add = w => { w = str(w); if (w.length >= 2 && w.length <= 30 && /^[가-힣A-Za-z ]+$/.test(w) && !out.includes(w)) out.push(w); };
+    const name = str(c.name).replace(/^(주식회사|\(주\)|㈜)\s*|\s*(주식회사|\(주\)|㈜)$/g, '');
+    add(name); name.split(' ').forEach(add);
+    add(c.ceo); add(sectorName);
+    TERMS.forEach(add);
+    return out.slice(0, 150);
+  }
+
+  function label(x, sp) { const n = x && x.speakers && x.speakers[sp]; return str(n) || '화자 ' + sp; }
+  /* 서버 결과(밀리초) → 정밀본 줄(초) */
+  function fromServer(segments) {
+    return (Array.isArray(segments) ? segments : []).filter(s => s && str(s.text)).slice(0, 20000)
+      .map(s => ({ t: Math.round((+s.s || 0) / 100) / 10, t1: Math.round((+s.e || +s.s || 0) / 100) / 10, sp: String(s.sp || '1').replace(/[^0-9A-Za-z]/g, '').slice(0, 8) || '1', text: str(s.text).slice(0, 2000) }));
+  }
+  /* 쓸 수 있는 정밀본이 있나 — 다시 받아쓰는 중(processing)에도 받아 둔 정밀본은 그대로 쓴다 */
+  function ready(x) { return !!(x && Array.isArray(x.segs) && x.segs.length && x.status !== 'failed'); }
+  function speakerIds(x) { const out = []; ((x && x.segs) || []).forEach(s => { if (!out.includes(s.sp)) out.push(s.sp); }); return out.sort(); }
+
+  /* 녹음 정리 · 받아쓰기 탭이 읽는 줄: 정밀본이 있는 녹음 시간대는 정밀본(화자 이름), 나머지는 실시간 자막 · 직접 적은 줄 */
+  function merged(p) {
+    const hv = (p && p.heavy) || {}, live = (hv.transcript || []).filter(l => l && str(l.text));
+    const st = hv.stt || {}, list = (hv.audio || []).filter(a => a && ready(st[a.key]));
+    if (!list.length) return live;
+    const out = [], cover = [];
+    let after = live.length ? (+live[live.length - 1].t || 0) + 1 : 0;
+    list.forEach(a => {
+      const x = st[a.key], has = typeof a.base === 'number' && a.base >= 0, b = has ? a.base : after;
+      x.segs.forEach(s => out.push(Object.assign({ t: Math.round((b + (+s.t || 0)) * 10) / 10, text: s.text, sp: label(x, s.sp), pre: true }, s.raw ? { raw: s.raw } : {}, s.u ? { u: s.u } : {})));
+      const last = x.segs[x.segs.length - 1], end = b + Math.max(+a.duration || 0, +last.t1 || +last.t || 0);
+      if (has) cover.push([b - 1, end + 2]); else after = end + 1;
+    });
+    live.forEach(l => { const t = +l.t || 0; if (l.typed || !cover.some(c => t >= c[0] && t <= c[1])) out.push(l); });
+    return out.sort((a, b) => (+a.t || 0) - (+b.t || 0));
+  }
+  function hasPrecise(p) { const hv = (p && p.heavy) || {}, st = hv.stt || {}; return (hv.audio || []).some(a => a && ready(st[a.key])); }
+
+  /* ---------- AI 보정(Opus) ---------- */
+  function chunks(x) {
+    const out = []; let from = 0, n = 0;
+    x.segs.forEach((s, i) => {
+      const len = (s.raw || s.text).length + 16;
+      if (n + len > CHUNK && i > from) { out.push([from, i]); from = i; n = 0; }
+      n += len;
+    });
+    if (from < x.segs.length) out.push([from, x.segs.length]);
+    return out;
+  }
+  function prompt(p, x, from, to, first, sectorName) {
+    const c = (p && p.company) || {};
+    const L = [
+      '너는 한국어 영업 미팅 받아쓰기 교정자다. 아래 [받아쓰기]는 음성 인식 결과이고 줄마다 "번호 [분:초] 화자번호: 말" 형식이다.',
+      '[회사] ' + (str(c.name) || '회사명 미정') + (str(c.ceo) ? ' · 대표 ' + str(c.ceo) : '') + (sectorName ? ' · 업종 ' + sectorName : '') + (str(c.bm) ? ' · BM ' + str(c.bm).slice(0, 200) : ''),
+      '[포켓] 포켓(포켓컴퍼니)은 스타트업 빌드업(지원사업 사업계획서 · 투자유치 IR · 마케팅 · 개발 MVP)을 파는 쪽이고, 미팅의 영업 담당자는 포켓 직원이다.',
+      '[자주 나오는 말] ' + TERMS.join(', '),
+      first
+        ? '1) speakers: 화자 번호마다 누구인지 정한다 — "영업"(포켓 직원: 질문 · 설명 · 제안 · 가격 · 일정) 또는 "대표님"(고객 회사 쪽). 고객 쪽이 둘 이상이면 "대표님", "고객 2"처럼 나눈다. 확실하지 않으면 가장 그럴듯한 쪽으로 정한다.'
+        : '1) speakers: 이미 정했다(' + JSON.stringify(x.speakers || {}) + '). 답에 넣지 않는다.',
+      '2) fix: 잘못 들은 단어 · 회사명 · 제품명 · 숫자 · 띄어쓰기 · 문장부호를 고친 줄만 {"i": 번호, "text": "고친 말 전체"}. 뜻을 바꾸거나 없는 말을 보태지 않는다. "어", "음" 같은 군말은 지운다. 고칠 게 없는 줄은 넣지 않는다.',
+      '3) unsure: 잘 안 들렸거나 뜻이 분명하지 않은 줄 {"i": 번호, "why": "20자 안의 이유"}.',
+      'JSON 하나만 답한다(설명 없이): {"speakers":{"1":"영업","2":"대표님"},"fix":[{"i":0,"text":"…"}],"unsure":[{"i":3,"why":"…"}]}',
+      '[받아쓰기]'
+    ];
+    for (let i = from; i < to; i++) { const s = x.segs[i]; L.push(i + ' [' + mmss(s.t) + '] ' + s.sp + ': ' + (s.raw || s.text)); }
+    return L.join('\n');
+  }
+  /* 다시 보정할 때: 원문으로 되돌린다 */
+  function resetFix(x) { (x.segs || []).forEach(s => { if (s.raw) { s.text = s.raw; delete s.raw; } delete s.u; }); }
+  /* AI 답 반영: 화자 이름(첫 묶음) · 고친 줄(원문은 raw에) · 불확실한 줄 — 고친 줄 수를 돌려준다 */
+  function applyFix(x, raw, from, to, first) {
+    const r = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+    if (first && r.speakers && typeof r.speakers === 'object') {
+      const ids = speakerIds(x), sp = {};
+      Object.keys(r.speakers).forEach(k => { const v = str(r.speakers[k]).slice(0, 12); if (ids.includes(k) && v) sp[k] = v; });
+      if (Object.keys(sp).length) x.speakers = Object.assign({}, x.speakers || {}, sp);
+    }
+    let n = 0;
+    (Array.isArray(r.fix) ? r.fix : []).forEach(f => {
+      const i = parseInt(f && f.i, 10), t = str(f && f.text).slice(0, 2000), s = x.segs[i];
+      if (!(i >= from && i < to) || !t || !s) return;
+      const orig = s.raw || s.text;
+      if (t !== orig) { s.raw = orig; s.text = t; n++; }
+    });
+    (Array.isArray(r.unsure) ? r.unsure : []).forEach(u => { const i = parseInt(u && u.i, 10); if (i >= from && i < to && x.segs[i]) x.segs[i].u = str(u && u.why).slice(0, 40) || '확인 필요'; });
+    return n;
+  }
+  /* 두 사람이면 이름을 맞바꾼다 */
+  function swap(x) {
+    const ids = speakerIds(x); if (ids.length !== 2) return false;
+    const a = label(x, ids[0]), b = label(x, ids[1]);
+    x.speakers = Object.assign({}, x.speakers || {}, { [ids[0]]: b, [ids[1]]: a });
+    return true;
+  }
+  /* 미팅 기록에 붙일 글 */
+  function blockText(x, name) {
+    return '[정밀 받아쓰기 · 화자 구분' + (name ? ' · ' + str(name) : '') + ']\n' + (x.segs || []).map(s => '[' + mmss(s.t) + '] ' + label(x, s.sp) + ': ' + s.text).join('\n');
+  }
+  PK.stt = { SPEAKERS, TERMS, CHUNK, FIX_MAX_TOKENS, FIX_PARALLEL, keywords, label, fromServer, ready, speakerIds, merged, hasPrecise, chunks, prompt, resetFix, applyFix, swap, blockText, mmss };
+})(window.PK = window.PK || {});
+
+/* ================================================================
  * PK.recap — 녹음 정리(미팅 녹음 · 받아쓰기 → 정리본)
  *  · AI(Claude) 정리: prompt → norm   · 긴 녹음은 나눠 정리(partPrompt) 뒤 합침(mergePrompt)
  *  · AI가 없을 때: rule(규칙으로 숫자 · 말씀 · 주제 · 확인할 것)
@@ -6764,11 +6951,16 @@ window.PK_VIS = {
   const PART = 30000;
 
   /* ---------- 받아쓰기 ---------- */
-  function lines(p) { return ((p && p.heavy && p.heavy.transcript) || []).filter(l => l && str(l.text)); }
+  /* 정밀 받아쓰기(화자 구분)가 있으면 그 녹음 시간대는 정밀본으로 바꿔 읽는다(PK.stt.merged) */
+  function lines(p) {
+    if (PK.stt && PK.stt.hasPrecise(p)) return PK.stt.merged(p);
+    return ((p && p.heavy && p.heavy.transcript) || []).filter(l => l && str(l.text));
+  }
   function trText(p, from, to) {
     const L = lines(p).slice(from || 0, to === undefined ? undefined : to);
-    return L.map(l => '[' + mmss(l.t) + '] ' + str(l.text)).join('\n');
+    return L.map(l => '[' + mmss(l.t) + '] ' + (l.sp ? str(l.sp) + ': ' : '') + str(l.text)).join('\n');
   }
+  function hasSpeakers(p) { return lines(p).some(l => l.sp); }
   /* 받아쓰기를 글자 수 기준으로 나눈 구간들(줄 단위로 자름) */
   function parts(p) {
     const L = lines(p), out = []; let cur = [], n = 0;
@@ -6796,10 +6988,14 @@ window.PK_VIS = {
   function addedLines(p, rc) { rc = rc || (p.heavy && p.heavy.recap); return rc && rc.sig ? Math.max(0, sigOf(p).n - rc.sig.n) : 0; }
 
   /* ---------- AI 지시문 ---------- */
+  const SPEAKER_RULE = '화자 구분이 없다. 포켓 쪽(질문 · 설명 · 제안)의 말은 회사 사실로 쓰지 않는다. 회사 이야기가 분명할 때만 "대표님"이라고 쓴다.';
+  const SPEAKER_RULE_ON = '줄 앞에 화자가 있다(영업 = 포켓 직원, 대표님 · 고객 = 고객 회사). 영업의 말(질문 · 설명 · 제안)은 회사 사실로 쓰지 않고, 대표님 · 고객의 말을 근거로 쓴다. 화자 구분은 음성 인식이 한 것이라 드물게 틀릴 수 있으니 문맥과 어긋나면 문맥을 따른다.';
+  /* 정밀 받아쓰기(화자 구분)가 있으면 화자 규칙을 바꾼다 */
+  function rulesOf(p) { const on = hasSpeakers(p); return RULES.map(r => r === SPEAKER_RULE && on ? SPEAKER_RULE_ON : r); }
   const RULES = [
     '받아쓰기 · 자료에 있는 사실만 쓴다. 없는 숫자 · 이름 · 약속을 만들지 않는다.',
     '받아쓰기는 음성 인식이라 틀린 글자가 있다. 문맥으로 바로잡되 확실하지 않으면 끝에 "(확인 필요)"를 붙인다.',
-    '화자 구분이 없다. 포켓 쪽(질문 · 설명 · 제안)의 말은 회사 사실로 쓰지 않는다. 회사 이야기가 분명할 때만 "대표님"이라고 쓴다.',
+    SPEAKER_RULE,
     '문장은 합니다체 · 짧게(항목 하나 70자 안팎) · 개조식. 같은 내용을 두 번 쓰지 않는다.',
     '숫자는 단위까지 쓴다(만 원 · 억 원 · % · 명 · 개월). 들은 숫자로 계산한 값은 note에 "추정"이라고 쓴다.',
     'quotes는 받아쓰기 원문 그대로(맞춤법만 고침) · [분:초] 시각을 t에 · 대표님의 고민 · 목표 · 현황이 드러나는 말 6개 이하.',
@@ -6831,21 +7027,21 @@ window.PK_VIS = {
   }
   function prompt(p) {
     return ['너는 포켓컴퍼니(스타트업 빌드업 회사) 빌드업팀의 미팅 기록 담당이다. 아래 미팅 녹음 받아쓰기를 읽고 대표님과의 미팅을 정리한 JSON 하나를 쓴다.',
-      '[규칙]', RULES.map(r => '- ' + r).join('\n'),
+      '[규칙]', rulesOf(p).map(r => '- ' + r).join('\n'),
       '[형식 — 이 키만]', SCHEMA, '',
       companyText(p), '',
-      '[녹음 받아쓰기 전체 · ' + head(p) + ' · 화자 구분 없음]', trText(p) || '(없음)'].join('\n');
+      '[녹음 받아쓰기 전체 · ' + head(p) + (hasSpeakers(p) ? ' · 화자 구분 있음(정밀 받아쓰기)' : ' · 화자 구분 없음') + ']', trText(p) || '(없음)'].join('\n');
   }
   function partPrompt(p, part, i, n) {
     return ['너는 포켓컴퍼니 빌드업팀의 미팅 기록 담당이다. 긴 미팅 녹음을 ' + n + '부분으로 나눠 정리하는 중이다. 아래는 ' + (i + 1) + '번째 부분(' + mmss(part.t0) + '~' + mmss(part.t1) + ')이다. 이 부분에 나온 것만 같은 형식의 JSON 하나로 쓴다(title · summary는 이 부분 기준).',
-      '[규칙]', RULES.map(r => '- ' + r).join('\n'),
+      '[규칙]', rulesOf(p).map(r => '- ' + r).join('\n'),
       '[형식 — 이 키만]', SCHEMA, '',
       companyText(p), '',
       '[받아쓰기 ' + (i + 1) + '/' + n + ']', trText(p, part.from, part.to)].join('\n');
   }
   function mergePrompt(p, partials) {
     return ['너는 포켓컴퍼니 빌드업팀의 미팅 기록 담당이다. 긴 미팅 녹음을 나눠 정리한 결과 ' + partials.length + '개를 하나의 정리본으로 합친다. 겹치는 내용은 하나로 · 시간 순서를 지키고 · 전체 미팅의 핵심이 summary에 오게 쓴다.',
-      '[규칙]', RULES.map(r => '- ' + r).join('\n'),
+      '[규칙]', rulesOf(p).map(r => '- ' + r).join('\n'),
       '[형식 — 이 키만]', SCHEMA, '',
       companyText(p), '',
       partials.map((x, i) => '[부분 ' + (i + 1) + ']\n' + JSON.stringify(x)).join('\n\n')].join('\n');
@@ -8681,7 +8877,7 @@ const S = {
   web: null, pKey: null, pOwner: '', pOwnerName: '', conflict: null, forceNext: false, webDown: false
 };
 
-function blankHeavy() { return { meetings: [], transcript: [], intel: { cards: [], chat: [] }, elapsed: 0, audio: [], docs: {} }; }
+function blankHeavy() { return { meetings: [], transcript: [], intel: { cards: [], chat: [] }, elapsed: 0, audio: [], docs: {}, stt: {} }; }
 function blankP() {
   const now = new Date().toISOString();
   return {
@@ -8715,6 +8911,7 @@ function normP(p) {
   const okId = v => typeof v === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(v);
   [h.meetings, h.intel.cards, h.intel.chat].forEach(list => list.forEach(x => { if (x && !okId(x.id)) x.id = uid(); }));
   h.audio.forEach(a => { if (a && !okId(a.key)) a.key = 'x' + uid(); if (a && a.mid && !okId(a.mid)) a.mid = null; });
+  normStt(h);
   p.heavy = h;
   if (!['company', 'diag', 'report', 'docs'].includes(p.view)) p.view = 'company';
   if (!timeOk(p.time)) p.time = '';
@@ -8735,7 +8932,7 @@ function coreOf(p) { const c = Object.assign({}, p); delete c.heavy; return c; }
 function summaryOf(p) {
   let total = 0; try { const m = D.model(p); total = m.q ? m.q.total : 0; } catch (e) { /* 계산 실패 */ }
   const hv = p.heavy || {};
-  return { id: p.id, name: p.company.name, ceo: p.company.ceo, date: p.date, time: timeOk(p.time) ? p.time : '', status: p.status, tier: E.TIERS[D.tierOf(p)], sector: String(p.company.sector || ''), total, updatedAt: p.updatedAt, saveId: p.saveId || '', tm: p.tm ? { by: p.tm.by || '', at: p.tm.at || '' } : null, bm1: bmOne(p), deal: dealOf(p),
+  return { id: p.id, name: p.company.name, ceo: p.company.ceo, date: p.date, time: timeOk(p.time) ? p.time : '', status: p.status, createdAt: String(p.createdAt || ''), tier: E.TIERS[D.tierOf(p)], sector: String(p.company.sector || ''), total, updatedAt: p.updatedAt, saveId: p.saveId || '', tm: p.tm ? { by: p.tm.by || '', at: p.tm.at || '' } : null, bm1: bmOne(p), deal: dealOf(p),
     recSec: Math.round(+hv.elapsed || 0), trN: Array.isArray(hv.transcript) ? hv.transcript.length : 0, final: !!(p.rep && p.rep.finalAt), crm: p.crm && p.crm.ms ? { ms: p.crm.ms } : null };
 }
 function isEmptyP(p) {
@@ -8946,18 +9143,21 @@ function renderLeftList() {
   if (S.lview === 'cal') { box.setAttribute('aria-label', '미팅 캘린더'); box.innerHTML = calLeftHtml(list); return; }
   box.removeAttribute('aria-label');
   const td = today();
-  const groups = [['오늘 미팅', x => x.date === td], ['예정', x => x.date > td], ['지난 미팅', x => x.date && x.date < td], ['날짜 없음', x => !x.date]];
   let h = '';
   if (window.PK_SAMPLE && (!q || '예시'.includes(q) || String(window.PK_SAMPLE.company.name).includes(q))) {
     h += '<div class="pj' + (S.sample ? ' on' : '') + '" role="listitem"><button type="button" class="pj-main" data-act="sample" title="가상 기업으로 화면 둘러보기"' + (S.sample ? ' aria-current="true"' : '') + '><b><span>' + esc(window.PK_SAMPLE.company.name) + '</span><span class="st sample">예시</span></b><small class="bm1">' + esc(bmOne(window.PK_SAMPLE)) + '</small></button></div>';
   }
-  const used = new Set();
-  groups.forEach(([label, fn]) => {
-    const items = list.filter(x => !used.has(x.id) && fn(x));
-    if (!items.length) return;
-    items.sort((a, b) => label === '예정' || label === '오늘 미팅' ? String(a.date + (a.time || '99')).localeCompare(String(b.date + (b.time || '99'))) : String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt)));
-    h += '<div class="pgroup">' + label + (label === '오늘 미팅' ? '<i aria-hidden="true"></i><span>' + esc(dayK(td)) + '</span>' : '') + '</div>';
-    items.forEach(x => { used.add(x.id); h += pjItemHtml(x, !S.sample && S.p && x.id === curKey()); });
+  /* 만든 날짜별 묶음(새로 만든 날이 위) · 오늘 만든 묶음만 펼침 — 지금 연 프로젝트가 든 묶음과 찾는 중에는 모두 펼친다 */
+  const byDay = {};
+  list.forEach(x => { const k = madeDay(x) || '-'; (byDay[k] = byDay[k] || []).push(x); });
+  const curId = !S.sample && S.p ? curKey() : '';
+  if (!S.lgOpen) S.lgOpen = {};
+  Object.keys(byDay).sort((a, b) => a === '-' ? 1 : b === '-' ? -1 : b.localeCompare(a)).forEach(k => {
+    const items = byDay[k].sort((a, b) => String(b.createdAt || b.updatedAt || '').localeCompare(String(a.createdAt || a.updatedAt || '')));
+    const open = !!q || (S.lgOpen[k] !== undefined ? S.lgOpen[k] : k === td || items.some(x => x.id === curId));
+    const name = k === '-' ? '만든 날 모름' : (k === td ? '오늘 · ' : dday(k) === -1 ? '어제 · ' : '') + dayK(k);
+    h += '<button type="button" class="pgroup tog' + (open ? ' on' : '') + '" data-act="lg:' + esc(k) + '" aria-expanded="' + open + '"><span>' + esc(name) + ' 생성</span><span class="n num">' + items.length + '</span>' + ic('down', 'xs') + '</button>';
+    if (open) items.forEach(x => { h += pjItemHtml(x, x.id === curId); });
   });
   if (!list.length) h += '<p class="lempty">' + (q ? '찾는 회사가 없습니다' : '새 미팅이나 TM 사전 입력으로 첫 프로젝트를 만드세요') + '</p>';
   box.innerHTML = h;
@@ -9545,7 +9745,7 @@ function exportJson() {
   saveFile(safeName(p.company.name) + '_프로젝트_' + ymd6(p.date) + '.json', JSON.stringify({ kind: 'pocket-intel-project', v: 4, exportedAt: new Date().toISOString(), projects: [p] }, null, 1), 'application/json');
 }
 /* 녹음 파일: 하나면 바로, 여럿이면 고르는 창 */
-async function audioBlob(a) { return S.recBlob && S.recBlob.key === a.key ? S.recBlob.blob : S.store.getAudio(a.key); }
+async function audioBlob(a) { return audioOf(a, true); }
 async function exportAudio(key) {
   const list = S.p.heavy.audio || []; if (!list.length) { toast('녹음 파일이 없습니다'); return; }
   if (!key && list.length > 1) {
@@ -9555,7 +9755,7 @@ async function exportAudio(key) {
   const a = key ? list.find(x => x.key === key) : list[0];
   if (!a) return;
   const blob = await audioBlob(a);
-  if (!blob) { toast(S.mode === 'shared' ? '녹음 파일은 녹음한 PC의 HTML 파일에만 있습니다' : S.mode === 'web' ? '녹음 파일은 녹음한 창에서만 받을 수 있습니다(서버에 저장하지 않음)' : '이 PC에서 녹음 파일을 찾지 못했습니다'); return; }
+  if (!blob) { toast(S.mode === 'shared' ? '녹음 파일은 녹음한 PC의 HTML 파일에만 있습니다' : S.mode === 'web' ? (a.rid ? '서버에서 녹음 파일을 받지 못했습니다 · 잠시 뒤 다시 눌러 주세요' : '이 녹음은 서버에 보관되지 않았습니다(이전 방식 · 녹음한 창에서만)') : '이 PC에서 녹음 파일을 찾지 못했습니다'); return; }
   saveFile(a.name, blob);
 }
 
@@ -11049,7 +11249,7 @@ function renderRight() {
     return '<button type="button" role="tab" id="rt-' + id + '" aria-controls="rpanel" aria-selected="' + (S.rtab === id) + '" class="' + (S.rtab === id ? 'on' : '') + '" data-act="rtab:' + id + '">' + name + '<span class="n num">' + (n || '') + '</span>' + (ut[id] && S.rtab !== id ? '<i class="dotn" aria-label="새 카드"></i>' : '') + '</button>';
   }).join('') + '</div>';
   if (S.rtab === 'tr') {
-    h += '<div id="trpinWrap">' + trPinHtml() + '</div>' +
+    h += '<div id="trpinWrap">' + trPinHtml() + '</div><div id="sttWrap">' + sttBoxHtml() + '</div>' +
       '<div class="trlist" id="trlist" role="tabpanel" aria-labelledby="rt-tr">' + trHtml() + '</div>' +
       '<div class="trtools"><input class="in" id="trIn" placeholder="들은 말 · 메모 한 줄" aria-label="받아쓰기 한 줄 입력" autocomplete="off"><button type="button" class="btn sm" data-act="tr-add">추가</button></div>' +
       '<div class="trtools sub"><button type="button" class="btn sm ghost" data-act="tr-attach"' + (hv.transcript.length ? '' : ' disabled') + '>' + ic('note', 'sm') + '미팅 기록에 붙이기</button>' +
@@ -11070,8 +11270,10 @@ function renderRight() {
   if (S.right) { S.intel.unseen = 0; if (S.intel.unseenTab && S.rtab !== 'tr') S.intel.unseenTab[S.rtab] = 0; }
 }
 function trHtml() {
-  const tr = S.p.heavy.transcript;
-  let h = tr.length ? tr.slice(-400).map(l => '<div data-t="' + (+l.t || 0) + '"><span>' + mmss(l.t) + '</span><p>' + esc(l.text) + '</p></div>').join('') : (REC.state === 'rec' ? '' : '<p class="feedempty"><b>받아쓴 내용이 없습니다</b></p>');
+  /* 정밀 받아쓰기(화자 구분)가 있으면 그 녹음 시간대는 정밀본 — 고친 줄은 원문을, 불확실한 줄은 이유를 풍선말로 */
+  const pre = STT.hasPrecise(S.p) && !S.trLive, tr = pre ? STT.merged(S.p) : S.p.heavy.transcript;
+  let h = tr.length ? tr.slice(-400).map(l => '<div data-t="' + (+l.t || 0) + '"' + (l.u ? ' class="u" title="' + esc('확인 필요 · ' + l.u) + '"' : l.raw ? ' title="' + esc('AI 보정 전: ' + l.raw) + '"' : '') + '><span>' + mmss(l.t) + '</span><p>' +
+    (l.sp ? '<b class="spk' + (l.sp === '영업' ? ' me' : '') + '">' + esc(l.sp) + '</b>' : '') + esc(l.text) + '</p></div>').join('') : (REC.state === 'rec' ? '' : '<p class="feedempty"><b>받아쓴 내용이 없습니다</b></p>');
   h += '<div class="itr" id="trInterim"' + (S.intel.interim ? '' : ' hidden') + '><span>…</span><p>' + esc(S.intel.interim) + '</p></div>';
   return h;
 }
@@ -11489,8 +11691,11 @@ async function runInsight(manual) {
     if (!S.p || S.p.id !== pid) return;
     addAiCards(j || {}, qmap);
   } catch (e) {
-    if (manual || (e && (e.code === 'auth' || e.code === 'model'))) toast(AI.errText(e));
+    /* 크레딧 · 한도 · 키 문제면 이 창의 자동 분석을 멈추고 한 번만 알린다 */
+    const paused = AI.pauseOn(e);
+    if (manual || paused || (e && e.code === 'model')) toast(AI.errText(e) + (paused ? ' · 이 창의 자동 분석을 멈췄습니다' : ''));
     if (e && e.code === 'auth') { AI.cfg.auto = false; }
+    if (paused) renderRight();
   } finally { S.intel.busy = false; setBusyUi(); }
 }
 function setBusyUi() {
@@ -11715,6 +11920,7 @@ async function recToggle() {
   if (S.mode === 'web' && S.readOnly) { toast('다른 직원의 상담에서는 녹음할 수 없습니다 · 내 상담에서 시작하세요'); return; }
   if (!REC.supported()) { micHelp('unsupported'); return; }
   const pid = S.p.id;
+  S.recBase = Math.max(0, +S.p.heavy.elapsed || 0);
   try {
     await REC.start({
       /* 녹음을 시작한 프로젝트에만 받아쓰기를 넣는다(멈춘 직후 늦게 온 문장이 다른 고객에 섞이지 않게) */
@@ -11752,7 +11958,7 @@ async function recStop() {
   const pid = S.recPid;
   const r = await REC.stop();
   if (r) await finishRec(r, pid);
-  toast('녹음을 끝냈습니다 · ' + mmss(REC.base) + (S.p && S.p.heavy.transcript.length ? ' — 받아쓰기 탭 「녹음 정리」로 정리 · 내려받기' : '') + (S.mode === 'web' && r && r.blob && r.blob.size ? ' · 녹음 파일(음성)은 이 창에서만 받을 수 있습니다' : ''));
+  toast('녹음을 끝냈습니다 · ' + mmss(REC.base) + (S.p && S.p.heavy.transcript.length ? ' — 받아쓰기 탭 「녹음 정리」로 정리 · 내려받기' : '') + (sttOn() && !S.readOnly && r && r.blob && r.blob.size ? ' · 녹음 파일은 서버에 보관합니다' + (sttAuto() && !S.sttNoKey && (r.duration || 0) >= 20 ? ' · 정밀 받아쓰기(화자 구분)를 시작합니다' : '') : ''));
 }
 /* 녹음 파일을 녹음한 프로젝트에 붙여 저장(사람이 멈추든 마이크가 빠지든) */
 async function finishRec(r, pid) {
@@ -11765,17 +11971,20 @@ async function finishRec(r, pid) {
   if (r && r.blob && r.blob.size) {
     const key = p.id + '-' + Date.now();
     const name = safeName(p.company.name) + '_상담녹음_' + ymd6(p.date) + '_' + (hv.audio.length + 1) + '.' + r.ext;
-    hv.audio.push({ key, name, type: r.type, duration: r.duration, size: r.blob.size, at: new Date().toISOString(), mid: S.recMid || null });
+    hv.audio.push(Object.assign({ key, name, type: r.type, duration: r.duration, size: r.blob.size, at: new Date().toISOString(), mid: S.recMid || null }, typeof S.recBase === 'number' ? { base: S.recBase } : {}));
     S.recBlob = { key, blob: r.blob };
     S.heavyDirty = true;
     const ok = await S.store.putAudio(key, r.blob);
     if (!ok) toast('녹음 파일은 이 화면에서만 내려받을 수 있습니다(내보내기 → 녹음 파일)');
     if (S.mode === 'web') hv.audio[hv.audio.length - 1].local = true;
   }
-  S.recMid = null;
+  S.recMid = null; S.recBase = null;
   if (S.p === p) { touchHeavy(); saveSoon.now(); }
   renderRight(); renderFab(); if (S.client) renderTop();
   if (S.p === p && AI.canAuto() && hv.transcript.length > S.intel.lastLen) runInsight(false);
+  /* 웹: 녹음 파일을 서버에 보관하고(계속) · 설정이 켜져 있으면 정밀 받아쓰기(화자 구분)를 시작한다 */
+  const last = r && r.blob && r.blob.size ? hv.audio[hv.audio.length - 1] : null;
+  if (last && S.p === p && sttOn() && !S.readOnly) sttAfterRec(p, last);
 }
 /* 마이크가 안 될 때: 권한 상태 · 브라우저 오류 · 여는 곳을 읽어 원인 하나를 짚는다 */
 async function micDiag(err) {
@@ -12074,9 +12283,14 @@ async function readDropped(files) {
 async function keepAudio(p, f, mid) {
   const key = p.id + '-a' + Date.now();
   const ok = await S.store.putAudio(key, f);
-  p.heavy.audio.push({ key, name: f.name, type: f.type || '', size: f.size, at: new Date().toISOString(), mid: mid || null, stored: !!ok });
+  const a = { key, name: f.name, type: f.type || '', size: f.size, at: new Date().toISOString(), mid: mid || null, stored: !!ok };
+  p.heavy.audio.push(a);
   if (!ok) toast(S.mode === 'shared' ? '이 링크에서는 녹음 파일을 보관하지 않습니다 · 받아쓴 글만 저장합니다' : '녹음 파일을 저장하지 못했습니다');
-  else if (S.mode === 'web') toast('녹음 파일(음성)은 서버에 저장하지 않습니다 · 이 창에 있는 동안 내려받으세요');
+  else if (sttOn() && !S.readOnly) {
+    /* 웹: 서버에 보관(상담이 아직 서버에 없으면 상담을 연 뒤에 올린다) — 정밀 받아쓰기는 받아쓰기 탭에서 시작 */
+    if (S.p === p) sttUpload(p, a, f); else a.pendUp = 1;
+    toast('녹음 파일을 서버에 보관합니다 · 받아쓰기 탭에서 정밀 받아쓰기(화자 구분)를 할 수 있습니다');
+  }
   return ok;
 }
 
@@ -12277,8 +12491,10 @@ async function loadAtt() {
   for (const el of $$('audio[data-akey]')) {
     const blob = S.recBlob && S.recBlob.key === el.dataset.akey ? S.recBlob.blob : await S.store.getAudio(el.dataset.akey);
     if (!document.contains(el)) continue;
+    const a = S.p && (S.p.heavy.audio || []).find(x => x.key === el.dataset.akey);
     if (blob) { const u = URL.createObjectURL(blob); S.attUrls.push(u); el.src = u; }
-    else el.replaceWith(Object.assign(document.createElement('small'), { textContent: S.mode === 'shared' ? '녹음 파일은 녹음한 PC에만 있습니다' : S.mode === 'web' ? '녹음 파일은 녹음한 창에서만 받을 수 있습니다(서버에 저장하지 않음)' : '이 PC에 파일 없음' }));
+    else if (S.mode === 'web' && a && a.rid) el.outerHTML = '<button type="button" class="btn sm" data-act="att-load:' + esc(a.key) + '">' + ic('play', 'sm') + '서버에서 불러와 듣기</button>';
+    else el.replaceWith(Object.assign(document.createElement('small'), { textContent: S.mode === 'shared' ? '녹음 파일은 녹음한 PC에만 있습니다' : S.mode === 'web' ? '이 녹음은 서버에 보관되지 않았습니다(이전 방식 · 녹음한 창에서만)' : '이 PC에 파일 없음' }));
   }
 }
 async function mtgFiles(files) {
@@ -12549,6 +12765,294 @@ async function exportAll() {
   saveFile('포켓인텔리전스_전체_' + ymd6(today()) + '.json', JSON.stringify({ kind: 'pocket-intel-project', v: 4, exportedAt: new Date().toISOString(), projects: out }, null, 1), 'application/json');
 }
 
+/* ===== ui_stt — 녹음 파일 서버 보관 · 정밀 받아쓰기(CLOVA 화자 구분) · AI 보정(Opus) — 웹 워크스페이스 전용 =====
+ * 녹음이 끝나면: 서버(회사 전용 저장소)에 올림 → (설정: 자동) 정밀 받아쓰기 시작 → 몇 분 뒤 화자별 문장 도착 → Opus가 잘못 들은 말 · 화자 이름 보정
+ * 녹음 항목(heavy.audio[]): rid(서버 녹음 id) · up('ing' | 'ok' | 'fail' | 'big') · base(이 녹음이 받아쓰기 시간선에서 시작한 초)
+ * 정밀본(heavy.stt[녹음 키]): PK.stt 머리말 참고 */
+const STT = PK.stt;
+const STT_ST = ['processing', 'raw', 'done', 'failed'];
+function sttOn() { return S.mode === 'web' && !!(ST.web && ST.web.bridge) && !S.sample; }
+function sttAuto() { return AI.cfg.sttAuto !== false; }
+function sttSpk() { const n = +AI.cfg.sttSpk; return STT.SPEAKERS.includes(n) ? n : 2; }
+/* 저장된 정밀본 다듬기(normP에서 부름) */
+function normStt(h) {
+  const okKey = v => typeof v === 'string' && /^[A-Za-z0-9_-]{1,120}$/.test(v);
+  const src = h.stt && typeof h.stt === 'object' && !Array.isArray(h.stt) ? h.stt : {}, out = {};
+  Object.keys(src).slice(0, 50).forEach(k => {
+    const x = src[k]; if (!okKey(k) || !x || typeof x !== 'object') return;
+    const segs = (Array.isArray(x.segs) ? x.segs : []).filter(s => s && typeof s.text === 'string' && s.text).slice(0, 20000).map(s => {
+      const o = { t: Math.max(0, +s.t || 0), t1: Math.max(0, +s.t1 || +s.t || 0), sp: String(s.sp || '1').replace(/[^0-9A-Za-z]/g, '').slice(0, 8) || '1', text: s.text.slice(0, 2000) };
+      if (typeof s.raw === 'string' && s.raw) o.raw = s.raw.slice(0, 2000);
+      if (typeof s.u === 'string' && s.u) o.u = s.u.slice(0, 40);
+      return o;
+    });
+    const sp = {}; if (x.speakers && typeof x.speakers === 'object') Object.keys(x.speakers).slice(0, 10).forEach(i => { if (/^[0-9A-Za-z]{1,8}$/.test(i) && typeof x.speakers[i] === 'string') sp[i] = x.speakers[i].slice(0, 12); });
+    out[k] = { rid: typeof x.rid === 'string' ? x.rid.slice(0, 40) : '', status: STT_ST.includes(x.status) ? x.status : (segs.length ? 'raw' : 'failed'), at: String(x.at || '').slice(0, 40),
+      spk: STT.SPEAKERS.includes(+x.spk) ? +x.spk : 2, speakers: sp, segs, fixed: !!x.fixed, fixedAt: String(x.fixedAt || '').slice(0, 40), model: String(x.model || '').slice(0, 60),
+      doneAt: String(x.doneAt || '').slice(0, 40), err: typeof x.err === 'string' ? x.err.slice(0, 60) : '', block: typeof x.block === 'string' ? x.block.slice(0, 300000) : '' };
+  });
+  h.stt = out;
+  (h.audio || []).forEach(a => {
+    if (!a || typeof a !== 'object') return;
+    if (a.rid !== undefined && !(typeof a.rid === 'string' && /^[0-9a-f-]{36}$/i.test(a.rid))) delete a.rid;
+    if (a.base !== undefined && !(typeof a.base === 'number' && a.base >= 0)) delete a.base;
+    if (a.up === 'ing') a.up = a.rid ? 'ok' : 'fail';
+  });
+}
+function sttErrText(code) {
+  return ({
+    stt_not_configured: '정밀 받아쓰기 서버 설정 전입니다 · 관리자가 CLOVA Speech 키를 등록하면 쓸 수 있습니다',
+    stt_key_invalid: 'CLOVA Speech 키가 맞지 않습니다 · 관리자에게 키 확인을 요청하세요',
+    stt_rate_limited: '한 시간에 정밀 받아쓰기를 너무 많이 요청했습니다 · 잠시 뒤 다시 해 주세요',
+    stt_busy: '받아쓰기 서버가 바쁩니다 · 잠시 뒤 다시 해 주세요',
+    stt_rejected: '받아쓰기 서버가 이 녹음 파일을 받지 않았습니다(형식 · 길이)',
+    stt_failed: '받아쓰기에 실패했습니다 · 다시 받아쓰기를 눌러 주세요',
+    stt_bad_result: '받아쓰기 결과를 읽지 못했습니다 · 다시 받아쓰기를 눌러 주세요',
+    audio_missing: '서버에서 녹음 파일을 찾지 못했습니다 · 다시 올려 주세요',
+    audio_too_large: '녹음 파일이 서버 한도보다 큽니다 · 관리자에게 저장 한도 상향을 요청하세요',
+    project_not_found: '상담을 먼저 저장한 뒤 올립니다 · 잠시 뒤 다시 눌러 주세요',
+    fix_failed: 'AI 보정을 마치지 못했습니다 · 정밀본은 그대로 쓸 수 있습니다',
+    empty: '녹음에서 알아들은 말이 없습니다'
+  })[code] || '정밀 받아쓰기를 하지 못했습니다(' + (code || '오류') + ')';
+}
+/* 녹음 파일: 이 창(메모리)에 있으면 그것, 없으면 서버에서 받아 온다(fetchServer일 때) */
+async function audioOf(a, fetchServer) {
+  const local = S.recBlob && S.recBlob.key === a.key ? S.recBlob.blob : await S.store.getAudio(a.key);
+  if (local || !fetchServer || S.mode !== 'web' || !a.rid) return local || null;
+  try { return await ST.web.audioDown(S.p.id, a.key, S.pOwner); } catch (e) { console.warn('audio', e && e.code); return null; }
+}
+
+/* ---------- 서버 보관 ---------- */
+async function sttUpload(p, a, blob) {
+  if (!sttOn() || S.readOnly || a.rid) return !!a.rid;
+  if (!blob || !blob.size) { a.up = 'fail'; return false; }
+  a.up = 'ing'; delete a.pendUp; paintStt();
+  /* 서버에 상담이 먼저 있어야 녹음을 붙일 수 있다 */
+  if (S.p === p) { saveSoon.now(); try { await saving; } catch (e) { /* 다음 저장에서 다시 */ } }
+  try {
+    const r = await ST.web.audioUp(p.id, a.key, blob, { mime: a.type || blob.type, duration: a.duration || 0 });
+    if (r && r.recordingId) { a.rid = r.recordingId; a.up = 'ok'; delete a.local; delete a.upErr; }
+  } catch (e) {
+    const code = (e && e.code) || 'error';
+    a.up = code === 'audio_too_large' ? 'big' : 'fail'; a.upErr = code;
+    console.warn('audio upload', code);
+  }
+  if (S.p === p) { touchHeavy(); paintStt(); }
+  return !!a.rid;
+}
+/* 녹음이 끝난 직후: 서버에 올리고(계속 보관) · 자동이면 정밀 받아쓰기 시작 */
+async function sttAfterRec(p, a) {
+  if (!sttOn() || S.readOnly || S.p !== p) return;
+  const blob = await audioOf(a, false);
+  if (!(await sttUpload(p, a, blob))) { if (S.p === p) toast('녹음 파일을 서버에 올리지 못했습니다 · 받아쓰기 탭에서 다시 올리세요'); return; }
+  if (sttAuto() && !S.sttNoKey && (+a.duration || 0) >= 20 && S.p === p) sttStart(p, a, true);
+}
+
+/* ---------- 정밀 받아쓰기 ---------- */
+async function sttStart(p, a, auto, spk) {
+  if (!sttOn() || S.readOnly || S.p !== p) return;
+  if (!a.rid) { const blob = await audioOf(a, false); if (!(await sttUpload(p, a, blob))) { toast(sttErrText(a.upErr || 'audio_missing')); return; } }
+  const hv = p.heavy, n = STT.SPEAKERS.includes(+spk) ? +spk : sttSpk(), prev = hv.stt[a.key];
+  hv.stt[a.key] = Object.assign(prev || { speakers: {}, segs: [] }, { rid: a.rid, status: 'processing', at: new Date().toISOString(), spk: n, err: '' });
+  touchHeavy(); paintStt();
+  try {
+    await ST.web.transcribe(a.rid, n, STT.keywords(p, sectorName(p.company.sector)));
+    if (!auto && S.p === p) toast('정밀 받아쓰기를 시작했습니다 · 화자 ' + (n || '자동') + (n ? '명' : '') + ' · 보통 몇 분 걸립니다');
+  } catch (e) {
+    const code = (e && e.code) || 'error', x = hv.stt[a.key];
+    x.status = STT.ready(x) ? (x.fixed ? 'done' : 'raw') : 'failed'; x.err = code;
+    if (code === 'stt_not_configured') S.sttNoKey = true;
+    if (!auto || code !== 'stt_not_configured') toast(sttErrText(code));
+    if (S.p === p) { touchHeavy(); paintStt(); }
+    return;
+  }
+  sttPollSoon(8000);
+}
+function sttPending(p) { const st = (p && p.heavy && p.heavy.stt) || {}; return Object.keys(st).filter(k => st[k].status === 'processing'); }
+function sttPollSoon(ms) {
+  clearTimeout(S.sttTimer);
+  if (!S.p || !sttOn() || !sttPending(S.p).length) return;
+  S.sttTimer = setTimeout(() => sttPoll(), ms || 12000);
+}
+async function sttPoll() {
+  const p = S.p; if (!p || !sttOn()) return;
+  if (!sttPending(p).length) return;
+  let r; try { r = await ST.web.recordings(p.id, S.pOwner); } catch (e) { sttPollSoon(30000); return; }
+  if (S.p !== p) return;
+  await sttApply(p, (r && r.items) || []);
+  sttPollSoon();
+}
+/* 서버의 녹음 상태를 이 상담에 맞춘다: 서버 id 되찾기 · 끝난 받아쓰기 받기 · 실패 표시 */
+async function sttApply(p, items) {
+  const hv = p.heavy; let changed = false;
+  for (const it of items) {
+    const a = (hv.audio || []).find(x => x.key === it.audioKey); if (!a) continue;
+    if (!a.rid && !S.readOnly) { a.rid = it.recordingId; a.up = 'ok'; delete a.local; changed = true; }
+    const x = hv.stt[a.key];
+    if (S.readOnly) continue;
+    if (it.status === 'done' && (!x || x.status === 'processing' || !STT.ready(x)) && !(x && x.err === 'empty' && x.status === 'done')) await sttFetch(p, a.key, it.recordingId);
+    else if (it.status === 'failed' && x && x.status === 'processing') { x.status = STT.ready(x) ? (x.fixed ? 'done' : 'raw') : 'failed'; x.err = it.errorCode || 'stt_failed'; changed = true; }
+    else if (it.status === 'processing' && (!x || x.status !== 'processing')) { hv.stt[a.key] = Object.assign(x || { speakers: {}, segs: [] }, { rid: it.recordingId, status: 'processing', at: it.requestedAt || '', spk: it.speakers || 2, err: '' }); changed = true; }
+  }
+  if (changed && S.p === p) touchHeavy();
+  if (S.p === p) paintStt();
+}
+async function sttFetch(p, key, rid) {
+  let r; try { r = await ST.web.transcript(rid, S.pOwner); } catch (e) { console.warn('transcript', e && e.code); return; }
+  if (S.p !== p || !r || r.status !== 'done') return;
+  const hv = p.heavy, x = hv.stt[key] || (hv.stt[key] = { speakers: {}, segs: [] });
+  /* 새 정밀본으로 바뀌면 고치던 보정은 멈춘다(줄 번호가 달라진다) */
+  if (S.sttFixing && S.sttFixing.key === key) { S.sttFixing.ctl.abort(); S.sttFixing = null; }
+  Object.assign(x, { rid, segs: STT.fromServer(r.segments), speakers: {}, fixed: false, fixedAt: '', doneAt: r.completedAt || new Date().toISOString(), err: '', block: x.block || '' });
+  x.status = x.segs.length ? 'raw' : 'done';
+  if (!x.segs.length) x.err = 'empty';
+  touchHeavy(); paintStt(); paintTr();
+  if (x.segs.length) {
+    toast('정밀 받아쓰기가 끝났습니다 · ' + STT.speakerIds(x).length + '명 · ' + x.segs.length + '문장' + (AI.ready() ? ' · AI 보정 중' : ''));
+    if (AI.ready()) sttFix(p, key);
+  }
+}
+
+/* ---------- AI 보정(Opus): 잘못 들은 말 · 회사명 · 숫자 · 화자 이름(영업 / 대표님) ---------- */
+async function sttFix(p, key, again) {
+  const x = p.heavy.stt[key];
+  if (!x || !STT.ready(x) || x.status === 'processing' || S.sttFixing) return;
+  if (roGuard()) return;
+  if (!AI.ready()) { toast('AI 보정은 회사 AI 키가 있어야 합니다'); return; }
+  const ctl = new AbortController();
+  if (again) STT.resetFix(x);
+  /* 묶음마다 한 번씩 부른다. Opus 5.5는 생각(끌 수 없음)도 출력 한도에 들어가므로, 답이 잘리면 묶음을 반으로 나눠 다시 부른다 */
+  const queue = STT.chunks(x).map(([from, to], i) => ({ from, to, first: i === 0 }));
+  const fx = S.sttFixing = { key, done: 0, total: queue.length, ctl };
+  paintStt();
+  const cancelled = () => Object.assign(new Error('cancelled'), { code: 'cancelled' });
+  async function run(job) {
+    const r = await AI.ask('', STT.prompt(p, x, job.from, job.to, job.first, sectorName(p.company.sector)) + '\n\nJSON 하나만 답한다(설명 없이).',
+      { model: AI.docModel(), tier: 'complex', maxTokens: STT.FIX_MAX_TOKENS, signal: ctl.signal, onText: () => {} });
+    if (ctl.signal.aborted) throw cancelled();
+    let j = null;
+    try { j = AI.parseJSON(r.text); } catch (e) { j = null; }
+    if ((!j || r.truncated) && job.to - job.from >= 4) {
+      const mid = (job.from + job.to) >> 1;
+      fx.total++;
+      return [{ from: job.from, to: mid, first: job.first }, { from: mid, to: job.to, first: false }];
+    }
+    if (!j) throw Object.assign(new Error('invalid_json'), { code: 'invalid_json' });
+    STT.applyFix(x, j, job.from, job.to, job.first);
+    x.model = r.model || x.model;
+    fx.done++; paintStt();
+    return null;
+  }
+  let ok = false;
+  try {
+    /* 화자 이름을 정하는 첫 묶음을 먼저, 나머지는 셋씩 함께 */
+    while (queue.length && queue[0].first) { const h = await run(queue.shift()); if (h) queue.unshift(...h); }
+    while (queue.length) {
+      await Promise.all(Array.from({ length: Math.min(STT.FIX_PARALLEL, queue.length) }, async () => {
+        while (queue.length) { if (ctl.signal.aborted) throw cancelled(); const h = await run(queue.shift()); if (h) queue.push(...h); }
+      }));
+    }
+    ok = true;
+  } catch (e) {
+    ctl.abort();
+    if (!(e && (e.code === 'cancelled' || e.name === 'AbortError'))) { x.err = 'fix_failed'; console.warn('stt fix', e && e.code); if (S.p === p) toast(sttErrText('fix_failed') + ' · ' + AI.errText(e)); }
+  } finally {
+    if (S.sttFixing && S.sttFixing.ctl === ctl) S.sttFixing = null;
+    if (ok) { x.status = 'done'; x.fixed = true; x.fixedAt = new Date().toISOString(); x.err = ''; }
+    if (S.p === p) { touchHeavy(); paintStt(); paintTr(); if (ok) toast('AI 보정을 마쳤습니다 · 화자 ' + STT.speakerIds(x).map(sp => STT.label(x, sp)).join(' · ')); }
+  }
+}
+/* 미팅 기록에 붙이기(녹음한 미팅 · 없으면 마지막 미팅) — 다시 붙이면 붙였던 자리만 바꾼다 */
+function sttAttach(key) {
+  const p = S.p, hv = p.heavy, a = (hv.audio || []).find(x => x.key === key), x = hv.stt[key];
+  if (!a || !STT.ready(x)) return;
+  if (S.readOnly) { toast('보기 전용 상담입니다'); return; }
+  let m = hv.meetings.find(mm => mm.id === a.mid);
+  if (!m) m = hv.meetings.filter(mm => mm.kind !== 'tm').slice(-1)[0] || addMeeting();
+  const block = STT.blockText(x, a.name);
+  m.text = mergeKpiTm(m.text, x.block, block); x.block = block;
+  touchHeavy(); saveSoon();
+  toast(meetingLabel(m) + ' 기록에 정밀 받아쓰기를 붙였습니다 · 미팅 기록에서 「내용 분석」으로 반영하세요');
+  paintStt();
+}
+function sttSpeaker(key, sp, name) {
+  const x = S.p.heavy.stt[key]; if (!x || S.readOnly) return;
+  name = String(name || '').trim().slice(0, 12);
+  x.speakers = Object.assign({}, x.speakers || {}, { [sp]: name || '화자 ' + sp });
+  touchHeavy(); paintStt(); paintTr();
+}
+
+/* ---------- 프로젝트를 열 때: 기다리던 업로드 · 서버 상태 맞추기 ---------- */
+async function sttSync() {
+  const p = S.p; if (!p || !sttOn()) return;
+  const hv = p.heavy; if (!(hv.audio || []).length) return;
+  if (!S.readOnly) {
+    for (const a of hv.audio) {
+      if (S.p !== p) return;
+      if (!a.rid && (a.pendUp || a.up === 'fail') && ST.web.audio.has(a.key)) await sttUpload(p, a, ST.web.audio.get(a.key));
+    }
+  }
+  if (!hv.audio.some(a => a.rid || ST.web.audio.has(a.key)) && !Object.keys(hv.stt || {}).length) return;
+  let r; try { r = await ST.web.recordings(p.id, S.pOwner); } catch (e) { return; }
+  if (S.p !== p) return;
+  await sttApply(p, (r && r.items) || []);
+  sttPollSoon();
+}
+
+/* ---------- 받아쓰기 탭의 정밀 받아쓰기 상자 ---------- */
+function sttRows() {
+  const hv = S.p.heavy, st = hv.stt || {};
+  return (hv.audio || []).filter(a => a && (a.rid || a.up || st[a.key] || (S.mode === 'web' && ST.web.audio.has(a.key)))).slice().reverse();
+}
+function sttBoxHtml() {
+  if (!sttOn() || !S.p) return '';
+  const rows = sttRows();
+  if (!rows.length) return '';
+  const st = S.p.heavy.stt || {}, ro = !!S.readOnly, n = sttSpk(), fx = S.sttFixing;
+  let h = '<div class="sttbox" id="sttBox"><div class="sttbox-h"><b>정밀 받아쓰기</b><span>화자 구분 · AI 보정</span><span class="sp"></span>' +
+    (ro ? '' : '<label class="sttspk">화자 <select id="sttSpk" aria-label="정밀 받아쓰기 화자 수">' + STT.SPEAKERS.map(k => '<option value="' + k + '"' + (k === n ? ' selected' : '') + '>' + (k ? k + '명' : '자동') + '</option>').join('') + '</select></label>') + '</div>';
+  rows.forEach(a => {
+    const x = st[a.key], k = esc(a.key), name = a.name || '녹음', dur = a.duration ? mmss(a.duration) : '';
+    let line = '', acts = '';
+    const local = S.mode === 'web' && ST.web.audio.has(a.key);
+    if (a.up === 'ing') line = '<span class="busy">서버에 올리는 중</span>';
+    else if (!a.rid) {
+      if (a.up === 'big') line = '<span class="errmsg">' + esc(sttErrText('audio_too_large')) + '</span>';
+      else if (local) { line = a.up === 'fail' ? '<span class="errmsg">서버에 올리지 못했습니다</span>' : '<span>이 창에만 있습니다 · 서버에 보관하면 다른 PC에서도 듣고 받아쓸 수 있습니다</span>'; if (!ro) acts = '<button type="button" class="btn sm" data-act="stt-up:' + k + '">' + ic('upload', 'sm') + (a.up === 'fail' ? '다시 올리기' : '서버에 보관') + '</button>'; }
+      else line = '<span class="mute">이 녹음은 서버에 보관되지 않았습니다(이전 방식)</span>';
+    } else if (!x) {
+      line = '<span>서버에 보관됨</span>';
+      if (!ro) acts = '<button type="button" class="btn sm acc" data-act="stt-go:' + k + '">' + ic('spark', 'sm') + '정밀 받아쓰기</button>';
+    } else if (x.status === 'processing') {
+      line = '<span class="busy">받아쓰는 중 · 화자 ' + (x.spk ? x.spk + '명' : '자동') + ' · 보통 몇 분 걸립니다(창을 닫아도 서버에서 이어서)</span>';
+    } else if (x.status === 'failed') {
+      line = '<span class="errmsg">' + esc(sttErrText(x.err)) + '</span>';
+      if (!ro) acts = '<button type="button" class="btn sm" data-act="stt-go:' + k + '">' + ic('sync', 'sm') + '다시 받아쓰기</button>';
+    } else {
+      const ids = STT.speakerIds(x), fixing = fx && fx.key === a.key;
+      line = fixing ? '<span class="busy">AI 보정 중 · ' + fx.done + ' / ' + fx.total + '</span>'
+        : '<span>' + (x.err === 'empty' ? esc(sttErrText('empty')) : '정밀본 · ' + x.segs.length + '문장 · 화자 ' + ids.length + '명' + (x.fixed ? ' · AI 보정됨' : x.err === 'fix_failed' ? ' · AI 보정 못 함' : ' · AI 보정 전')) + '</span>';
+      if (ids.length && !fixing) {
+        line += '<div class="sttsp">' + ids.map(sp => {
+          const cur = STT.label(x, sp), opts = uniq(['영업', '대표님', '고객', cur, '화자 ' + sp]);
+          return ro ? '<span class="spk">' + esc(cur) + '</span>' : '<label><i class="sw s' + esc(sp) + '"></i><select data-sttsp="' + k + '|' + esc(sp) + '" aria-label="화자 ' + esc(sp) + ' 이름">' + opts.map(o => '<option' + (o === cur ? ' selected' : '') + '>' + esc(o) + '</option>').join('') + '</select></label>';
+        }).join('') + (!ro && ids.length === 2 ? '<button type="button" class="btn sm ghost icon" data-act="stt-swap:' + k + '" aria-label="두 화자 이름 맞바꾸기" title="두 화자 이름 맞바꾸기">' + ic('sync', 'sm') + '</button>' : '') + '</div>';
+      }
+      if (!ro && !fixing && x.segs.length) acts = '<button type="button" class="btn sm" data-act="stt-attach:' + k + '">' + ic('note', 'sm') + (x.block ? '미팅 기록 다시 붙이기' : '미팅 기록에 붙이기') + '</button>' +
+        (AI.ready() ? '<button type="button" class="btn sm ghost" data-act="stt-fix:' + k + '"' + (fx ? ' disabled' : '') + '>' + ic('spark', 'sm') + (x.fixed ? '다시 보정' : 'AI 보정') + '</button>' : '') +
+        '<button type="button" class="btn sm ghost" data-act="stt-go:' + k + '">' + ic('sync', 'sm') + '다시 받아쓰기</button>';
+    }
+    h += '<div class="sttrow"><div class="sttname">' + ic('mic', 'sm') + '<b>' + esc(short(name, 28)) + '</b>' + (dur ? '<small class="num">' + dur + '</small>' : '') + '</div><div class="sttline">' + line + '</div>' + (acts ? '<div class="sttacts">' + acts + '</div>' : '') + '</div>';
+  });
+  const pre = STT.hasPrecise(S.p);
+  if (pre) h += '<div class="sttfoot"><button type="button" class="lnk" data-act="stt-view">' + (S.trLive ? '정밀본 보기' : '실시간 자막 보기') + '</button><span class="hint">' + (S.trLive ? '지금 실시간 자막을 보는 중' : '아래 받아쓰기 · 녹음 정리가 정밀본을 씁니다') + '</span></div>';
+  if (S.sttNoKey && !ro) h += '<p class="hint">' + esc(sttErrText('stt_not_configured')) + '</p>';
+  return h + '</div>';
+}
+function paintStt() { const w = $('#sttWrap'); if (w) w.innerHTML = sttBoxHtml(); }
+/* 받아쓰기 목록만 다시 그리기(정밀본 도착 · 화자 이름 변경) */
+function paintTr() { const l = $('#trlist'); if (l && S.rtab === 'tr') { l.innerHTML = trHtml(); } }
+
 /* ===== ui_pipe — 왼쪽 목록(BM 한 줄 · 고치기 · 지우기) · 캘린더(미팅 일시 · 다음 할 일) · 프로젝트 전체 보기(계약 상태 · 가능성)
  * 계약 상태 · 가능성 · 다음 할 일은 내부용(p.deal) — 고객 화면 · 고객 자료(레포트 · 영업자료)에는 나가지 않는다 ===== */
 const DEAL = { open: '진행 중', won: '계약 성사', hold: '보류', lost: '무산' };
@@ -12576,6 +13080,8 @@ function dOf(s) { if (!/^\d{4}-\d{2}-\d{2}$/.test(String(s || ''))) return null;
 function whenTxt(x) { const d = dOf(x.date); return d ? shortD(d) + '(' + WD[d.getDay()] + ')' + (timeOk(x.time) ? ' ' + x.time : '') : ''; }
 /* 목록 묶음 머리의 날짜: 26년 10월 20일 (화) */
 function dayK(s) { const d = dOf(s); return d ? String(d.getFullYear()).slice(2) + '년 ' + (d.getMonth() + 1) + '월 ' + d.getDate() + '일 (' + WD[d.getDay()] + ')' : ''; }
+/* 프로젝트를 만든 날(이 기기 시각 기준 YYYY-MM-DD) · 왼쪽 목록 묶음 */
+function madeDay(x) { const s = String((x && (x.createdAt || x.updatedAt)) || ''), d = s ? new Date(s) : null; return d && !isNaN(d.getTime()) ? ymd(d) : ''; }
 function dday(s) { const a = dOf(s), b = dOf(today()); return a && b ? Math.round((a - b) / 86400000) : null; }
 function ddayTxt(s) { const n = dday(s); return n === null ? '' : n === 0 ? '오늘' : n > 0 ? 'D-' + n : '지남'; }
 function dealChip(x) {
@@ -12605,7 +13111,8 @@ function ownerTxt(x) { return othersItem(x) ? '담당 ' + (x.ownerName || '직�
 /* 셋째 줄: 담당(관리자 보기) · 일시(오늘이면 시간만 — 날짜는 묶음 머리에) · 업종 · 매출 구간 · 견적 · TM 담당
  * 업종은 요약에 있을 때만(예전 요약에는 없음) — 고르지 않았으면 「업종 선택 안함」 */
 function pjMeta(x) {
-  const when = x.date && x.date === today() ? (timeOk(x.time) ? x.time : '') : whenTxt(x);
+  /* 목록은 만든 날로 묶으니 미팅 일시는 줄마다 보인다(오늘 미팅은 「오늘 11:00」) */
+  const when = x.date && x.date === today() ? '오늘 미팅' + (timeOk(x.time) ? ' ' + x.time : '') : whenTxt(x);
   const sec = typeof x.sector === 'string' ? (sectorName(x.sector) || '업종 선택 안함') : '';
   return [ownerTxt(x), when, sec, x.tier || '', x.total ? E.fmt(x.total) + '만 원' : '', x.tm && x.tm.by ? 'TM ' + x.tm.by : ''].filter(Boolean).join(' · ');
 }
@@ -12810,14 +13317,15 @@ function crmStrip(pm, crm) {
   const td = today(), nToday = items.filter(x => x.meetingDay === td).length;
   const nWeek = items.filter(x => { const n = dday(x.meetingDay); return n !== null && n >= 0 && n <= 7; }).length;
   const sync = pm.sync || {}, at = sync.at ? fmtDT(sync.at) : '';
+  const ready = crm.filter(r => !(r.it.linked && !r.it.linked.mine)).length;
   return '<div class="pcrm" role="status">' + head + '<span><b>곧 미팅할 프리미팅 ' + items.length + '건</b> · 오늘 ' + nToday + ' · 7일 안 ' + nWeek +
-    (items.length ? ' · 상담 준비 전 ' + crm.length : '') + '</span><span class="sp"></span>' +
+    (items.length ? ' · 상담 준비 전 ' + ready + ' · 프로젝트 생성됨 ' + Math.max(0, items.length - ready) : '') + '</span><span class="sp"></span>' +
     '<small>' + (at ? 'CRM 기준 · 매일 아침 8시 업데이트 · 마지막 ' + esc(at) : 'CRM 기준 · 매일 아침 8시 업데이트 · 아직 업데이트 전') + (sync.failed ? ' · 최근 업데이트 실패(이전 목록)' : '') + '</small>' + again + '</div>';
 }
 function crmRowHtml(r, adminAll) {
   const it = r.it, c = it.client || {}, dd = ddayTxt(r.date), nm = it.company, no = esc(it.scheduleNo);
   const facts = [c.annualSales ? '매출 ' + crmHum(c.annualSales) : '', crmHum(c.members), c.needBuildup ? '필요 ' + crmHum(c.needBuildup) : ''].filter(Boolean).join(' · ');
-  const other = it.linked && !it.linked.mine ? (it.linked.ownerName ? it.linked.ownerName + ' 님이 준비함' : '다른 직원이 준비함') : '';
+  const made = !!(it.linked && !it.linked.mine), other = made ? (it.linked.ownerName ? it.linked.ownerName + ' 님' : '다른 직원') : '';
   const way = CRM_WAY_SHORT[it.way] ? CRM_WAY_SHORT[it.way] + ' 미팅' : '미팅';
   return '<tr class="crm">' +
     '<th scope="row"><button type="button" class="pco" data-act="crm-prep:' + no + '"><b>' + esc(nm) + ' <span class="crmtag">CRM</span></b><small>' + esc([it.contact ? it.contact + ' 님' : '', it.salesOwner ? '담당 ' + it.salesOwner : ''].filter(Boolean).join(' · ') || '—') + '</small></button></th>' +
@@ -12826,7 +13334,7 @@ function crmRowHtml(r, adminAll) {
     '<td class="pwhen">' + esc(whenTxt(r)) + (dd ? '<small class="' + (dd === '오늘' ? 'td' : '') + '">' + dd + '</small>' : '') + '</td>' +
     '<td><span class="st crm">' + way + ' 예정</span></td>' +
     '<td colspan="3" class="pcrmf">' + (facts ? esc(facts) : '<span class="mute">CRM 사전 정보 없음</span>') + '</td>' +
-    '<td class="pnext"><button type="button" class="btn sm crmgo" data-act="crm-prep:' + no + '">' + ic('plus', 'sm') + '<span>상담 준비</span></button>' + (other ? '<small>' + esc(other) + '</small>' : '') + '</td><td></td></tr>';
+    '<td class="pnext">' + (made ? '<span class="madechip">' + ic('check', 'xs') + '프로젝트 생성됨</span><small>' + esc(other) + '</small>' : '<button type="button" class="btn sm crmgo" data-act="crm-prep:' + no + '">' + ic('plus', 'sm') + '<span>상담 준비</span></button>') + '</td><td></td></tr>';
 }
 
 /* ---------- 프로젝트 전체 보기(표 · 캘린더) ---------- */
@@ -12889,7 +13397,9 @@ function pipeBody() {
     return h + '<div class="pcal">' + calHead('p') + calGrid(calEvents(list, crm), true, 'pipe-open') + pipeDay(list, crm) + '</div>';
   }
   if (st.f === 'crm' && !crmOn()) st.f = 'all';
-  const f = st.f, rows = (f === 'all' ? list : f === 'crm' ? [] : list.filter(x => dealOf(x).stage === f)).slice();
+  /* 「CRM 예정」: 상담 준비 전인 CRM 일정 + CRM 일정에서 이미 만든 프로젝트(곧 미팅) — 「프로젝트 생성됨」으로 함께 본다 */
+  const td0 = today(), crmMade = list.filter(x => x.crm && x.crm.ms && String(x.date || '') >= td0);
+  const f = st.f, rows = (f === 'all' ? list : f === 'crm' ? crmMade : list.filter(x => dealOf(x).stage === f)).slice();
   const CH = { high: 0, mid: 1, low: 2, '': 3 };
   const byDate = (a, b) => {
     const da = dday(a.date), db = dday(b.date), ka = da === null ? 3 : da >= 0 ? 0 : 1, kb = db === null ? 3 : db >= 0 ? 0 : 1;
@@ -12906,17 +13416,17 @@ function pipeBody() {
   /* CRM 줄: 미팅일 순이면 프로젝트와 날짜대로 섞고, 다른 정렬이면 프로젝트 뒤에 날짜순으로 */
   const crmShown = f === 'all' || f === 'crm' ? crm.slice().sort(byDate) : [];
   const shown = st.sort === 'date' || f === 'crm' ? rows.concat(crmShown).sort(byDate) : rows.concat(crmShown);
-  const chips = [['all', '전체', list.length + crm.length]].concat(crmOn() ? [['crm', 'CRM 예정', crm.length]] : []).concat(DEAL_IDS.map(k => [k, DEAL[k], by(k).length]));
+  const chips = [['all', '전체', list.length + crm.length]].concat(crmOn() ? [['crm', 'CRM 예정', crm.length + crmMade.length]] : []).concat(DEAL_IDS.map(k => [k, DEAL[k], by(k).length]));
   h += '<div class="ptools"><div class="chips" role="group" aria-label="계약 상태로 거르기">' + chips.map(t =>
     '<button type="button" class="chip' + (t[0] === 'crm' ? ' crmchip' : '') + (f === t[0] ? ' on' : '') + '" aria-pressed="' + (f === t[0]) + '" data-act="pipe-f:' + t[0] + '">' + t[1] + ' <span class="num">' + t[2] + '</span></button>').join('') + '</div><span class="sp"></span>' +
     '<label class="psort">정렬 <select id="pipeSort" aria-label="정렬">' + [['date', '미팅일(다가오는 순)'], ['updated', '최근 고친 순'], ['amount', '견적 금액'], ['chance', '가능성']].map(o => '<option value="' + o[0] + '"' + (st.sort === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></label></div>';
-  if (!shown.length) return h + '<p class="lempty">' + (f === 'crm' ? (pm && !pm.err ? '상담 준비 전인 CRM 프리미팅이 없습니다' : 'CRM 프리미팅을 불러오면 여기에 보입니다') : all.length ? '조건에 맞는 프로젝트가 없습니다' : '새 미팅이나 TM 사전 입력으로 첫 프로젝트를 만드세요') + '</p>';
+  if (!shown.length) return h + '<p class="lempty">' + (f === 'crm' ? (pm && !pm.err ? '곧 미팅할 CRM 프리미팅이 없습니다' : 'CRM 프리미팅을 불러오면 여기에 보입니다') : all.length ? '조건에 맞는 프로젝트가 없습니다' : '새 미팅이나 TM 사전 입력으로 첫 프로젝트를 만드세요') + '</p>';
   h += '<div class="ptw"><table class="ptbl"><thead><tr><th scope="col">회사</th>' + (adminAll ? '<th scope="col">담당</th>' : '') + '<th scope="col">비즈니스 모델</th><th scope="col">미팅 일시</th><th scope="col">진행</th><th scope="col">계약 상태</th><th scope="col">가능성</th><th scope="col" class="r">견적 합계</th><th scope="col">다음 할 일</th><th scope="col"><span class="sr">고치기</span></th></tr></thead><tbody>' +
     shown.map(x => {
       if (x.kind === 'crm') return crmRowHtml(x, adminAll);
       const d = dealOf(x), dd = ddayTxt(x.date), cur = S.p && !S.sample && curKey() === x.id, nm = x.name || '이름 없는 프로젝트', ro = othersItem(x);
       return '<tr class="st-' + d.stage + (cur ? ' cur' : '') + (ro ? ' ro' : '') + '">' +
-        '<th scope="row"><button type="button" class="pco" data-act="pipe-open:' + esc(x.id) + '"><b>' + esc(nm) + (x.crm && x.crm.ms ? ' <span class="crmtag" title="CRM 프리미팅에서 준비한 상담">CRM</span>' : '') + '</b><small>' + esc([x.ceo ? x.ceo + ' 대표' : '', x.tier || ''].filter(Boolean).join(' · ') || '—') + '</small></button></th>' +
+        '<th scope="row"><button type="button" class="pco" data-act="pipe-open:' + esc(x.id) + '"><b>' + esc(nm) + (x.crm && x.crm.ms ? ' <span class="crmtag" title="CRM 프리미팅에서 준비한 상담">CRM</span><span class="madechip">' + ic('check', 'xs') + '프로젝트 생성됨</span>' : '') + '</b><small>' + esc([x.ceo ? x.ceo + ' 대표' : '', x.tier || ''].filter(Boolean).join(' · ') || '—') + '</small></button></th>' +
         (adminAll ? '<td class="pown">' + (ro ? '<button type="button" class="lnk" data-act="pipe-owner:' + esc(x.ownerId) + '">' + esc(x.ownerName || '직원') + '</button>' : '<span>나</span>') + '</td>' : '') +
         '<td class="pbm">' + esc(x.bm1 || sectorName(x.sector) || '—') + '</td>' +
         '<td class="pwhen">' + (whenTxt(x) ? esc(whenTxt(x)) + (dd ? '<small class="' + (dd === '오늘' ? 'td' : dd === '지남' ? 'past' : '') + '">' + dd + '</small>' : '') : '<span class="mute">미정</span>') + '</td>' +
@@ -12998,10 +13508,13 @@ function openSettings() {
       '<div class="line" style="margin-top:12px"><label class="toggle"><input type="checkbox" id="setAuto"' + (c.auto !== false ? ' checked' : '') + '> 녹음 중 자동 인사이트</label>' +
       '<select class="in" id="setEvery" style="width:auto;height:40px" aria-label="자동 인사이트 간격">' + [20, 30, 60, 90].map(n => '<option value="' + n + '"' + (+c.every === n ? ' selected' : '') + '>' + n + '초마다</option>').join('') + '</select></div>';
   }
-  h += '</div><div class="set"><h3>받아쓰기</h3><p>녹음하면서 한국어로 바로 받아씁니다(Chrome).</p><label class="toggle"><input type="checkbox" id="setSr"' + (REC.srOn ? ' checked' : '') + (REC.srSupported() ? '' : ' disabled') + '> 실시간 받아쓰기' + (REC.srSupported() ? '' : ' · 이 브라우저는 지원하지 않음') + '</label></div>';
+  h += '</div><div class="set"><h3>받아쓰기</h3><p>녹음하면서 한국어로 바로 받아씁니다(Chrome).</p><label class="toggle"><input type="checkbox" id="setSr"' + (REC.srOn ? ' checked' : '') + (REC.srSupported() ? '' : ' disabled') + '> 실시간 받아쓰기' + (REC.srSupported() ? '' : ' · 이 브라우저는 지원하지 않음') + '</label>' +
+    (web ? '<p style="margin-top:12px">정밀 받아쓰기: 녹음 파일을 회사 전용 저장소에 보관하고, CLOVA Speech로 다시 받아써 화자를 나눕니다(영업 · 대표님). 끝나면 Opus 5.5가 잘못 들은 말과 화자 이름을 바로잡습니다.</p>' +
+      '<div class="line"><label class="toggle"><input type="checkbox" id="setStt"' + (sttAuto() ? ' checked' : '') + '> 녹음이 끝나면 정밀 받아쓰기 자동 시작</label>' +
+      '<select class="in" id="setSttSpk" style="width:auto;height:40px" aria-label="화자 수">' + STT.SPEAKERS.map(n => '<option value="' + n + '"' + (n === sttSpk() ? ' selected' : '') + '>화자 ' + (n ? n + '명' : '자동') + '</option>').join('') + '</select></div>' : '') + '</div>';
   const th = ST.lsGet('theme') || 'auto';
   h += '<div class="set"><h3>화면</h3><div class="seg" role="group" aria-label="화면 밝기">' + [['auto', '자동'], ['light', '밝게'], ['dark', '어둡게']].map(x => '<button type="button" data-act="set-theme:' + x[0] + '" class="' + (th === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('') + '</div></div>';
-  h += '<div class="set"><h3>데이터</h3><p>' + (web ? '상담은 로그인한 직원 계정에 자동 저장되어 다른 PC에서도 이어서 볼 수 있습니다. 관리자는 직원별 상담을 볼 수 있습니다. 녹음 파일(음성)은 서버에 저장하지 않으니 필요하면 내려받으세요.' : shared ? '팀이 함께 보는 프로젝트입니다. TM 입력과 미팅 기록이 팀 전체에 보입니다.' : '프로젝트는 이 PC 브라우저에 저장됩니다. 다른 PC로 옮기려면 파일로 보내세요.') + '</p><div class="line">' +
+  h += '<div class="set"><h3>데이터</h3><p>' + (web ? '상담은 로그인한 직원 계정에 자동 저장되어 다른 PC에서도 이어서 볼 수 있습니다. 관리자는 직원별 상담을 볼 수 있습니다. 녹음 파일은 회사 전용 저장소에 보관되어 다른 PC에서도 듣고 내려받을 수 있습니다.' : shared ? '팀이 함께 보는 프로젝트입니다. TM 입력과 미팅 기록이 팀 전체에 보입니다.' : '프로젝트는 이 PC 브라우저에 저장됩니다. 다른 PC로 옮기려면 파일로 보내세요.') + '</p><div class="line">' +
     '<button type="button" class="btn" data-act="data-export">' + ic('download', 'sm') + '전체 프로젝트 보내기(.json)</button>' + '<button type="button" class="btn" data-act="imp-json">' + ic('upload', 'sm') + '가져오기</button>' + '</div></div>';
   h += '<div class="set"><p style="margin:0">' + esc('포켓 빌드업 인텔리전스 ' + VERSION + ' · ' + E.PRICE_VERSION) + '</p></div>';
   openModal(h, { title: '설정', foot: shared ? '<span class="sp"></span><button type="button" class="btn pri" data-act="modal-close">닫기</button>' : '<span class="sp"></span><button type="button" class="btn" data-act="modal-close">취소</button><button type="button" class="btn pri" data-act="set-save">저장</button>' });
@@ -13012,7 +13525,8 @@ function readSettings() {
 }
 function saveSettings() {
   if (S.mode === 'web') {
-    const c = Object.assign({}, AI.cfg, { key: '', auto: $('#setAuto') ? $('#setAuto').checked : AI.cfg.auto, every: +((($('#setEvery') || {}).value) || AI.cfg.every) });
+    const c = Object.assign({}, AI.cfg, { key: '', auto: $('#setAuto') ? $('#setAuto').checked : AI.cfg.auto, every: +((($('#setEvery') || {}).value) || AI.cfg.every),
+      sttAuto: $('#setStt') ? $('#setStt').checked : sttAuto(), sttSpk: $('#setSttSpk') ? +$('#setSttSpk').value : sttSpk() });
     AI.setConfig(c); ST.lsSet('ai', c);
   } else if (S.mode !== 'shared') {
     const c = readSettings(), keep = !$('#setKeep') || $('#setKeep').checked;
@@ -13079,6 +13593,8 @@ async function switchTo(p, isNew, o) {
   if (S.docs && S.docs.ctl) S.docs.ctl.abort();
   if (S.docs && S.docs.run && S.docs.run.ctl) S.docs.run.ctl.abort();
   if (S.recapUi && S.recapUi.ctl) S.recapUi.ctl.abort();
+  if (S.sttFixing && S.sttFixing.ctl) S.sttFixing.ctl.abort();
+  clearTimeout(S.sttTimer); S.sttFixing = null; S.trLive = false;
   const keep = o.keepView ? { view: S.view, rtab: S.rtab } : null;
   S.docs = keep && S.docs ? Object.assign(S.docs, { busy: null, ctl: null, err: '', word: false }) : null;
   S.sample = false; S.deck = null; S.menu = false; S.expMenu = false; S.ana = null; S.mtg = null;
@@ -13095,6 +13611,7 @@ async function switchTo(p, isNew, o) {
   render();
   const m = $('#main'); if (m) m.scrollTop = 0;
   if (narrow() && S.left) setLeft(false);
+  if (S.mode === 'web') setTimeout(() => { sttSync().catch(e => console.warn('stt sync', e && e.code)); }, 600);
   return true;
 }
 /* 본문(미팅 기록 · 받아쓰기 · 인사이트) 읽기: 다른 사람이 저장하는 중이면 잠시 뒤 다시, 끝내 안 되면 저장을 잠근다 */
@@ -13229,12 +13746,21 @@ async function act(name, arg, el, ev) {
     case 'meetings': openMeetings(arg); return;
     case 'sample': toggleSample(); return;
     case 'load': loadProject(arg); return;
+    case 'lg': { if (!S.lgOpen) S.lgOpen = {}; const b = $('[data-act="lg:' + arg + '"]'); S.lgOpen[arg] = !(b && b.getAttribute('aria-expanded') === 'true'); renderLeftList(); const nb = $('[data-act="lg:' + arg + '"]'); if (nb) nb.focus(); return; }
     case 'del': deleteProject(arg); return;
     case 'pdf': doPdf(); return;
     case 'exp-txt': exportTxt(); return;
     case 'exp-md': exportMd(); return;
     case 'exp-json': exportJson(); return;
     case 'exp-audio': exportAudio(arg); return;
+    case 'stt-up': { const a = S.p && S.p.heavy.audio.find(x => x.key === arg); if (a) audioOf(a, false).then(b => sttUpload(S.p, a, b)); return; }
+    case 'stt-go': { const a = S.p && S.p.heavy.audio.find(x => x.key === arg); if (a) sttStart(S.p, a, false); return; }
+    case 'stt-fix': if (S.p) sttFix(S.p, arg, true); return;
+    case 'stt-attach': sttAttach(arg); return;
+    case 'stt-swap': { const x = S.p && S.p.heavy.stt[arg]; if (x && !S.readOnly && STT.swap(x)) { touchHeavy(); paintStt(); paintTr(); } return; }
+    case 'stt-view': S.trLive = !S.trLive; paintStt(); paintTr(); return;
+    case 'att-load': { const a = S.p && S.p.heavy.audio.find(x => x.key === arg); if (!a) return; const b = $('[data-act="att-load:' + arg + '"]'); if (b) { b.disabled = true; b.textContent = '불러오는 중'; }
+      audioOf(a, true).then(blob => { if (!blob) toast('서버에서 녹음 파일을 받지 못했습니다'); refreshMeetings(); }); return; }
     case 'imp-json': importJson(); return;
     case 'data-export': exportAll(); return;
     case 'modal-close': closeModal(); return;
@@ -13466,6 +13992,9 @@ function onChange(ev) {
   if (t.id === 'srToggle') { REC.setSr(t.checked); ST.lsSet('sr', REC.srOn); paintLive(); return; }
   if (t.dataset.pdeal) { quickDeal(t.dataset.pdeal, 'stage', DEAL[t.value] ? t.value : 'open'); return; }
   if (t.id === 'pipeSort') { if (S.pipe) { S.pipe.sort = t.value; paintPipe(); } return; }
+  /* 정밀 받아쓰기: 화자 수(다음 받아쓰기부터) · 화자 이름 */
+  if (t.id === 'sttSpk') { if (S.mode === 'web') { const c = Object.assign({}, AI.cfg, { key: '', sttSpk: +t.value }); AI.setConfig(c); ST.lsSet('ai', c); } return; }
+  if (t.dataset.sttsp) { const i = t.dataset.sttsp.indexOf('|'); sttSpeaker(t.dataset.sttsp.slice(0, i), t.dataset.sttsp.slice(i + 1), t.value); return; }
   if (t.dataset.ana !== undefined) {
     const st = S.tmf && t.closest('#tmRes') ? S.tmf : S.ana; if (!st) return;
     st.checked[t.dataset.ana] = t.checked;
