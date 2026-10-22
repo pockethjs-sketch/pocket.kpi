@@ -35,3 +35,6 @@ verify_jwt = true
 
 [functions.kpi-buildup-stt-callback]
 verify_jwt = false
+
+[functions.kpi-contract-sheet-report]
+verify_jwt = true

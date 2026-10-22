@@ -1,5 +1,12 @@
 # Employee authentication cutover — 2026-09-18
 
+## 2026-10-22 KPI overlap repair and authenticated sheet-date receipts
+
+- Latest main aaae450 retained (buildup v4.9 / Vite8.3.5). Fix five search inputs with separate in-flow icon/control/action slots; separate payment text and progress meter; neutral canvas and bordered white cards. No financial mutation or original dirty checkout files are included.
+- Operator explicitly selected A/H/O of the existing shared contract sheet for the monthly receipt list. New GET-only `kpi-contract-sheet-report` v1 is ACTIVE with verify_jwt=true. Auth.getUser and current ACTIVE organization membership are checked before reading the single fixed source CSV; temporary-password accounts and non-all scopes refused. Same explicit origin list; no anonymous fallback, claims-based role, membership grant, source write, collector, DB schema or business mutation. No credential or raw source/memo/contact logging.
+- Existing pure contract parser is reused without modification. Return only approved display columns plus source time/hash/row counts and issue codes. Missing source, invalid headers/dates, truncation and uncertain rows never become success/0 or DB fallbacks. A dates remain sheet-date attribution, not fabricated paidAt or historical month-end receipts. Existing actual-date reports are retained.
+- Four deployed source files re-read and match local; synthetic unauthenticated and malformed-token probes401, approved preflight204. API positive employee-session/DOM remains unverified. Pure source reader independently checked current public source, October18 rows/12 confirmed/101,556,400; 6 unconfirmed excluded. No production employee credential used. Frontend release status follows in KPI_UI_REFINEMENT.md and operations ledger.
+
 ## 2026-10-21 PR #2 frontend released (account administration, buildup v4.9)
 
 - PR #2 merged as `6dd89d3`; the Pages deploy stopped in `npm test` because `tests/kpi-ui.test.mjs` still pinned the v4.8 buildup asset hash (the v4.9 pin had been updated only in `tests/workspace-shell.test.mjs`; the KPI UI test cannot load locally without `postcss`, so it was not caught before merge). Nothing was published by the failed run.

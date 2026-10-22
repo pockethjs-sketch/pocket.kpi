@@ -13,7 +13,7 @@ const theme=read('src/design.css'), tokenSource=read('src/kpi-tokens.css');
 const tokens=readTokens(tokenSource), report=auditKpiDesign(tokenSource,theme);
 const uiSource=read('src/components/KpiUi.jsx');
 const {code}=await transformWithOxc(uiSource.replace(/^import .*\r?\n/gm,'').replaceAll('export const ','const '),'KpiUi.jsx',{jsx:{runtime:'classic'}});
-const {Btn,Inp,Ta,Sel,Fld,Card,Chip,SecTitle,Seg}=new Function('React',code+';return {Btn,Inp,Ta,Sel,Fld,Card,Chip,SecTitle,Seg};')(React);
+const {Btn,Inp,IconInput,Ta,Sel,Fld,Card,Chip,SecTitle,Seg}=new Function('React',code+';return {Btn,Inp,IconInput,Ta,Sel,Fld,Card,Chip,SecTitle,Seg};')(React);
 
 test('warehouse tokens use ten integer sizes >=11, four weights, five radii and accessible core text pairs',()=>{
   assert.equal(report.sizes.length,10);
@@ -55,6 +55,49 @@ test('shared component markup exposes labels, selected filters, preserved card c
   let selected='a';const group=Seg({value:selected,options:[['a','항목 A'],['b','항목 B']],onChange:value=>selected=value});
   assert.equal(group.props.role,'group');assert.equal(group.props.children[0].props['aria-pressed'],true);
   group.props.children[1].props.onClick();assert.equal(selected,'b');
+});
+
+test('icon fields keep icon/input/clear action in separate flow slots and preserve search events',()=>{
+  const Icon=props=>React.createElement('svg',props);
+  const clear=React.createElement('button',{'aria-label':'검색어 지우기'},'×');
+  let changed,entered;
+  const field=IconInput({icon:Icon,className:'ui-global-search',value:'예시',readOnly:true,'aria-label':'통합 검색',onChange:e=>changed=e,onKeyDown:e=>entered=e,trailingAction:clear});
+  const [icon,input,action]=field.props.children;
+  assert.equal(icon.props['aria-hidden'],'true');
+  assert.equal(input.type,Inp);assert.equal(input.props.value,'예시');assert.equal(input.props.readOnly,true);
+  assert.equal(input.props['aria-label'],'통합 검색');assert.equal(action.props.children,clear);
+  const change={target:{value:'예시 2'}},enter={key:'Enter'};
+  input.props.onChange(change);input.props.onKeyDown(enter);assert.equal(changed,change);assert.equal(entered,enter);
+  const html=renderToStaticMarkup(field);assert.match(html,/ui-input-icon/);assert.match(html,/ui-input-action/);
+  assert.doesNotMatch(html,/absolute|pl-8/);
+  assert.match(theme,/\.ui-icon-input\{display:flex;align-items:center/);
+  assert.match(theme,/\.ui-icon-input>\.ui-icon-input-control\{flex:1 1 0%;width:0;min-width:0/);
+  assert.match(theme,/\.ui-icon-input:focus-within\{border-color:var\(--ui-brand\)/);
+  const main=read('src/main.jsx');
+  assert.equal((main.match(/<IconInput icon=\{Search\}/g)||[]).length,5);
+  assert.doesNotMatch(main,/<Inp[^>]*className="pl-8/);
+});
+
+test('payment summary wraps above a distinct meter without hiding financial text or changing calculations',()=>{
+  const main=read('src/main.jsx');
+  const payment=main.slice(main.indexOf('<div className="ui-payment-status">'),main.indexOf('</td>',main.indexOf('<div className="ui-payment-status">')));
+  assert.match(payment,/ui-payment-summary/);assert.match(payment,/\{fmtK\(l\.paid \|\| 0\)\}/);assert.match(payment,/\{pStat\.text\}/);
+  assert.match(payment,/ui-payment-meter/);assert.match(payment,/ui-payment-percent[^>]*>\{payPct\}%/);
+  assert.doesNotMatch(payment,/hidden 2xl:block|truncate|absolute/);
+  assert.doesNotMatch(payment.slice(payment.indexOf('ui-payment-summary'),payment.indexOf('</button>')),/whitespace-nowrap/);
+  assert.match(theme,/\.ui-payment-status\{display:flex;flex-direction:column/);
+  assert.match(theme,/\.ui-payment-summary\{[^}]*flex-wrap:wrap[^}]*white-space:normal/);
+  assert.match(theme,/\.ui-payment-meter\{display:grid;grid-template-columns:minmax\(0,1fr\) max-content/);
+  assert.match(main,/const payPct = isWon && amt \? Math\.min\(100, Math\.round\(\(l\.paid \|\| 0\) \/ amt \* 100\)\) : null/);
+});
+
+test('neutral page canvas and bordered white cards restore explicit surface hierarchy',()=>{
+  assert.equal(tokens['--ui-canvas'],'#f3f4f6');assert.equal(tokens['--ui-surface'],'#ffffff');
+  for(const selector of ['kpi-card','kpi-stat','kpi-stage-block']){
+    assert.match(theme,new RegExp('\\.'+selector+'\\{border:1px solid var\\(--ui-line\\)!important'));
+  }
+  assert.match(theme,/\.kpi-method-notes>\.kpi-card\{border:0!important/);
+  assert.equal(report.contrastFailures,0);
 });
 
 test('refinement selectors are KPI-scoped and preserve ledger colors and frozen contract geometry',()=>{

@@ -39,7 +39,7 @@ export default function ContractBasisView({ leads, basis, range, periodLabel, op
     });
   }, [leads, basis, type, owner, search]);
   const description = isPayment
-    ? '실제 입금일 기준 · 해당 기간 받은 선금·중도금·잔금만 합산 · 계약 총액 아님'
+    ? '프리미팅 일정·영업 단계 무관 · 실제 입금일 기준 · 해당 기간 받은 선금·중도금·잔금만 합산 · 계약 총액 아님'
     : '최초 CRM 프리미팅일(없으면 저장된 프리미팅일) 기준 · 현재 확정 계약액 · 계약일 원본 유지';
   useExcelExport(() => [
     excelTable(basisLabel, ['업체', '담당자', '신규·기존', '채널', '프로그램', `${amountLabel} (원)`], rows.map(r => [r.company || '', ownerOf(r), r.ctype || '신규', channelOf(r.channel), programOf(r), r.basisAmount]), `${view === 'monthly' && month ? month : periodLabel} · ${description} · 구분 ${type} · 담당 ${owner} · 검색 ${search || '없음'}`),
@@ -60,6 +60,7 @@ export default function ContractBasisView({ leads, basis, range, periodLabel, op
         <div role="group" aria-label="성과 보기" className="flex gap-1">{[['owner', '담당자별'], ['list', '전체 목록'], ['monthly', '월별 비교']].map(([key, label]) => <button key={key} aria-pressed={view === key} onClick={() => { setView(key); setMonth(''); }} className={'rounded-md px-3 py-1.5 text-xs font-bold ' + (view === key ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600')}>{label}</button>)}</div>
         <p className="text-xs text-slate-600">{view === 'monthly' && month ? month : periodLabel} · {rows.length}개사 {isPayment && `· ${events.length}회 입금`} · <b className="text-indigo-700">{amountLabel} {money(rows.reduce((sum, row) => sum + row.basisAmount, 0))}</b></p>
       </div>
+      {isPayment && !!summary.undated.length && <p role="note" className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">현재 합계는 DB에 실제 입금일이 저장된 건만 포함합니다. 입금일 미상 {summary.undated.length}건은 아래에서 별도 확인할 수 있으며, 이 합계를 스프레드시트 전체 입금액으로 볼 수 없습니다.</p>}
       {!!summary.undated.length && <details className="rounded-md bg-amber-50 px-3 py-2 text-[11px] text-amber-800"><summary className="cursor-pointer font-bold">{isPayment ? '입금일' : '미팅일'} 미상 {summary.undated.length}건 · 전체 기간 · 월별 집계 제외</summary>
         <p className="mt-1">{isPayment ? '완료 체크만 있거나 날짜가 없는 금액은 계약일·예정일로 대신 집계하지 않습니다.' : '미팅 날짜가 없는 계약을 계약일·유입일로 대신 집계하지 않습니다.'}</p>
         <div className="mt-2 max-h-44 overflow-y-auto">{summary.undated.map((event, index) => <button key={event.lead.id + ':' + index} onClick={() => openLead(event.lead.id)} className="block py-1 text-left underline">{event.lead.company} · {event.lead.ctype || '신규'} · {money(event.amount)}</button>)}</div>

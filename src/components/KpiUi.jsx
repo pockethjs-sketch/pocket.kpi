@@ -9,6 +9,12 @@ export const Btn = ({ onClick, kind = 'ghost', size = 'sm', disabled, children, 
   return <button type="button" {...props} data-ui-component="button" data-kind={kind} data-size={size} onClick={onClick} disabled={disabled} className={base + variant + ' ' + sizing + ' ' + cls}>{children}</button>;
 };
 export const Inp = ({ className = '', ...props }) => <input {...props} data-ui-component="input" className={'ui-input w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-sm text-slate-800 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 ' + className} />;
+// Keep adornments in normal flow; common input padding must never cover an icon.
+export const IconInput = ({ icon: Icon, className = '', inputClassName = '', trailingAction, ...props }) => <span data-ui-component="icon-input" className={'ui-icon-input ' + className}>
+  {Icon && <span className="ui-input-icon" aria-hidden="true"><Icon size={16} /></span>}
+  <Inp {...props} className={'ui-icon-input-control ' + inputClassName} />
+  {trailingAction && <span className="ui-input-action">{trailingAction}</span>}
+</span>;
 export const Ta = ({ className = '', ...props }) => <textarea {...props} data-ui-component="textarea" className={'ui-textarea w-full px-2.5 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-800 leading-relaxed placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 ' + className} />;
 export const Sel = ({ value, onChange, options, className = '', disabled, ...props }) => <select {...props} value={value} onChange={onChange} disabled={disabled} data-ui-component="select" className={'ui-select px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed ' + className}>
   {options.map(option => { const value = option && typeof option === 'object' ? option.value : option; const label = option && typeof option === 'object' ? option.label : option; return <option key={value} value={value}>{label}</option>; })}

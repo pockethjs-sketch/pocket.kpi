@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   ACCOUNT_ROLES, PASSWORD_FLAG, isAccountAdmin, passwordChangeRequired, isMasterUser, canAssignRole, canManageTarget,
   normalizeEmail, validateTempPassword, validateNewPassword, displayName, validateCreate, validateUpdate, accountRow, sortAccounts, authErrorCode,
@@ -118,7 +119,7 @@ test('login entry asks for a new password before any workspace loads', () => {
 test('no temporary password value is committed to source', () => {
   const files = [];
   const walk = (dir) => { for (const name of readdirSync(dir)) { const path = join(dir, name); if (statSync(path).isDirectory()) walk(path); else if (/\.(js|jsx|mjs|ts|sql|toml)$/.test(name)) files.push(path); } };
-  walk(new URL('../src', import.meta.url).pathname);
-  walk(new URL('../supabase', import.meta.url).pathname);
+  walk(fileURLToPath(new URL('../src', import.meta.url)));
+  walk(fileURLToPath(new URL('../supabase', import.meta.url)));
   for (const path of files) assert.doesNotMatch(readFileSync(path, 'utf8'), /12345678-/, path);
 });

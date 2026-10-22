@@ -5,7 +5,7 @@ import { calendarActivityLeads, calendarPeriodEntries } from "./data/calendarAct
 import { CalendarConsistencyNotice } from './components/CalendarConsistencyNotice.jsx';
 import "./design.css";
 import "./styles.css";
-import { Chip, Btn, Inp, Ta, Sel, Fld, Card, SecTitle, Seg } from './components/KpiUi.jsx';
+import { Chip, Btn, Inp, IconInput, Ta, Sel, Fld, Card, SecTitle, Seg } from './components/KpiUi.jsx';
 import WorkspaceShell from './WorkspaceShell.jsx';
 import { ExcelExportProvider, ExcelExportButton, useExcelExport } from './ExcelExport.jsx';
 import { excelTable } from './data/excelTable.js';
@@ -15,6 +15,7 @@ const localStorage = window.kpiEmployeeStorage;
 import ContractOwnerSheet, { ContractCustomerTypeLabel } from "./ContractOwnerSheet.jsx";
 import ContractMonthlyPerformance from "./ContractMonthlyPerformance.jsx";
 import ContractBasisView from "./ContractBasisView.jsx";
+import ContractSheetPayments from './ContractSheetPayments.jsx';
 import ChannelRoasDetails from "./ChannelRoasDetails.jsx";
 import RecentSyncActivity from "./RecentSyncActivity.jsx";
 import DailyActivityChart from "./DailyActivityChart.jsx";
@@ -3227,11 +3228,7 @@ function LeadsView() {
         ))}
       </div>
       <div className="flex gap-2 flex-wrap items-center">
-        <div className="relative flex-1 max-w-xs">
-          <Search size={13} className="absolute left-2.5 top-2.5 text-slate-300" />
-          <Inp value={q} onChange={(e) => setQ(e.target.value)} placeholder="DB번호·회사·담당자·문의 검색" className="pl-8 pr-7" />
-          {q && <button onClick={() => setQ("")} className="absolute right-2 top-2 text-slate-300 hover:text-slate-500" title="지우기"><X size={13} /></button>}
-        </div>
+        <IconInput icon={Search} className="flex-1 max-w-xs" value={q} onChange={(e) => setQ(e.target.value)} aria-label="유입 DB 검색" placeholder="DB번호·회사·담당자·문의 검색" trailingAction={q && <button type="button" onClick={() => setQ("")} className="text-slate-400 hover:text-slate-600" aria-label="검색어 지우기" title="지우기"><X size={13} /></button>} />
         <Sel value={fBuild} onChange={(e) => setFBuild(e.target.value)} options={["전체", ...BUILDUPS]} />
         <span className="flex items-center gap-1">
           <span className="text-xs font-bold text-slate-500 mr-0.5" title="TM·프리미팅 진단 점수 기준">진단</span>
@@ -4541,19 +4538,21 @@ function DealsView() {
                     <td className="px-3 py-2 text-center"><input type="checkbox" className="rounded w-4 h-4 accent-emerald-600" checked={isWon} title={isWon ? "체크 해제 = 견적·제안 발송으로 되돌림" : "체크 = 계약 완료 처리 (계약일·금액 자동)"} onChange={(e) => toggleWin(l, e.target.checked)} /></td>
                     <td className="px-3 py-2">
                       {isWon ? (
-                        <div className="flex items-center gap-1.5">
+                        <div className="ui-payment-status">
                           {payRows(l).length ? (
-                            <button onClick={() => setPayId(l.id)} title="결제 스케줄 열기 — 회차별 금액·예정일·입금일" className={"text-xs font-bold rounded-lg px-2 py-1 border transition-colors text-left whitespace-nowrap " + (pStat.tone === "done" ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100" : pStat.tone === "over" ? "bg-red-50 text-red-700 border-red-200 hover:bg-red-100" : "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100")}>
-                              <span className="tabular-nums">{fmtK(l.paid || 0)}</span> <span className="font-semibold opacity-80">· {pStat.text}</span>
+                            <button type="button" onClick={() => setPayId(l.id)} title="결제 스케줄 열기 — 회차별 금액·예정일·입금일" className={"ui-payment-summary text-xs font-bold rounded-lg px-2 py-1 border transition-colors text-left " + (pStat.tone === "done" ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100" : pStat.tone === "over" ? "bg-red-50 text-red-700 border-red-200 hover:bg-red-100" : "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100")}>
+                              <span className="ui-payment-amount tabular-nums">{fmtK(l.paid || 0)}</span> <span className="ui-payment-description font-semibold opacity-80">· {pStat.text}</span>
                             </button>
                           ) : (
-                            <>
+                            <div className="ui-payment-entry">
                               <Inp value={l.paid || 0} onChange={(e) => up((d) => { const x = d.leads.find((y) => y.id === l.id); if (x) x.paid = num(e.target.value); })} className="w-24 text-right inline-block" />
                               <button onClick={() => setPayId(l.id)} title="결제 시점(입금일) 등록 — 월별 수금 집계에 반영됩니다" className="text-xs font-bold rounded-lg px-2 py-1 border bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100 whitespace-nowrap">＋결제일</button>
-                            </>
+                            </div>
                           )}
-                          <div className="hidden 2xl:block w-14"><Bar pct={payPct} color={fullyPaid ? "bg-emerald-500" : payPct >= 50 ? "bg-amber-400" : "bg-red-400"} /></div>
-                          <span className={"text-xs font-bold tabular-nums " + (fullyPaid ? "text-emerald-600" : "text-slate-500")}>{payPct}%</span>
+                          <div className="ui-payment-meter">
+                            <div className="ui-payment-track"><Bar pct={payPct} color={fullyPaid ? "bg-emerald-500" : payPct >= 50 ? "bg-amber-400" : "bg-red-400"} /></div>
+                            <span className={"ui-payment-percent text-xs font-bold tabular-nums " + (fullyPaid ? "text-emerald-600" : "text-slate-500")}>{payPct}%</span>
+                          </div>
                         </div>
                       ) : <span className="text-xs text-slate-300">계약 후 관리</span>}
                     </td>
@@ -4722,10 +4721,7 @@ function DealsView() {
       <Modal open={contractLogOpen} onClose={() => setContractLogOpen(false)} wide title={"프리미팅 기업 활동 로그 · " + contractStatusLogs.length + "건"}>
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="relative w-full sm:w-[360px]">
-              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-              <Inp value={contractLogQuery} onChange={(e) => setContractLogQuery(e.target.value)} placeholder="업체·작업·경로·입력자 검색" className="pl-8" />
-            </div>
+            <IconInput icon={Search} className="w-full sm:w-[360px]" value={contractLogQuery} onChange={(e) => setContractLogQuery(e.target.value)} aria-label="프리미팅 활동 로그 검색" placeholder="업체·작업·경로·입력자 검색" />
             <span className="text-[11px] text-slate-400">최근 기록부터 표시 · 삭제된 업체 로그도 보존</span>
           </div>
           <div className="overflow-x-auto border border-slate-200 bg-white">
@@ -7185,11 +7181,11 @@ function ContractHubView() {
     <SecTitle icon={Handshake} title="계약 총괄" sub={pLabel(period) + ' · 귀속 시점별 성과'} right={<Btn size="xs" kind="primary" onClick={() => go('ltvExpansion')}>잔금 관리</Btn>} />
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div role="group" aria-label="계약 성과 날짜 기준" className="inline-flex gap-1 rounded-lg border border-slate-200 bg-white p-1">
-        {[['meeting', '미팅 일자 기준'], ['payment', '입금 시점 기준']].map(([key, label]) => <button key={key} type="button" aria-pressed={!legacy && basis === key} onClick={() => { setBasis(key); setLegacy(false); }} className={'rounded-md px-4 py-2 text-xs font-extrabold ' + (!legacy && basis === key ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-100')}>{label}</button>)}
+        {[['meeting', '미팅 일자 기준'], ['sheetPayment', '입금 현황 · 시트 기준'], ['payment', '실제 입금일 기준']].map(([key, label]) => <button key={key} type="button" aria-pressed={!legacy && basis === key} onClick={() => { setBasis(key); setLegacy(false); }} className={'rounded-md px-4 py-2 text-xs font-extrabold ' + (!legacy && basis === key ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-100')}>{label}</button>)}
       </div>
       <button type="button" aria-pressed={legacy} onClick={() => setLegacy(!legacy)} className="text-[11px] font-bold text-slate-500 underline">{legacy ? '새 기준으로 돌아가기' : '기존 계약일·과거 시트 실적'}</button>
     </div>
-    {legacy ? <ContractDateHubView /> : <ContractBasisView leads={db.leads} basis={basis} range={pRange(period)} periodLabel={pLabel(period)} openLead={openLead} channelOf={channelGroupName} />}
+    {legacy ? <ContractDateHubView /> : basis === 'sheetPayment' ? <ContractSheetPayments range={pRange(period)} periodLabel={pLabel(period)} /> : <ContractBasisView leads={db.leads} basis={basis} range={pRange(period)} periodLabel={pLabel(period)} openLead={openLead} channelOf={channelGroupName} />}
   </div>;
 }
 
@@ -7735,7 +7731,7 @@ function SupportGrantListView({ loading }) {
           <div className="inline-flex rounded-md bg-slate-100 p-0.5">
             {tabItems.map(([value, label, count]) => <button key={value} type="button" onClick={() => setTab(value)} className={"h-7 rounded px-3 text-[11px] font-extrabold " + (tab === value ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800")}>{label} <span className="ml-1 text-[10px] text-slate-400">{count}</span></button>)}
           </div>
-          <div className="relative ml-auto w-full sm:w-72"><Search size={13} className="pointer-events-none absolute left-2.5 top-2.5 text-slate-400" /><Inp className="h-8 rounded-md pl-8 text-xs" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="고객사·지원사업·지역 검색" /></div>
+          <IconInput icon={Search} className="ml-auto w-full sm:w-72" value={query} onChange={(event) => setQuery(event.target.value)} aria-label="고객사·지원사업·지역 검색" placeholder="고객사·지원사업·지역 검색" />
         </div>
         {tab === "assignments" && <>
           <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 bg-slate-50 px-3 py-2">
@@ -8477,7 +8473,7 @@ function LtvExpansionView() {
       </div>
       <Card cls="p-3">
         <div className="flex items-end gap-2.5 flex-wrap">
-          <div className="min-w-[220px] flex-[1.4]"><Fld label="업체·프로젝트 검색"><div className="relative"><Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" /><Inp className="pl-8" value={ledgerQuery} onChange={(e) => setLedgerQuery(e.target.value)} placeholder="업체명, 프로젝트, 특이사항" /></div></Fld></div>
+          <div className="min-w-[220px] flex-[1.4]"><Fld label="업체·프로젝트 검색"><IconInput icon={Search} value={ledgerQuery} onChange={(e) => setLedgerQuery(e.target.value)} placeholder="업체명, 프로젝트, 특이사항" /></Fld></div>
           <div className="min-w-[135px] flex-1"><Fld label="담당자"><Sel className="w-full" value={ledgerOwner} onChange={(e) => setLedgerOwner(e.target.value)} options={[{ value: "all", label: "전체 담당자" }, ...ledgerOwners.map((owner) => ({ value: owner, label: owner }))]} /></Fld></div>
           <div className="min-w-[135px] flex-1"><Fld label="상태"><Sel className="w-full" value={ledgerStatus} onChange={(e) => setLedgerStatus(e.target.value)} options={[{ value: "all", label: "전체 상태" }, ...STATUS_OPTIONS.map((status) => ({ value: status, label: status }))]} /></Fld></div>
           <div className="min-w-[130px] flex-1"><Fld label="입금"><Sel className="w-full" value={ledgerPaymentState} onChange={(e) => setLedgerPaymentState(e.target.value)} options={[{ value: "all", label: "전체 입금" }, ...PAYMENT_OPTIONS.map((state) => ({ value: state, label: state }))]} /></Fld></div>
@@ -9700,10 +9696,7 @@ function KpiWorkspace() {
               </div>}
               </div>
               <div className="flex-1" />
-              {canAccess("leads") && <div className="relative w-36 md:w-56">
-                <Search size={13} className="absolute left-2.5 top-2.5 text-slate-300" />
-                <Inp value={qDraft} onChange={(e) => setQDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && qDraft.trim()) { if (!canAccess("leads")) { toast("유입 DB 접근 권한이 없습니다"); return; } setGlobalQ(qDraft.trim()); setQDraft(""); setView("leads"); } }} placeholder="유입 DB 통합 검색 (Enter)" className="pl-8" />
-              </div>}
+              {canAccess("leads") && <IconInput icon={Search} className="ui-global-search" value={qDraft} onChange={(e) => setQDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && qDraft.trim()) { if (!canAccess("leads")) { toast("유입 DB 접근 권한이 없습니다"); return; } setGlobalQ(qDraft.trim()); setQDraft(""); setView("leads"); } }} aria-label="유입 DB 통합 검색" placeholder="유입 DB 통합 검색 (Enter)" />}
               <ExcelExportButton title={AUTH_PAGE_GROUPS.flatMap(g => g.pages).find(p => p.id === effectiveView)?.label || effectiveView} periodLabel={pLabel(period)} allowed={canAccess(effectiveView) && !['settings', 'accessControl', 'schema', 'otherHub'].includes(effectiveView)} toast={toast} />
             </div>
           </header>

@@ -23,6 +23,19 @@ test('payments are attributed by actual receipt date, not the contract total or 
   assert.equal(summarizeContractBasis([lead], 'payment', null, '기존').total, 0);
 });
 
+test('October receipts include companies without meetings, outside the meeting month, and non-won stages', () => {
+  const rows = [
+    { id: 'no-meeting', status: '신규 DB', payments: [{ amount: 100, paidAt: '2026-10-01' }] },
+    { id: 'old-meeting', status: '프리미팅 완료', premeetingDoneAt: '2026-08-01', payments: [{ amount: 200, paidAt: '2026-10-20' }] },
+    { id: 'future-meeting', status: '프리미팅 확정', premeetingAt: '2026-11-01', payments: [{ amount: 300, paidAt: '2026-10-21' }] },
+  ];
+  const before = JSON.stringify(rows);
+  const result = summarizeContractBasis(rows, 'payment', ['2026-10-01', '2026-10-31']);
+  assert.equal(result.rows.length, 3);
+  assert.equal(result.total, 600);
+  assert.equal(JSON.stringify(rows), before);
+});
+
 test('confirmed undated payments and legacy paid balances are visible as undated, never assigned to a due date', () => {
   const rows = [
     { id: 'confirmed', contractAt: '2026-09-07', payments: [{ amount: 5500000, paidConfirmed: true, dueAt: '2026-09-07' }] },
