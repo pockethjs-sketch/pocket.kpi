@@ -49,13 +49,30 @@ export function buildSheetPaymentReport(csv, { start, end, fetchedAt, sourceHash
     sourceRowCount:values.length, rangeRows:all.length, confirmedRows:rows.length, total:rows.reduce((s,r)=>s+r.amount,0), rows,issues };
 }
 
-export async function readSheetPaymentReport({ start,end, fetchImpl=fetch, now=()=>new Date().toISOString() }) {
+// Review includes unknown H values; an unconfirmed receipt must not hide a contract.
+// Reuse the payment report's strict source/header/date validation, never raw memos.
+export function buildSheetContractReport(csv, options) {
+  const validated = buildSheetPaymentReport(csv, options);
+  const all = _crmParseContractSource(parseReportCsv(csv), () => 'review-only', options.start)
+    .flatMap(g => g.rows).filter(r => r.date <= options.end);
+  if (!all.length) throw Error('sheet_source_empty');
+  const rows = all.map(r => ({ row:r.row, date:r.date, company:r.company, owner:r.owner,
+    ctype:r.ctype, dealText:r.dealText, amount:r.amount, service:r.service, taxBasis:r.taxBasis,
+    paymentPercent:r.paymentPercent, paymentAmount:r.paymentAmount,
+    paymentText:r.paymentPercent !== null ? r.paymentPercent + '%' : r.paymentAmount ? r.paymentAmount + '원' : '' }));
+  return { ok:true, schemaVersion:'contract-review-source-v1', start:options.start, end:options.end,
+    fetchedAt:options.fetchedAt, sourceHash:options.sourceHash, sourceRowCount:validated.sourceRowCount,
+    rangeRows:rows.length, rows };
+}
+
+export async function readSheetPaymentReport({ start,end, mode='payments', fetchImpl=fetch, now=()=>new Date().toISOString() }) {
   const response = await fetchImpl(CONTRACT_SHEET_URL, { signal:AbortSignal.timeout(25000), headers:{accept:'text/csv'} });
   if (!response.ok || /accounts\.google\.com/.test(response.url || '') || !/csv|octet-stream|text\/plain/i.test(response.headers.get('content-type') || '')) throw Error('sheet_source_unavailable');
   if (Number(response.headers.get('content-length') || 0) > 10000000) throw Error('sheet_source_invalid');
   const csv = await response.text();
   const sourceHash = [...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(csv)))].map(b=>b.toString(16).padStart(2,'0')).join('');
-  return buildSheetPaymentReport(csv,{start,end,fetchedAt:now(),sourceHash});
+  const options={start,end,fetchedAt:now(),sourceHash};
+  return mode === 'contracts' ? buildSheetContractReport(csv,options) : buildSheetPaymentReport(csv,options);
 }
 
 export async function handleSheetReport(request, { authorize, readSource=readSheetPaymentReport }) {
@@ -64,7 +81,8 @@ export async function handleSheetReport(request, { authorize, readSource=readShe
   if (!access.ok) return {status:access.status,body:{error:access.error}};
   if (access.scope !== 'all') return {status:403,body:{error:'scope_action_forbidden'}};
   const url = new URL(request.url), start=url.searchParams.get('start'), end=url.searchParams.get('end');
-  if ([...url.searchParams.keys()].some(k=>!['start','end'].includes(k)) || !_crmSyncDate(start) || _crmSyncDate(start)!==start || !_crmSyncDate(end) || _crmSyncDate(end)!==end || start>end || start<'2000-01-01' || end>'2100-12-31') return {status:400,body:{error:'sheet_range_invalid'}};
-  try { return {status:200,body:await readSource({start,end})}; }
+  const mode=url.searchParams.get('mode') || 'payments';
+  if ([...url.searchParams.keys()].some(k=>!['start','end','mode'].includes(k)) || !['payments','contracts'].includes(mode) || !_crmSyncDate(start) || _crmSyncDate(start)!==start || !_crmSyncDate(end) || _crmSyncDate(end)!==end || start>end || start<'2000-01-01' || end>'2100-12-31') return {status:400,body:{error:'sheet_range_invalid'}};
+  try { return {status:200,body:await readSource(mode === 'contracts' ? {start,end,mode} : {start,end})}; }
   catch(e) { const code=String(e?.message || ''); return {status:502,body:{error:/^sheet_[a-z_]+$/.test(code)?code:'sheet_source_unavailable'}}; }
 }

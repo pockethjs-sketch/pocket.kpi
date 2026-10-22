@@ -4,7 +4,8 @@ import { _crmSyncDate, _crmSyncPaymentPercent } from '../../scripts/contract-she
 export function contractReviewPreview(item) {
   const rows = item?.sourceRows || [];
   const dates = [...new Set(rows.map(r => r.date))];
-  let reason = '';
+  let reason = item?.reviewReason || '';
+  if (!reason && item?.matchType === 'new_contract' && !(item.candidates || []).some(c => c.id === item.targetId)) reason = '연결할 기존 업체/계약을 선택해주세요 · 기존 계약 금액은 변경하지 않습니다';
   if (!rows.length) reason = '원본 계약 행이 없습니다';
   else if (item.company && !/^[a-f0-9]{64}$/i.test(item.sourceHash || '')) reason = '원본 해시 확인이 필요합니다';
   else if (/[\/·,]/.test(item.company || '')) reason = '복합 업체명입니다 · 기존 업체 식별을 먼저 확인해주세요';

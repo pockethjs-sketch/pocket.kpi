@@ -17,6 +17,7 @@ import ContractMonthlyPerformance from "./ContractMonthlyPerformance.jsx";
 import ContractBasisView from "./ContractBasisView.jsx";
 import ContractSheetPayments from './ContractSheetPayments.jsx';
 import { contractReviewPreview } from './data/contractReviewPreview.js';
+import { buildContractReviewItems, contractReviewErrorText, reviewLeadId } from './data/contractReviewMatches.js';
 import ChannelRoasDetails from "./ChannelRoasDetails.jsx";
 import RecentSyncActivity from "./RecentSyncActivity.jsx";
 import DailyActivityChart from "./DailyActivityChart.jsx";
@@ -154,11 +155,21 @@ const isScopedReceivablesWriter = () => window.kpiEmployeeAccess?.writeProfile =
   }
 
   window.crmFetchContractSheetChanges = async function () {
-    if (!CRM_SHEET_URL) throw new Error('sheet_url_missing');
-    var payload = await crmFetchSheetAction('contract_changes', 45000);
-    if (!payload || payload.error) throw new Error((payload && payload.error) || 'contract_changes_empty');
-    if (payload.action !== 'contract_changes' || !Array.isArray(payload.items)) throw new Error('contract_review_not_deployed');
-    return payload;
+    // Lookup uses only authenticated GETs and a revision-aligned server snapshot.
+    // No Apps Script queue write, company-wide applied marker, or local-save wait.
+    const headers = await window.kpiEmployeeHeaders();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 35000);
+    try {
+      const [response, primary] = await Promise.all([
+        fetch('https://ilnklntqkdbbtzzbhqrl.supabase.co/functions/v1/kpi-contract-sheet-report?' + new URLSearchParams({start:'2026-08-01',end:todayISO(),mode:'contracts'}), {headers,signal:controller.signal,cache:'no-store'}),
+        window.crmReadPrimaryContractState(),
+      ]);
+      const report = await response.json();
+      if (!response.ok || report.error) throw Error(report.error || 'sheet_source_unavailable');
+      const result = await buildContractReviewItems(report, primary.state);
+      return {...result, databaseRevision:primary.revision, lookupBasis:'server-confirmed', localSavePending:Number(window.crmPendingRemoteSaves || 0)>0 || localStorage.getItem(CRM_LOCAL_DIRTY_KEY)==='1'};
+    } finally { clearTimeout(timer); }
   };
 
   window.crmSetContractSheetChangeStatus = async function (changeId, status, actor) {
@@ -3829,6 +3840,7 @@ function DealsView() {
   const [contractReviewOpen, setContractReviewOpen] = useState(false);
   const [contractReviewBusy, setContractReviewBusy] = useState(false);
   const [contractReviewError, setContractReviewError] = useState("");
+  const [contractReviewTargets, setContractReviewTargets] = useState({});
   const [contractApplyingId, setContractApplyingId] = useState("");
   const [contractLogOpen, setContractLogOpen] = useState(false);
   const [dealsTab, setDealsTab] = useState('companies');
@@ -3846,10 +3858,10 @@ function DealsView() {
       return;
     }
     contractReviewRunning.current = true;
-    window.crmSyncInProgress = true;
+    if (runSync) window.crmSyncInProgress = true;
     setContractReviewBusy(true);
     try {
-      await window.crmWaitForRemoteCommit(45000);
+      if (runSync) await window.crmWaitForRemoteCommit(45000);
       const sync = runSync ? await window.crmSyncNewContracts() : null;
       if (runSync && (!sync || sync.action !== 'contract_auto_sync')) throw new Error('contract_auto_not_deployed');
       if (sync) {
@@ -3861,13 +3873,13 @@ function DealsView() {
       setContractReviewError("");
       if (sync && (showToast || (sync.updated || []).length || (sync.paymentUpdated || []).length)) toast("계약 자동 반영 " + (sync.updated || []).length + "곳 · 입금 완료 " + (sync.paymentUpdated || []).length + "곳 · 확인 필요 " + ((sync.blocked || []).length + (sync.paymentBlocked || []).length) + "곳 · 미등록 " + payload.pending + "곳");
     } catch (error) {
-      const message = String(error && error.message || error || "contract_review_failed");
+      const message = error?.name === 'AbortError' ? 'AbortError' : String(error && error.message || error || "contract_review_failed");
       setContractReviewError(message);
-      if (showToast) toast(message === "contract_review_not_deployed" ? "신규 계약 업체 확인 기능이 Apps Script에 아직 배포되지 않았습니다" : "계약 시트 신규 업체 확인 실패 · " + message);
+      if (showToast) toast(contractReviewErrorText(message));
     } finally {
       setContractReviewBusy(false);
       contractReviewRunning.current = false;
-      window.crmSyncInProgress = false;
+      if (runSync) window.crmSyncInProgress = false;
     }
   };
   useEffect(() => {
@@ -4168,7 +4180,7 @@ function DealsView() {
     const parsed = new Date(value || "");
     return Number.isNaN(parsed.getTime()) ? (value || "시각 없음") : parsed.toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
   };
-  const contractReviewVisible = contractReview.items || [];
+  const contractReviewVisible = (contractReview.items || []).map(item => ({...item,targetId:contractReviewTargets[item.id] || item.targetId}));
   const contractCompanyAliases = (value) => {
     const raw = String(value || "");
     const parts = [raw, raw.replace(/\([^)]*\)/g, " ")];
@@ -4194,16 +4206,27 @@ function DealsView() {
     if (!preview.canAdd) { toast(preview.reason); return; }
     const sourceAliases = contractCompanyAliases(item.company);
     const alreadyExists = (db.leads || []).some((row) => contractCompanyAliases(row.company).some((alias) => sourceAliases.includes(alias)));
-    if (alreadyExists) {
+    if (alreadyExists && !item.contractKey) {
       toast("이미 프리미팅 기업에 등록된 업체입니다 · 목록을 다시 확인합니다");
       refreshContractReview(false);
       return;
     }
     setContractApplyingId(item.id);
     try {
+      if (item.contractKey) {
+        // Creation still requires an acknowledged latest server state; lookup does not.
+        await window.crmWaitForRemoteCommit(45000);
+        const primary = await window.crmReadPrimaryContractState();
+        const fresh = await buildContractReviewItems({ok:true,schemaVersion:'contract-review-source-v1',sourceHash:contractReview.sourceHash,
+          start:contractReview.sourceCutoff,rows:item.sourceRows,rangeRows:item.sourceRows.length,fetchedAt:contractReview.checkedAt},primary.state);
+        const candidate = fresh.items.find(x => x.contractKey === item.contractKey);
+        if (!candidate || candidate.reviewReason || !contractReviewPreview({...candidate,targetId:item.targetId}).canAdd ||
+            (db.leads || []).some(l => l.id === reviewLeadId(item))) throw Error('contract_candidate_changed');
+      }
       up((d) => {
-        const leadId = "contract-sheet-" + String(item.sourceHash).slice(0, 40);
+        const leadId = reviewLeadId(item);
         let lead = (d.leads || []).find((row) => row.id === leadId);
+        if (lead && item.contractKey) throw Error('contract_candidate_changed');
         if (!lead) {
           lead = {
             id: leadId, manualEntry: false, contractSheetImported: true,
@@ -4214,6 +4237,7 @@ function DealsView() {
             sent: {}, newsletter: false, pushLog: [], premeetingAt: "", premeetingDoneAt: "",
             bookedAt: "", contractAt: item.firstDate || "", createdAt: "",
             memo: "", history: [],
+            ...(item.contractKey ? {contractSheetContractKey:item.contractKey,contractCompanyLeadId:item.targetId || ''} : {}),
           };
           d.leads.unshift(lead);
         }
@@ -4299,23 +4323,23 @@ function DealsView() {
         appendContractStatusLog(d, {
           company: lead.company, leadId: lead.id, action: "외부 시트 생성", source: "계약 프로세스 시트",
           actor: contractReviewActor,
-          detail: "신규 업체 생성 · 계약 " + (lead.contractAmount ? fmtWon(lead.contractAmount) : "금액 미확인") + " · 원본 " + (item.sourceRows || []).length + "행",
+          detail: (item.matchType === 'new_contract' ? '기존 업체의 별도 계약 추가 · ' : '신규 업체 생성 · ') + "계약 " + (lead.contractAmount ? fmtWon(lead.contractAmount) : "금액 미확인") + " · 원본 " + (item.sourceRows || []).length + "행",
           meta: { sourceKey: item.sourceKey, sourceHash: item.sourceHash, contractAmount: Number(lead.contractAmount || 0), paid: preview.confirmedPaid, paymentNotCompared: preview.paymentNotCompared },
         });
       }, { reason: "contract_sheet_change_approved" });
       if (window.crmWaitForRemoteCommit) await window.crmWaitForRemoteCommit(45000);
       if (window.crmReadPrimaryContractState) {
         const primary = await window.crmReadPrimaryContractState();
-        const id = 'contract-sheet-' + String(item.sourceHash).slice(0, 40);
+        const id = reviewLeadId(item);
         const saved = primary.state?.leads?.find(lead => lead.id === id);
         if (!saved || Number(saved.contractAmount) !== preview.contractAmount || actualPaid(saved) !== preview.confirmedPaid ||
           (saved.payments || []).reduce((sum, p) => sum + Number(p.amount || 0), 0) !== preview.contractAmount) throw new Error('contract_created_verification_failed');
       }
-      if (window.crmSetContractSheetChangeStatus) {
+      if (!item.contractKey && window.crmSetContractSheetChangeStatus) {
         await window.crmSetContractSheetChangeStatus(item.id, "추가", contractReviewActor);
       }
       removeContractReviewItem(item.id);
-      toast("프리미팅 기업에 신규 업체를 생성했습니다 · " + item.company);
+      toast((item.matchType === 'new_contract' ? '기존 업체의 별도 계약을 추가했습니다 · ' : '프리미팅 기업에 신규 업체를 생성했습니다 · ') + item.company);
       await refreshContractReview(false);
     } catch (error) {
       const reason = String(error && error.message || error || "contract_apply_failed");
@@ -4325,16 +4349,18 @@ function DealsView() {
     }
   };
   const ignoreContractReviewItem = async (item) => {
-    if (!window.crmSetContractSheetChangeStatus || contractApplyingId) return;
+    if ((!item.contractKey && !window.crmSetContractSheetChangeStatus) || contractApplyingId) return;
+    if (!['OWNER','ADMIN','EDITOR'].includes(currentAccount.serverRole)) return;
     setContractApplyingId(item.id);
     try {
-      await window.crmSetContractSheetChangeStatus(item.id, "제외", contractReviewActor);
+      if (!item.contractKey) await window.crmSetContractSheetChangeStatus(item.id, "제외", contractReviewActor);
       up((d) => appendContractStatusLog(d, {
         company: item.company, leadId: "", action: "외부 시트 제외", source: "계약 프로세스 시트",
         actor: contractReviewActor,
         detail: "신규 업체 후보에서 제외 · 원본 " + (item.sourceRows || []).length + "행",
         meta: { sourceKey: item.sourceKey, sourceHash: item.sourceHash },
       }), { reason: "contract_sheet_candidate_excluded" });
+      if (item.contractKey) await window.crmWaitForRemoteCommit(45000);
       removeContractReviewItem(item.id);
       toast("이번 계약 시트 변경을 제외했습니다 · " + item.company);
     } catch (error) {
@@ -4391,7 +4417,7 @@ function DealsView() {
                 {contractReviewError ? <AlertCircle size={16} /> : <RefreshCw size={15} />}
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-extrabold text-slate-800">{contractReviewError ? "시트 미등록 업체 확인 필요" : "8월 이후 KPI DB에 없는 시트 업체 " + contractReview.pending + "곳"}</p>
+                <p className="text-sm font-extrabold text-slate-800">{contractReviewError ? "시트 계약 대조 확인 필요" : "8월 이후 시트 미등록·확인 필요 계약 " + contractReview.pending + "건"}</p>
                 <p className="text-xs text-slate-500 mt-0.5 truncate">{contractReviewError ? "연동 상태를 다시 확인합니다" : "생성될 계약 정보를 확인한 뒤 신규업체 생성 또는 제외를 선택하세요"}</p>
               </div>
             </div>
@@ -4669,7 +4695,7 @@ function DealsView() {
           <div className="flex justify-end gap-2"><Btn disabled={crmImportBusy} onClick={() => setCrmImportOpen(false)}>취소</Btn><Btn kind="primary" disabled={crmImportBusy} onClick={importCrmDeal}><RefreshCw size={13} className={crmImportBusy ? "animate-spin" : ""} />{crmImportBusy ? "CRM 확인 중" : "불러와서 추가"}</Btn></div>
         </div>
       </Modal>
-      <Modal open={contractReviewOpen} onClose={() => { if (!contractApplyingId) setContractReviewOpen(false); }} wide title={"시트 미등록 업체 확인" + (contractReviewBusy ? ' · 대조 중' : contractReviewError ? ' · 확인 실패' : ' · ' + (contractReview.pending || 0) + '곳')}>
+      <Modal open={contractReviewOpen} onClose={() => { if (!contractApplyingId) setContractReviewOpen(false); }} wide title={"시트 미등록 계약 확인" + (contractReviewBusy ? ' · 대조 중' : contractReviewError ? ' · 확인 실패' : ' · ' + (contractReview.pending || 0) + '건')}>
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <p className="text-xs font-bold text-slate-500">{contractReview.sourceCutoff || "2026-08-01"} 이후 · 현재 화면 월 필터와 무관 · 신규/기존 모두 · 프리미팅 이력 없어도 추가 가능</p>
@@ -4679,10 +4705,12 @@ function DealsView() {
             </div>
           </div>
           <div className="border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
-            조회만으로 기업·계약·입금을 자동 반영하지 않습니다. 개별 생성 시 미등록 업체만 추가하며 기존 KPI DB 업체는 중복 생성하지 않습니다. H 체크/V는100%, 백분율은 누적 확인액으로 계산하고 실제 입금일·프리미팅일은 만들지 않습니다. 동명·복수 계약은 별도 검토합니다.
+            회사가 이미 있어도 날짜·프로젝트가 다른 시트 계약은 따로 대조합니다. 추가 버튼을 누른 계약만 별도 계약 행으로 저장하며, 기존 계약 금액·입금·프리미팅 이력은 변경하지 않습니다. H 체크/V는100%, 백분율은 누적 확인액으로 계산하고 실제 입금일·프리미팅일은 만들지 않습니다. 동일 날짜·금액 충돌과 동명 업체는 연결 검토가 필요합니다.
           </div>
+          {contractReview.localSavePending && <p role="note" className="text-xs font-bold text-amber-800">미저장 변경이 있어 마지막 서버 확정본 기준으로 조회했습니다. 로컬 변경은 삭제하지 않으며, 계약 추가는 저장 완료 후에만 가능합니다.</p>}
+          {contractReview.databaseRevision && <p className="text-xs text-slate-500">서버 확정본 대조 · 원본 {contractReview.comparedRows}행 · 기존 계약 일치 {contractReview.represented}건 · 계약별 제외 {contractReview.excluded}건</p>}
           {contractReviewBusy && <p role="status" className="text-sm text-slate-600">계약 시트와 현재 DB를 대조하고 있습니다.</p>}
-          {contractReviewError && <p role="alert" className="text-sm text-red-700">시트 대조 실패 · 미등록0건으로 판정하지 않습니다. 다시 대조해주세요.</p>}
+          {contractReviewError && <p role="alert" className="text-sm text-red-700">{contractReviewErrorText(contractReviewError)} · 미등록 0건으로 판정하지 않습니다.</p>}
           <div className="space-y-3 max-h-[62vh] overflow-y-auto pr-1">
             {!contractReviewBusy && !contractReviewError && contractReviewVisible.map((item) => {
               const preview = contractReviewPreview(item);
@@ -4692,8 +4720,8 @@ function DealsView() {
                 ["계약일", item.firstDate || "미확인"],
                 ["영업담당", item.owner || "미지정"],
                 ["신규/기존", item.ctype || "신규"],
-                ["계약 빌드업", (item.services || []).join(", ") || "미지정"],
-                ["계약금액", Number(item.sourceAmount || 0) > 0 ? fmtWon(Number(item.sourceAmount || 0)) : "금액 미확인 · 0원"],
+                ["프로젝트", (item.sourceRows || []).map(r => r.dealText).join(' · ') || "미지정"],
+                ["계약금액", Number(item.sourceAmount || 0) > 0 ? fmtWon(Number(item.sourceAmount || 0)) : "금액 미확인 · 합계 제외"],
                 ["확인 입금액", preview.confirmedPaid > 0 ? fmtWon(preview.confirmedPaid) + (preview.paymentNotCompared ? ' · 일부 확인 필요' : ' · 실제 입금일 미상') : preview.paymentNotCompared ? '지급 확인 미상 · 미지급0원 판정 아님' : '확인액0원'],
               ];
               return (
@@ -4702,13 +4730,13 @@ function DealsView() {
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-sm font-extrabold text-slate-900">{item.company}</p>
-                        <Chip cls="bg-indigo-50 text-indigo-700 border-indigo-200">KPI DB 미등록</Chip>
+                        <Chip cls="bg-indigo-50 text-indigo-700 border-indigo-200">{item.changeType || 'KPI DB 미등록'}</Chip>
                       </div>
                       <p className="text-xs text-slate-400 mt-1">원본 {item.firstDate || "날짜 없음"}{item.lastDate && item.lastDate !== item.firstDate ? " ~ " + item.lastDate : ""} · 계약 행 {(item.sourceRows || []).length}건</p>
                     </div>
                   </div>
                   <div className="mt-3 border border-slate-200">
-                    <p className="px-3 py-2 text-xs font-extrabold text-slate-700 bg-slate-50 border-b border-slate-200">프리미팅 기업 생성 미리보기</p>
+                    <p className="px-3 py-2 text-xs font-extrabold text-slate-700 bg-slate-50 border-b border-slate-200">{item.matchType === 'new_contract' ? '별도 계약 추가 미리보기 · 과거 계약에 합산하지 않음' : '원본 계약 미리보기'}</p>
                     <div className="grid sm:grid-cols-2">
                       {previewRows.map(([label, value], index) => (
                         <div key={label} className={"px-3 py-2.5 flex items-start justify-between gap-3 text-xs " + (index < previewRows.length - 2 ? "border-b border-slate-100 " : "") + (index % 2 === 0 ? "sm:border-r border-slate-100" : "")}>
@@ -4729,17 +4757,23 @@ function DealsView() {
                       ))}
                     </div>
                   </details>
+                  {!!item.candidates?.length && <div className="mt-3 space-y-2 border border-slate-200 p-3 text-xs">
+                    <p className="font-bold">같은 업체의 기존 기록 {item.candidates.length}건 · 기존 기록은 보존합니다</p>
+                    {item.matchType === 'new_contract' && <Sel aria-label="별도 계약의 기존 업체 연결" value={item.targetId || ''} onChange={e => setContractReviewTargets(v => ({...v,[item.id]:e.target.value}))}
+                      options={[{value:'',label:'연결할 기존 기록 선택'},...item.candidates.map(c => ({value:c.id,label:c.company + ' · ' + (c.contractAt || '계약일 미상') + ' · ' + fmtWon(c.contractAmount)}))]} />}
+                    <div className="flex flex-wrap gap-2">{item.candidates.map(c => <Btn key={c.id} size="xs" onClick={() => { setContractReviewOpen(false); openLead(c.id); }}>기존 기록 {c.contractAt || '날짜 미상'} 확인</Btn>)}</div>
+                  </div>}
                   {!preview.canAdd && <p role="note" className="mt-3 text-xs font-bold text-amber-800">생성 보류 · {preview.reason}</p>}
                   <div className="flex justify-end gap-2 mt-3">
                     <Btn kind="danger" disabled={!!contractApplyingId || !['OWNER','ADMIN','EDITOR'].includes(currentAccount.serverRole)} onClick={() => ignoreContractReviewItem(item)}>제외</Btn>
                     <Btn kind="primary" disabled={!!contractApplyingId || !preview.canAdd || !['OWNER','ADMIN','EDITOR'].includes(currentAccount.serverRole)} onClick={() => applyContractReviewItem(item)}>
-                      {contractApplyingId === item.id ? <RefreshCw size={12} className="animate-spin" /> : <Plus size={12} />}신규업체 생성
+                      {contractApplyingId === item.id ? <RefreshCw size={12} className="animate-spin" /> : <Plus size={12} />}{item.matchType === 'new_contract' ? '별도 계약으로 추가' : item.matchType === 'existing_contract_difference' ? '기존 계약 대조 필요' : '신규업체 생성'}
                     </Btn>
                   </div>
                 </div>
               );
             })}
-            {!contractReviewBusy && !contractReviewError && contractReviewVisible.length === 0 && <Empty compact text="8월 이후 추가할 KPI DB 미등록 시트 업체가 없습니다. 이미 DB에 있는 업체는 중복 생성하지 않습니다." />}
+            {!contractReviewBusy && !contractReviewError && contractReviewVisible.length === 0 && <Empty compact text="8월 이후 시트 계약 중 새로 추가하거나 대조할 계약이 없습니다. 회사명뿐 아니라 계약 날짜·프로젝트·금액으로 대조한 결과입니다." />}
           </div>
         </div>
       </Modal>

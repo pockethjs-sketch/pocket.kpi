@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import {contractReviewErrorText} from '../src/data/contractReviewMatches.js';
 import { operationsFile, missingOperationsSource } from './operations-file.mjs';
 const opsCode = operationsFile('Code.gs');
 import { _crmParseContractSource as parse, _crmPlanContractAutoSync as plan, _crmPlanContractPaymentSync as paymentPlan, _crmPlanContractAndPaymentSync as combinedPlan, _crmSyncMoney as money } from '../scripts/contract-sheet-sync-core.mjs';
@@ -133,13 +134,13 @@ test('frontend waits for server commit and reload before announcing automatic up
   const sandbox={window:{crmRemoteApplied:true,crmRemoteLoaded:true,crmSyncInProgress:false,crmRemoteRevision:'old',
     crmWaitForRemoteCommit:async()=>calls.push('wait'),crmSyncNewContracts:async()=>{calls.push('commit');return {action:'contract_auto_sync',updated:[{}],blocked:[],revision:'new'};},
     crmReloadAfterContractSync:async()=>calls.push('reload'),crmFetchContractSheetChanges:async()=>{calls.push('review');return {pending:0};}},
-    contractReviewRunning:{current:false},setContractReviewBusy:()=>{},setContractReviewOpen:()=>{},setContractAutoSync:()=>calls.push('success'),setContractReview:()=>{},setContractReviewError:()=>{},toast:()=>{},Date};
+    contractReviewRunning:{current:false},contractReviewErrorText,setContractReviewBusy:()=>{},setContractReviewOpen:()=>{},setContractAutoSync:()=>calls.push('success'),setContractReview:()=>{},setContractReviewError:()=>{},toast:()=>{},Date};
   vm.createContext(sandbox);vm.runInContext(code.slice(start,end)+'\nglobalThis.refresh=refreshContractReview;',sandbox);
   await sandbox.refresh(true,true);
   assert.deepEqual(calls,['wait','commit','reload','success','review']);
   calls.length=0;sandbox.window.crmSyncNewContracts=async()=>{throw Error('network');};await sandbox.refresh(true,true);
   assert.deepEqual(calls,['wait']);assert.equal(sandbox.contractReviewRunning.current,false);
-  calls.length=0;await sandbox.refresh(true);assert.deepEqual(calls,['wait','review']);
+  calls.length=0;await sandbox.refresh(true);assert.deepEqual(calls,['review']);
   calls.length=0;sandbox.window.crmRemoteLoaded=false;await sandbox.refresh(true);assert.equal(calls.length,0);
 });
 test('same-day duplicate source rows are never double counted',()=>{

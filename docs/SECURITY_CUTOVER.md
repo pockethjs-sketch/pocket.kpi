@@ -1,5 +1,13 @@
 # Employee authentication cutover — 2026-09-18
 
+## 2026-10-22 Contract-level missing-sheet review (local verification; deployment pending)
+
+- Server: kpi-contract-sheet-report v2 ACTIVE/verify_jwt=true; all four deployed source files reread equal to release sources. Same index/employee-access/parser bytes as v1; only sanitized report mode added. Synthetic no-session/invalid-session 401 and approved-origin preflight204. 457 tests, security255 sources, build and audit0 passed. Frontend release still pending; positive employee response/browser unverified.
+
+- Fix manual review's company-wide exclusion and save-wait dependency. Existing authenticated GET-only sheet report adds allowlisted mode=contracts returning sanitized contract columns (unknown H retained, no raw memo/contact/H notes). Same Auth.getUser/current ACTIVE membership, all-scope/temp-password/origin/JWT checks. Existing default payment report and automatic collectors unchanged. No schema/grant/RLS/trigger or live business-data mutation.
+- Client compares each company/date/project against revision-aligned primary reads; O/H and row shifts never create a new identity. Existing-company new contracts remain visible; duplicates, same-date conflicts and archived matches held. Lookup is read-only and independent of pending saves; explicit creation requires ACK/latest reread, user-selected linkage if multiple historical records, stable ID, old financial records unchanged and post-save verification. Per-contract exclusions use existing V3 logs, not legacy company-wide queue state. Full company/project normalization is not claimed.
+- Synthetic actual dialog/controls SSR and actual handlers cover candidates, held/failed/loading states, separate contract creation, old money/date preservation and save failure. User's code/automatic-only verification preference retained; employee API/browser and actual creation remain unverified. Details/evidence in CONTRACT_AUTO_SYNC.md.
+
 ## 2026-10-22 Restore explicit missing-sheet review beside CRM link (deployed; employee UI unverified)
 
 - Released1aaed367c14704f2444c31f34db053a5145adb65 / Actions39718449729 build+deployment success at12:44KST.444 local tests/security/build/audit0 passed. At12:45KST live HTML/9 JS-CSS/5 fonts HTTP200; entry index-Ce192sqM.js/main-DnHWyId1.js match tested build after asset-name normalization; main CSS/buildup/fonts exact. Shared CSS hash is unchanged from the verified prior release. Actual employee dialog/creation remains unverified; no real customer/financial write or collector run was used to test deployment. No backend redeployment required.
