@@ -1,6 +1,8 @@
 # Employee authentication cutover — 2026-09-18
 
-## 2026-10-22 Missing-sheet review month selector (locally verified; release pending)
+## 2026-10-22 Missing-sheet review month selector (deployed; employee UI unverified)
+
+- Web38acad6eb707bebf4ff78c223377629d097b3ef6 / Actions39775507711 build+deployment success21:06:01KST.21:06:53KST actual HTML/14 static assets200; entry index-CQk0JD9R.js/main-C9NFLI5o.js match tested local build after hashed asset-name normalization. Month selector/A-column basis/whole-report count present. Shared CSS unchanged from prior verified index-CQD1ZRH3.css. Security257sources/462tests/build/audit0 passed. No backend redeployment/business-data writes; positive employee UI remains unverified.
 
 - Frontend presentation only: source A contract-month selector plus all-period/counts; default selected KPI month/day or current month for other periods. Full source/primary matching unchanged; no network or write on month change; refresh retains month. Unknown-date holds remain accessible. Existing creation/exclusion/financial/authentication paths unchanged. No Supabase/API/schema/RLS/collector deployment or live business writes.
 - 462 tests including actual dialog/shared Select SSR, empty-month/all/year boundaries and loading/error nonzero safeguards; security check/build verification/audit0 passed. Actual employee browser/mobile/zoom intentionally unverified per user's code/automatic-only preference.
