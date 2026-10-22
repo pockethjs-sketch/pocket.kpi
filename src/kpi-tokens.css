@@ -19,9 +19,9 @@
   --ui-tracking: -.02em;
   --ui-leading: 1.4;
   --ui-leading-prose: 1.6;
-  --ui-canvas: #f1f5f9;
+  --ui-canvas: #f3f4f6;
   --ui-surface: #ffffff;
-  --ui-line: #cbd5e1;
+  --ui-line: #d1d5db;
   --ui-muted: #58677c;
   --ui-body: #334155;
   --ui-ink: #0f172a;
@@ -49,6 +49,7 @@
   --ui-input-height: 50px;
   --ui-hit-compact: 32px;
   --ui-hit-touch: 44px;
+  --ui-shadow-card: 0 1px 2px #1118270a;
   --lp-bg: var(--ui-canvas);
   --lp-surface: var(--ui-surface);
   --lp-surface-soft: var(--ui-canvas);
@@ -64,5 +65,5 @@
   --lp-radius-compact: var(--ui-radius-tag);
   --lp-radius-control: var(--ui-radius-control);
   --lp-radius-card: var(--ui-radius-card);
-  --lp-shadow-card: none;
+  --lp-shadow-card: var(--ui-shadow-card);
 }

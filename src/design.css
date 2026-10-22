@@ -40,7 +40,7 @@ html[data-ui="precision"] #root .kpi-app svg text{font-family:var(--ui-font-body
 html[data-ui="precision"] #root .kpi-app svg text:is([font-size="8"],[font-size="9"],[font-size="10"]){font-size:var(--ui-text-caption)}
 html[data-ui="precision"] #root .kpi-app svg polyline{stroke-linejoin:round;stroke-linecap:round}
 
-/* G-03/PT-16/G-19: one page frame; reusable headings and surface-only cards. */
+/* White surfaces on neutral canvas, with visible boundaries between KPI groups. */
 html[data-ui="precision"] #root .kpi-app main.flex-1{width:100%;max-width:var(--ui-page-width);padding:var(--ui-page-inset)!important;margin-inline:auto}
 html[data-ui="precision"] #root .kpi-app aside.bg-slate-900{background:var(--ui-surface)!important}
 html[data-ui="precision"] #root .kpi-app aside nav{padding:var(--ui-inset-medium)}
@@ -58,13 +58,13 @@ html[data-ui="precision"] #root .kpi-app :is(.ui-section-icon,.kpi-block-icon,.k
 html[data-ui="precision"] #root .kpi-app :is(.ui-section-icon,.kpi-stage-icon){width:40px;height:40px}
 html[data-ui="precision"] #root .kpi-app .kpi-block-icon{width:32px;height:32px;margin-right:0}
 html[data-ui="precision"] #root .kpi-app .kpi-stage-number{display:none}
-html[data-ui="precision"] #root .kpi-app .kpi-card{border:0!important;border-radius:var(--ui-radius-card)!important;background:var(--ui-surface);box-shadow:none!important}
-html[data-ui="precision"] #root .kpi-app .kpi-stat{border:0!important;border-radius:var(--ui-radius-card)!important;padding:var(--ui-inset-large);background:var(--ui-surface)!important;box-shadow:none!important}
+html[data-ui="precision"] #root .kpi-app .kpi-card{border:1px solid var(--ui-line)!important;border-radius:var(--ui-radius-card)!important;background:var(--ui-surface);box-shadow:var(--ui-shadow-card)!important}
+html[data-ui="precision"] #root .kpi-app .kpi-stat{border:1px solid var(--ui-line)!important;border-radius:var(--ui-radius-card)!important;padding:var(--ui-inset-large);background:var(--ui-surface)!important;box-shadow:var(--ui-shadow-card)!important}
 html[data-ui="precision"] #root .kpi-app .kpi-stat>p:first-child{font-size:var(--ui-text-label)!important;color:var(--ui-muted)!important;font-weight:var(--ui-weight-description);gap:var(--ui-inset-small);margin-bottom:var(--ui-inset-medium);min-height:32px}
 html[data-ui="precision"] #root .kpi-app .kpi-stat .text-2xl{font-size:var(--ui-text-metric)!important;font-weight:var(--ui-weight-heading)!important}
 html[data-ui="precision"] #root .kpi-app .kpi-stat .ui-metric-unit{font-size:var(--ui-text-control)!important;font-weight:var(--ui-weight-description)!important;color:var(--ui-muted)!important}
 html[data-ui="precision"] #root .kpi-app .kpi-stat>p:nth-child(3){font-size:var(--ui-text-label)!important;color:var(--ui-muted)!important;margin-top:var(--ui-inset-small)}
-html[data-ui="precision"] #root .kpi-app .kpi-stage-block{border:0!important;border-radius:var(--ui-radius-card)!important;box-shadow:none!important;background:var(--ui-surface)!important;padding:var(--ui-inset-large)!important}
+html[data-ui="precision"] #root .kpi-app .kpi-stage-block{border:1px solid var(--ui-line)!important;border-radius:var(--ui-radius-card)!important;box-shadow:var(--ui-shadow-card)!important;background:var(--ui-surface)!important;padding:var(--ui-inset-large)!important}
 html[data-ui="precision"] #root .kpi-app .kpi-stage-block .space-y-2.mt-4>button{border:0!important;border-bottom:1px solid var(--ui-line)!important;border-radius:0!important;box-shadow:none!important;background:transparent!important;padding:var(--ui-inset-medium) 0!important;min-height:var(--ui-control-height)}
 html[data-ui="precision"] #root .kpi-app .kpi-stage-block .space-y-2.mt-4>button:hover{background:var(--ui-brand-soft)!important}
 
@@ -87,6 +87,25 @@ html[data-ui="precision"] #root .kpi-app [role="tablist"]>[role="tab"][aria-sele
 html[data-ui="precision"] #root .kpi-app :is(.ui-input,.ui-select){min-height:var(--ui-input-height);font-size:var(--ui-text-control)!important;border-radius:var(--ui-radius-control)!important;padding-inline:var(--ui-inset-medium);background-color:var(--ui-surface)!important}
 html[data-ui="precision"] #root .kpi-app .ui-textarea{min-height:100px;font-size:var(--ui-text-control)!important;line-height:var(--ui-leading-prose);padding:var(--ui-inset-medium);background-color:var(--ui-surface)!important}
 html[data-ui="precision"] #root .kpi-app :is(.kpi-card,.ui-dialog-panel,header.sticky) :is(.ui-input,.ui-select,.ui-textarea){background-color:var(--ui-canvas)!important}
+/* Icon and text occupy separate columns instead of relying on pl-* overrides. */
+html[data-ui="precision"] #root .kpi-app .ui-icon-input{display:flex;align-items:center;gap:8px;min-width:0;min-height:var(--ui-input-height);padding-inline:var(--ui-inset-medium);border:1px solid var(--ui-line);border-radius:var(--ui-radius-control);background:var(--ui-surface)}
+html[data-ui="precision"] #root .kpi-app .ui-input-icon{display:flex;align-items:center;justify-content:center;flex:0 0 16px;color:var(--ui-muted);pointer-events:none}
+html[data-ui="precision"] #root .kpi-app .ui-icon-input>.ui-icon-input-control{flex:1 1 0%;width:0;min-width:0;min-height:48px;border:0;box-shadow:none;padding-inline:0;background:transparent!important}
+html[data-ui="precision"] #root .kpi-app .ui-icon-input:focus-within{border-color:var(--ui-brand);outline:2px solid var(--ui-brand);outline-offset:2px}
+html[data-ui="precision"] #root .kpi-app .ui-icon-input>.ui-icon-input-control:focus-visible{outline:none}
+html[data-ui="precision"] #root .kpi-app .ui-input-action{display:flex;flex:none;align-items:center}
+html[data-ui="precision"] #root .kpi-app .ui-input-action>button{display:flex;align-items:center;justify-content:center;min-width:32px;min-height:32px}
+html[data-ui="precision"] #root .kpi-app .ui-global-search{flex:0 1 280px;width:280px;max-width:100%}
+/* Payment text can wrap above its own meter; neither can shrink over the other. */
+html[data-ui="precision"] #root .kpi-app .ui-payment-status{display:flex;flex-direction:column;gap:8px;min-width:0}
+html[data-ui="precision"] #root .kpi-app .ui-payment-summary{display:flex;align-items:baseline;flex-wrap:wrap;gap:2px 4px;width:100%;min-width:0;max-width:100%;white-space:normal;overflow-wrap:anywhere}
+html[data-ui="precision"] #root .kpi-app .ui-payment-amount{flex:none;white-space:nowrap}
+html[data-ui="precision"] #root .kpi-app .ui-payment-description{min-width:0;overflow-wrap:anywhere}
+html[data-ui="precision"] #root .kpi-app .ui-payment-entry{display:flex;flex-wrap:wrap;gap:8px;min-width:0}
+html[data-ui="precision"] #root .kpi-app .ui-payment-entry>.ui-input{width:100%;min-width:0}
+html[data-ui="precision"] #root .kpi-app .ui-payment-meter{display:grid;grid-template-columns:minmax(0,1fr) max-content;align-items:center;gap:8px;min-width:0}
+html[data-ui="precision"] #root .kpi-app .ui-payment-track{min-width:0}
+html[data-ui="precision"] #root .kpi-app .ui-payment-percent{white-space:nowrap}
 html[data-ui="precision"] #root .kpi-app .ui-field-label{font-size:var(--ui-text-label)!important;font-weight:var(--ui-weight-description)!important;line-height:var(--ui-leading);color:var(--ui-muted)!important;margin-bottom:var(--ui-inset-small)}
 html[data-ui="precision"] #root .kpi-app :is(input,textarea)::placeholder{color:var(--ui-muted)!important}
 html[data-ui="precision"] #root .kpi-app :is(button,a,input,textarea,select,summary,[tabindex]):focus-visible{outline:2px solid var(--ui-brand);outline-offset:3px}
@@ -124,7 +143,7 @@ html[data-ui="precision"] #root .kpi-app .receivables-company{font-weight:var(--
 
 .kpi-app .kpi-method-notes{margin-top:32px!important;padding:var(--ui-inset-large) 0;border-top:1px solid var(--ui-line);color:var(--ui-muted);font-size:var(--ui-text-label)}
 .kpi-app .kpi-method-notes>h3{font-size:var(--ui-text-label);font-weight:var(--ui-weight-control);margin-bottom:var(--ui-inset-small)}
-.kpi-app .kpi-method-notes>.kpi-card{background:transparent!important;padding:var(--ui-inset-medium) 0}
+html[data-ui="precision"] #root .kpi-app .kpi-method-notes>.kpi-card{border:0!important;background:transparent!important;box-shadow:none!important;padding:var(--ui-inset-medium) 0}
 .kpi-app .kpi-connection-footer{display:flex;flex-wrap:wrap;gap:var(--ui-inset-small) var(--ui-inset-large);padding:var(--ui-inset-large) 0 80px;margin-top:24px;border-top:1px solid var(--ui-line);font-size:var(--ui-text-label);color:var(--ui-muted)}
 .kpi-app .kpi-connection-label{display:flex;align-items:center;gap:var(--ui-inset-small)}
 .kpi-app .kpi-connection-label strong{font-weight:var(--ui-weight-control)}

@@ -78,7 +78,7 @@ test('DB/quality refresh cannot create meetings through retired broad-range or f
 test('premeeting view keeps manual sync actions without the verbose schedule box',()=>{
  const source=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
  assert.match(source,/onClick=\{refreshTodayPremeetings\}/);
- assert.match(source,/onClick=\{\(\) => refreshContractReview\(true\)\}/);
+ assert.match(source,/onClick=\{\(\) => refreshContractReview\(true, false\)\}/);
  assert.doesNotMatch(source,/매일 오전 9시 이후 1회 자동 갱신 · 프리미팅은/);
 });
 

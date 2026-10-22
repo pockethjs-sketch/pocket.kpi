@@ -33,6 +33,8 @@ test('receipt owner sheet labels and totals show actual selected receipts, not f
   assert.match(html, /₩10,000,000/);
   assert.doesNotMatch(html, /₩25,000,000|₩15,000,000/);
   assert.match(html, /입금일 미상 1건/);
+  assert.match(html, /프리미팅 일정·영업 단계 무관/);
+  assert.match(html, /이 합계를 스프레드시트 전체 입금액으로 볼 수 없습니다/);
   assert.match(html, /2026-09-07/);
   assert.equal(exportFactory()[0].rows[0][5], 10000000);
   assert.equal(exportFactory()[1].rows[0][0], '2026-09-07');
