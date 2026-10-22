@@ -1,6 +1,8 @@
 # 신규 계약 → 프리미팅 기업 자동 반영
 
-## 2026-10-22 계약 단위 수동 대조 (아래 회사 단위 복구 정책보다 우선; 배포 검증 전)
+## 2026-10-22 계약 단위 수동 대조 (아래 회사 단위 복구 정책보다 우선; 운영 배포 완료)
+
+- 서버 kpi-contract-sheet-report v2 ACTIVE/JWT유지·배포4소스재조회일치·합성무인증/무효세션401/preflight204. 웹654b4e119cde63a35eab93e981976f674ab06d1a/Actions39768924745 build+deployment success20:13:52KST.20:14:42KST 운영HTML/9JS-CSS/5글꼴200,entry index-CH0XnVsc.js/main-DT-EOQKW.js가 자산명 정규화 후 검증빌드와 일치.457테스트/보안255소스/빌드/audit0. 실제직원API/브라우저/운영생성 미검증·업무변경0.
 
 - 원인: 구형 contract_changes가 전체 DB의 회사명만 일치해도 제외하고, 회사 단위 적용/제외 원장을 먼저 검사했다. 기존 회사의 다른 달 계약과 미팅 없는 계약이 사라졌다. 조회 전 저장 ACK 대기도 저장 시간초과를 시트 실패로 오인시켰다.
 - 수동 버튼은 기존 직원 인증 GET kpi-contract-sheet-report의 mode=contracts + 동일 리비전 bootstrap/crm으로 조회한다. source A/H/O 엄격 파서·고정 CSV·현재 Auth/membership·scope all·임시비밀번호 제한 그대로다. H 미확인 계약도 반환하되 원문 메모/연락처/원시 H 문구는 반환하지 않는다. 기존 입금 보고 기본 mode는 불변. Apps Script 자동 수집/계약 반영·검토 큐·주기는 변경하지 않는다.
