@@ -1,5 +1,10 @@
 # Employee authentication cutover — 2026-09-18
 
+## 2026-10-22 Missing-sheet review month selector (locally verified; release pending)
+
+- Frontend presentation only: source A contract-month selector plus all-period/counts; default selected KPI month/day or current month for other periods. Full source/primary matching unchanged; no network or write on month change; refresh retains month. Unknown-date holds remain accessible. Existing creation/exclusion/financial/authentication paths unchanged. No Supabase/API/schema/RLS/collector deployment or live business writes.
+- 462 tests including actual dialog/shared Select SSR, empty-month/all/year boundaries and loading/error nonzero safeguards; security check/build verification/audit0 passed. Actual employee browser/mobile/zoom intentionally unverified per user's code/automatic-only preference.
+
 ## 2026-10-22 Contract-level missing-sheet review (deployed; employee UI unverified)
 
 - Server: kpi-contract-sheet-report v2 ACTIVE/verify_jwt=true; all four deployed source files reread equal to release sources. Same index/employee-access/parser bytes as v1; only sanitized report mode added. Synthetic no-session/invalid-session 401 and approved-origin preflight204. 457 tests, security255 sources, build and audit0 passed. Positive employee response/browser unverified.

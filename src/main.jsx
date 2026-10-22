@@ -18,6 +18,7 @@ import ContractBasisView from "./ContractBasisView.jsx";
 import ContractSheetPayments from './ContractSheetPayments.jsx';
 import { contractReviewPreview } from './data/contractReviewPreview.js';
 import { buildContractReviewItems, contractReviewErrorText, reviewLeadId } from './data/contractReviewMatches.js';
+import { defaultContractReviewMonth, contractReviewMonthLabel, filterContractReviewMonth, contractReviewMonthOptions } from './data/contractReviewMonth.js';
 import ChannelRoasDetails from "./ChannelRoasDetails.jsx";
 import RecentSyncActivity from "./RecentSyncActivity.jsx";
 import DailyActivityChart from "./DailyActivityChart.jsx";
@@ -3838,6 +3839,7 @@ function DealsView() {
   const [crmImportBusy, setCrmImportBusy] = useState(false);
   const [contractReview, setContractReview] = useState({ items: [], pending: 0, summary: { newCompanies: 0 }, checkedAt: "", sourceSpreadsheetId: "", sourceCutoff: "2026-08-01" });
   const [contractReviewOpen, setContractReviewOpen] = useState(false);
+  const [contractReviewMonth, setContractReviewMonth] = useState(() => defaultContractReviewMonth(period, todayISO()));
   const [contractReviewBusy, setContractReviewBusy] = useState(false);
   const [contractReviewError, setContractReviewError] = useState("");
   const [contractReviewTargets, setContractReviewTargets] = useState({});
@@ -4180,7 +4182,9 @@ function DealsView() {
     const parsed = new Date(value || "");
     return Number.isNaN(parsed.getTime()) ? (value || "시각 없음") : parsed.toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
   };
-  const contractReviewVisible = (contractReview.items || []).map(item => ({...item,targetId:contractReviewTargets[item.id] || item.targetId}));
+  const contractReviewAll = contractReview.items || [];
+  const contractReviewMonths = contractReviewMonthOptions(contractReviewAll, { start:contractReview.sourceCutoff || '2026-08-01', today:todayISO(), selected:contractReviewMonth });
+  const contractReviewVisible = filterContractReviewMonth(contractReviewAll, contractReviewMonth).map(item => ({...item,targetId:contractReviewTargets[item.id] || item.targetId}));
   const contractCompanyAliases = (value) => {
     const raw = String(value || "");
     const parts = [raw, raw.replace(/\([^)]*\)/g, " ")];
@@ -4399,7 +4403,7 @@ function DealsView() {
           <div className="flex items-center gap-1.5 flex-wrap pt-3 border-t border-slate-100 2xl:pt-0 2xl:border-t-0 2xl:border-l 2xl:border-slate-200 2xl:pl-3 2xl:ml-auto">
             <span className="text-[10px] font-extrabold uppercase tracking-wide text-slate-400 mr-0.5">데이터 작업</span>
             {currentAccount.scope !== 'premeeting' && <Btn size="xs" kind="ghost" onClick={() => setCrmImportOpen(true)} cls="border-indigo-200 text-indigo-700 hover:bg-indigo-50"><Link2 size={12} />CRM 링크</Btn>}
-            <Btn size="xs" kind="ghost" disabled={contractReviewBusy || !!contractApplyingId} onClick={() => { setContractReviewOpen(true); refreshContractReview(true, false); }} cls="border-amber-200 text-amber-700 hover:bg-amber-50" title="계약 시트와 대조해 미등록 업체 확인 · 신규/기존 및 프리미팅 이력 무관 · 생성은 개별 승인">
+            <Btn size="xs" kind="ghost" disabled={contractReviewBusy || !!contractApplyingId} onClick={() => { setContractReviewMonth(defaultContractReviewMonth(period, todayISO())); setContractReviewOpen(true); refreshContractReview(true, false); }} cls="border-amber-200 text-amber-700 hover:bg-amber-50" title="계약 시트와 대조해 미등록 업체 확인 · 신규/기존 및 프리미팅 이력 무관 · 생성은 개별 승인">
               <RefreshCw size={12} className={contractReviewBusy ? "animate-spin" : ""} />{contractReviewBusy ? '시트 대조 중…' : '시트 미등록 확인'}{contractReview.pending > 0 ? " " + contractReview.pending : ""}
             </Btn>
             <Btn size="xs" kind="ghost" onClick={() => setContractLogOpen(true)} cls="border-slate-200 text-slate-700 hover:bg-slate-50"><ClipboardList size={12} />활동 로그{contractStatusLogs.length ? " " + contractStatusLogs.length : ""}</Btn>
@@ -4409,7 +4413,7 @@ function DealsView() {
         </div>
       </Card>
       {(contractReview.pending > 0 || contractReviewError) && (
-        <button onClick={() => { setContractReviewOpen(true); refreshContractReview(true, false); }}
+        <button onClick={() => { setContractReviewMonth(defaultContractReviewMonth(period, todayISO())); setContractReviewOpen(true); refreshContractReview(true, false); }}
           className={"w-full border px-4 py-3 text-left transition-colors " + (contractReviewError ? "border-red-200 bg-red-50 hover:bg-red-100" : "border-amber-200 bg-amber-50 hover:bg-amber-100")}>
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-3 min-w-0">
@@ -4695,13 +4699,23 @@ function DealsView() {
           <div className="flex justify-end gap-2"><Btn disabled={crmImportBusy} onClick={() => setCrmImportOpen(false)}>취소</Btn><Btn kind="primary" disabled={crmImportBusy} onClick={importCrmDeal}><RefreshCw size={13} className={crmImportBusy ? "animate-spin" : ""} />{crmImportBusy ? "CRM 확인 중" : "불러와서 추가"}</Btn></div>
         </div>
       </Modal>
-      <Modal open={contractReviewOpen} onClose={() => { if (!contractApplyingId) setContractReviewOpen(false); }} wide title={"시트 미등록 계약 확인" + (contractReviewBusy ? ' · 대조 중' : contractReviewError ? ' · 확인 실패' : ' · ' + (contractReview.pending || 0) + '건')}>
+      <Modal open={contractReviewOpen} onClose={() => { if (!contractApplyingId) setContractReviewOpen(false); }} wide title={"시트 미등록 계약 확인" + (contractReviewBusy ? ' · 대조 중' : contractReviewError ? ' · 확인 실패' : ' · ' + contractReviewMonthLabel(contractReviewMonth) + ' ' + contractReviewVisible.length + '건')}>
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-3 flex-wrap">
-            <p className="text-xs font-bold text-slate-500">{contractReview.sourceCutoff || "2026-08-01"} 이후 · 현재 화면 월 필터와 무관 · 신규/기존 모두 · 프리미팅 이력 없어도 추가 가능</p>
+            <p className="text-xs font-bold text-slate-500">{contractReview.sourceCutoff || "2026-08-01"} 이후 전체 원본 대조 · 신규/기존 모두 · 프리미팅 이력 없어도 추가 가능</p>
             <div className="flex items-center gap-2">
               {contractReview.sourceSpreadsheetId && <a href={"https://docs.google.com/spreadsheets/d/" + contractReview.sourceSpreadsheetId + "/edit"} target="_blank" rel="noreferrer" className="text-xs font-bold text-indigo-600 hover:underline inline-flex items-center gap-1">원본 계약 시트<ExternalLink size={11} /></a>}
               <Btn size="xs" disabled={contractReviewBusy || !!contractApplyingId} onClick={() => refreshContractReview(true, false)}><RefreshCw size={11} className={contractReviewBusy ? "animate-spin" : ""} />시트 다시 대조</Btn>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-3">
+            <label className="flex flex-wrap items-center gap-2 text-sm font-bold text-slate-800">
+              계약 월
+              <Sel aria-label="시트 계약 조회 월" value={contractReviewMonth} onChange={e => setContractReviewMonth(e.target.value)} disabled={contractReviewBusy || !!contractApplyingId} options={contractReviewBusy || contractReviewError ? contractReviewMonths.map(option => ({...option,label:contractReviewMonthLabel(option.value)})) : contractReviewMonths} />
+            </label>
+            <div className="text-xs text-slate-600">
+              <p>시트 A열 계약 날짜 기준 · 입금월/프리미팅월 아님</p>
+              {!contractReviewBusy && !contractReviewError && <p role="status" aria-live="polite" className="mt-1 font-bold text-indigo-800">{contractReviewMonthLabel(contractReviewMonth)} {contractReviewVisible.length}건 / 전체 대조 후보 {contractReviewAll.length}건</p>}
             </div>
           </div>
           <div className="border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
@@ -4773,7 +4787,10 @@ function DealsView() {
                 </div>
               );
             })}
-            {!contractReviewBusy && !contractReviewError && contractReviewVisible.length === 0 && <Empty compact text="8월 이후 시트 계약 중 새로 추가하거나 대조할 계약이 없습니다. 회사명뿐 아니라 계약 날짜·프로젝트·금액으로 대조한 결과입니다." />}
+            {!contractReviewBusy && !contractReviewError && contractReviewVisible.length === 0 && <div className="space-y-2 text-center">
+              <Empty compact text={contractReviewMonthLabel(contractReviewMonth) + '에 새로 추가하거나 대조할 계약이 없습니다. 회사명뿐 아니라 계약 날짜·프로젝트·금액으로 대조한 결과입니다.'} />
+              {contractReviewMonth !== 'all' && contractReviewAll.length > 0 && <Btn size="xs" onClick={() => setContractReviewMonth('all')}>다른 월 후보 {contractReviewAll.length}건 · 전체 기간 보기</Btn>}
+            </div>}
           </div>
         </div>
       </Modal>
