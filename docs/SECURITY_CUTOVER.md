@@ -1,6 +1,8 @@
 # Employee authentication cutover — 2026-09-18
 
-## 2026-10-22 Restore explicit missing-sheet review beside CRM link (release pending)
+## 2026-10-22 Restore explicit missing-sheet review beside CRM link (deployed; employee UI unverified)
+
+- Released1aaed367c14704f2444c31f34db053a5145adb65 / Actions39718449729 build+deployment success at12:44KST.444 local tests/security/build/audit0 passed. At12:45KST live HTML/9 JS-CSS/5 fonts HTTP200; entry index-Ce192sqM.js/main-DnHWyId1.js match tested build after asset-name normalization; main CSS/buildup/fonts exact. Shared CSS hash is unchanged from the verified prior release. Actual employee dialog/creation remains unverified; no real customer/financial write or collector run was used to test deployment. No backend redeployment required.
 
 - Frontend-only restoration of the existing authenticated contract_changes/change_status + V3 user mutation. Explicit click opens the dialog and refreshes with runSync=false, not contract_auto_sync. Existing queue bookkeeping remains; no business writes on lookup, no tab-entry collection, new endpoint, membership/RLS change or collector/backup schedule change. Both new/existing source customer types and no-premeeting companies remain eligible when absent from the whole KPI DB. Already-present leads are not duplicated; monthly projects are a separate unimplemented model.
 - Approved individual creation reuses O/VAT and H-check/percent semantics, keeps receipt/meeting/inflow dates unknown, preserves total=confirmed+remaining. Ambiguous/duplicate/multi-contract dates held. VIEWER cannot create/exclude. ACK plus primary amount reread before applied-queue status. Synthetic fixtures only; no real customer creation or financial change performed. See CONTRACT_AUTO_SYNC.md.
