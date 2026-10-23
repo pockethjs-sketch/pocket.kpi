@@ -1,6 +1,8 @@
 # Employee authentication cutover — 2026-09-18
 
-## 2026-10-23 Standalone creation choice in sheet review (locally verified; release pending)
+## 2026-10-23 Standalone creation choice in sheet review (deployed; employee UI unverified)
+
+- Web2543a30a32130dd5ec0f469bf143c1c89e021466 / Actions39878374646 build+deployment success09:29:40KST.09:30:48KST actual public HTML/14 static assets200; entry index-6IDjpoRp.js/main-BgzBTN5W.js match tested build after hashed asset-name normalization. Standalone/type/provenance/post-save-mode verification and existing month selector present. Shared CSS index-CQD1ZRH3.css unchanged from prior verified release. 466 tests/security257sources/build/audit0. No backend deployment or production creation/mutation used to test this release; real employee DOM remains unverified.
 
 - Frontend-only explicit standalone vs existing-record-linked choice; same-source contract identities and existing financial/ambiguity holds unchanged. Standalone creates a new KPI lead/contract row with empty parent, never an external CRM customer; linked mode still requires a current candidate. Customer type is separately selected and applied consistently to the created lead and contract event. Original source type stays in source data/provenance fields and approval metadata. No historical-record edits, source collection, receipt-date fabrication, auth/API/schema/RLS/collector changes or backend deployment.
 - Same existing role gate/V3 write path, pre-write ACK/fresh primary duplicate check and post-write finance verification. Post-write checks now also verify selected type/mode/parent/source-type; disagreement cannot announce completion. 466 tests including actual JSX control events/SSR and synthetic real-handler invariants, security257sources/build/audit0 passed. Real production creation/employee DOM/mobile/zoom not used to test this release.
