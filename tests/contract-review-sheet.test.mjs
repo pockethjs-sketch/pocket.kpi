@@ -45,4 +45,5 @@ test('CSS isolates 21px rows and 12px type from precision defaults, fixes width 
  const cells=rules.find(r=>r.selector.endsWith('.contract-review-sheet :is(th,td)'));
  const props=Object.fromEntries(cells.nodes.filter(n=>n.type==='decl').map(n=>[n.prop,n.value]));assert.equal(props.height,'21px');assert.equal(props['font-size'],'12px');assert.equal(props['line-height'],'20px');assert.equal(props.padding,'0 4px');
  assert.match(css,/width:1142px;min-width:1142px;table-layout:fixed/);assert.match(css,/position:sticky;top:0/);assert.match(css,/position:sticky;right:0/);assert.match(css,/text-overflow:ellipsis/);assert.match(css,/overflow:auto/);assert.doesNotMatch(css,/transform:scale|zoom:/);
+ assert.match(css,/\[data-held="true"\]\[aria-expanded="false"\]/);
 });
