@@ -107,7 +107,7 @@ test('actual review dialog renders monthly candidates, real select options, expl
  const render=values=>renderToStaticMarkup(React.createElement(makeDialog(values)));
  const html=render({});assert.match(html,/가상 월정액A/);assert.match(html,/가상 월정액B/);assert.match(html,/2026-10-15/);assert.match(html,/별도 계약으로 추가/);assert.match(html,/aria-label="별도 계약의 기존 업체 연결"/);assert.match(html,/<option value="two"/);
  const compact=render({contractReviewExpandedId:''});assert.equal((compact.match(/scope="col"/g)||[]).length,9);assert.equal((compact.match(/class="review-source-row"/g)||[]).length,2);assert.doesNotMatch(compact,/review-editor-cell|별도 계약으로 추가|연결할 기존 기록 선택/);
- assert.match(compact,/width:58px/);assert.match(compact,/width:108px/);assert.match(compact,/추가 여부/);assert.match(compact,/aria-expanded="false"/);
+ assert.match(compact,/width:108px/);assert.match(compact,/<time class="review-date"[^>]*>2026-10-15<\/time>/);assert.match(compact,/추가 여부/);assert.match(compact,/aria-expanded="false"/);
  const failed=render({contractReviewError:'sheet_source_unavailable'});assert.match(failed,/시트 원본 검증 실패/);assert.doesNotMatch(failed,/별도 계약으로 추가/);
  const loading=render({contractReviewBusy:true});assert.match(loading,/계약 시트와 현재 DB를 대조/);assert.doesNotMatch(loading,/별도 계약으로 추가/);
  assert.match(html,/aria-label="시트 계약 조회 월"/);assert.match(html,/<option value="2026-10" selected="">2026년 10월 · 2건/);assert.match(html,/전체 대조 후보 2건/);

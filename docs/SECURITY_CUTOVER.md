@@ -1,5 +1,10 @@
 # Employee authentication cutover — 2026-09-18
 
+## 2026-10-23 Review date truncation repair (local verification; deployment pending)
+
+- Frontend only: replace shortened YY date/ellipsis with full ISO YYYY-MM-DD in a semantic time element; dedicated108px date column, fixed-width numeric font and non-truncating text. Table1192px/modal1250px, preserve horizontal scrolling and all other column widths. No API/DB/source/payment/matching/authentication/collector change or production business write.
+- Synthetic SSR asserts the visible full date, not only a tooltip. CSS guards dedicated date text/width/font/no ellipsis, month/year/leap-day fixtures plus existing regressions. Actual employee DOM/mobile/zoom remain unverified under the user's code/automatic-only scope.
+
 ## 2026-10-23 Compact source-sheet review (deployed; employee UI unverified)
 
 - Edge kpi-contract-sheet-report v3 ACTIVE/verify_jwt=true; all four deployed files reread equal to tested sources, unchanged index/employee-access/parser from v2.09:45:41KST no-session/invalid synthetic session401, approved-origin preflight204. Web81e94d06ac10835879d2181e6379dfb76063b06b/Actions39880225413 build+deployment success09:48:19KST.09:48:53KST HTML/14assets200; index-D6bTtyg_.js/main-DdqZkAfQ.js normalized equal to tested build, main-BWaHu2d4.css byte equal. Shared CSS structure identical except49LAB components rounding<=0.0001.471tests/security260sources/build/audit0. No actual employee/customer request or financial write used as a deployment test.

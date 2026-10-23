@@ -1,6 +1,6 @@
 // Presentation only: never use display values to calculate receipts or create contracts.
 export const CONTRACT_REVIEW_COLUMNS = [
-  ['date','날짜',58],['company','업체명',174],['owner','프리',145],
+  ['date','날짜',108],['company','업체명',174],['owner','프리',145],
   ['payment','대금 지급 확인',108],['project','프로젝트',180],
   ['price','별도가',125],['method','계약방식',170],['type','신규/기존',74],['action','추가 여부',108],
 ];
@@ -13,7 +13,7 @@ export function contractReviewSheetCells(item) {
   const price = r.amountDisplay || (Number.isSafeInteger(r.netAmount) && r.netAmount > 0 ? String(r.netAmount / 10000) : 'amountDisplay' in r ? '확인 필요' : '미제공');
   const owner = r.owner || item.owner || '';
   const ownerTone = [...owner].reduce((n,c) => (n + c.codePointAt(0)) % 4,0);
-  return {date:(r.date || '').replace(/^20(?=\d\d-)/,''),company:r.company || item.company || '',owner,
+  return {date:r.date || item.firstDate || '확인 필요',company:r.company || item.company || '',owner,
     payment,project:r.dealText || '',price,methods:Array.isArray(r.contractMethods) ? r.contractMethods : [],
     methodStatus:r.contractMethodStatus || 'unavailable',type:r.ctype || '',ownerTone};
 }

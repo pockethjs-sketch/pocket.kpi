@@ -1,7 +1,7 @@
-/* Measured source: nine fixed columns, 21px rows, 12px type. Isolated from KPI table defaults. */
-html[data-ui="precision"] #root .kpi-app .ui-dialog-panel.contract-review-dialog{max-width:1200px}
+/* Source-like density; full ISO dates have their own non-truncating column. */
+html[data-ui="precision"] #root .kpi-app .ui-dialog-panel.contract-review-dialog{max-width:1250px}
 html[data-ui="precision"] #root .kpi-app .contract-review-scroll{max-height:62vh;overflow:auto;border:1px solid #aab6c4;background:#fff;scrollbar-gutter:stable}
-html[data-ui="precision"] #root .kpi-app .contract-review-sheet{width:1142px;min-width:1142px;table-layout:fixed;border-collapse:separate;border-spacing:0;font-size:12px;line-height:20px;color:#17212f}
+html[data-ui="precision"] #root .kpi-app .contract-review-sheet{width:1192px;min-width:1192px;table-layout:fixed;border-collapse:separate;border-spacing:0;font-size:12px;line-height:20px;color:#17212f}
 html[data-ui="precision"] #root .kpi-app .contract-review-sheet :is(th,td){box-sizing:border-box;border-right:1px solid #b7c3cf;border-bottom:1px solid #d9dfe6;padding:0 4px;height:21px;font-size:12px!important;line-height:20px!important;text-align:center;vertical-align:middle;white-space:nowrap}
 html[data-ui="precision"] #root .kpi-app .contract-review-sheet thead th{position:sticky;top:0;z-index:3;background:#b9e1d4;color:#101d35;font-weight:700!important;border-bottom:2px solid #698d84}
 html[data-ui="precision"] #root .kpi-app .contract-review-sheet thead th:nth-child(5){background:#a9c8fa}
@@ -10,6 +10,8 @@ html[data-ui="precision"] #root .kpi-app .contract-review-sheet .review-source-r
 html[data-ui="precision"] #root .kpi-app .contract-review-sheet .review-source-row td:nth-child(5){background:#e5edff}
 html[data-ui="precision"] #root .kpi-app .contract-review-sheet .review-source-row:hover td{box-shadow:inset 0 0 0 999px #dbeafe40}
 html[data-ui="precision"] #root .kpi-app .contract-review-sheet .review-cell-text{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+html[data-ui="precision"] #root .kpi-app .contract-review-sheet .review-date-cell{width:108px;min-width:108px}
+html[data-ui="precision"] #root .kpi-app .contract-review-sheet .review-date{display:block;white-space:nowrap;overflow:visible;text-overflow:clip;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace!important;font-size:12px!important;font-variant-numeric:tabular-nums;letter-spacing:0!important}
 html[data-ui="precision"] #root .kpi-app .contract-review-sheet .review-pill{display:inline-block;max-width:100%;padding:0 8px;height:16px;line-height:16px;border-radius:9px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;font-size:12px}
 .contract-review-sheet .review-owner-0{background:#e3cdf4;color:#5e347c}.contract-review-sheet .review-owner-1{background:#ffcdca;color:#8b1e25}.contract-review-sheet .review-owner-2{background:#c9e2ea;color:#245e6c}.contract-review-sheet .review-owner-3{background:#e4e8ee;color:#334155}
 .contract-review-sheet .review-type-new{background:#0f5fb0;color:#fff}.contract-review-sheet .review-type-existing{background:#b82020;color:#fff}

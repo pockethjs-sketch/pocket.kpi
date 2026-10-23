@@ -4741,7 +4741,7 @@ function DealsView() {
               return (
                 <React.Fragment key={item.id}>
                   <tr className="review-source-row">
-                    <td><span className="review-cell-text" title={item.firstDate}>{cells.date}</span></td>
+                    <td className="review-date-cell"><time className="review-date" dateTime={item.firstDate || undefined}>{cells.date}</time></td>
                     <td><span className="review-cell-text" title={cells.company}>{cells.company}</span></td>
                     <td><span className={'review-pill review-owner-' + cells.ownerTone} title={cells.owner}>{cells.owner || '—'}</span></td>
                     <td><span className="review-cell-text" title={cells.payment || '지급 확인 미상 · 미지급 0원 판정 아님'}>{cells.payment || '—'}</span></td>

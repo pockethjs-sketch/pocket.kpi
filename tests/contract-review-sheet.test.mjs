@@ -12,14 +12,14 @@ const read=(...rows)=>buildSheetContractReport(csv(rows),options);
 
 test('sheet columns and dimensions match reference order; source order does not mutate candidates',()=>{
  assert.deepEqual(CONTRACT_REVIEW_COLUMNS.map(c=>c[1]),['날짜','업체명','프리','대금 지급 확인','프로젝트','별도가','계약방식','신규/기존','추가 여부']);
- assert.deepEqual(CONTRACT_REVIEW_COLUMNS.map(c=>c[2]),[58,174,145,108,180,125,170,74,108]);
+ assert.deepEqual(CONTRACT_REVIEW_COLUMNS.map(c=>c[2]),[108,174,145,108,180,125,170,74,108]);
  const items=[{id:'later',sourceRows:[{row:99}]},{id:'first',sourceRows:[{row:12}]}],before=structuredClone(items);
  assert.deepEqual(contractReviewSheetOrder(items).map(x=>x.id),['first','later']);assert.deepEqual(items,before);
 });
 test('display O as source net price, never VAT-inclusive contract amount; methods stay separate tokens',()=>{
  const report=read(row()),r=report.rows[0],cells=contractReviewSheetCells({sourceRows:[r]});
  assert.equal(report.displaySchemaVersion,1);assert.equal(r.amount,50050000);assert.equal(r.netAmount,45500000);
- assert.equal(cells.price,'4550');assert.equal(cells.date,'26-10-06');assert.equal(cells.payment,'50%');assert.deepEqual(cells.methods,['선금','잔금']);assert.equal(cells.type,'기존');
+ assert.equal(cells.price,'4550');assert.equal(cells.date,'2026-10-06');assert.equal(cells.payment,'50%');assert.deepEqual(cells.methods,['선금','잔금']);assert.equal(cells.type,'기존');
  assert.equal(contractReviewSheetCells({sourceRows:[{...r}],customerTypeOverride:'신규'}).type,'기존');
  assert.equal(contractReviewSheetCells({sourceRows:[read(row('✓','400(포함가)','완납 지원금')).rows[0]]}).price,'400(포함가)');
  assert.equal(read(row('✓','400(포함가)')).rows[0].amount,4000000);
@@ -44,6 +44,18 @@ test('CSS isolates 21px rows and 12px type from precision defaults, fixes width 
  const rules=[];root.walkRules(r=>rules.push(r));
  const cells=rules.find(r=>r.selector.endsWith('.contract-review-sheet :is(th,td)'));
  const props=Object.fromEntries(cells.nodes.filter(n=>n.type==='decl').map(n=>[n.prop,n.value]));assert.equal(props.height,'21px');assert.equal(props['font-size'],'12px');assert.equal(props['line-height'],'20px');assert.equal(props.padding,'0 4px');
- assert.match(css,/width:1142px;min-width:1142px;table-layout:fixed/);assert.match(css,/position:sticky;top:0/);assert.match(css,/position:sticky;right:0/);assert.match(css,/text-overflow:ellipsis/);assert.match(css,/overflow:auto/);assert.doesNotMatch(css,/transform:scale|zoom:/);
+ assert.match(css,/width:1192px;min-width:1192px;table-layout:fixed/);assert.match(css,/position:sticky;top:0/);assert.match(css,/position:sticky;right:0/);assert.match(css,/text-overflow:ellipsis/);assert.match(css,/overflow:auto/);assert.doesNotMatch(css,/transform:scale|zoom:/);
  assert.match(css,/\[data-held="true"\]\[aria-expanded="false"\]/);
+});
+test('dates retain the full year/month/day, including month edges; dedicated date text cannot inherit ellipsis',()=>{
+ for(const date of ['2026-01-01','2026-09-30','2026-10-06','2026-10-31','2026-12-31','2028-02-29']){
+  assert.equal(contractReviewSheetCells({firstDate:date,sourceRows:[{date}]}).date,date);
+ }
+ const css=postcss.parse(readFileSync(new URL('../src/contract-review-sheet.css',import.meta.url),'utf8'));
+ let dateRule,dateCell;css.walkRules(r=>{if(r.selector.endsWith('.review-date'))dateRule=r;if(r.selector.endsWith('.review-date-cell'))dateCell=r;});
+ const values=r=>Object.fromEntries(r.nodes.filter(n=>n.type==='decl').map(n=>[n.prop,n.value]));
+ const d=values(dateRule);assert.equal(d['text-overflow'],'clip');assert.equal(d.overflow,'visible');assert.equal(d['white-space'],'nowrap');assert.equal(d['font-size'],'12px');assert.match(d['font-family'],/monospace/);assert.equal(d['font-variant-numeric'],'tabular-nums');
+ assert.equal(values(dateCell)['min-width'],'108px');assert.equal(CONTRACT_REVIEW_COLUMNS.reduce((s,c)=>s+c[2],0),1192);
+ const main=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+ assert.match(main,/<td className="review-date-cell"><time className="review-date"/);assert.doesNotMatch(main,/<time className="review-date review-cell-text"/);
 });
