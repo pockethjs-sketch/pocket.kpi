@@ -1,5 +1,10 @@
 # Employee authentication cutover — 2026-09-18
 
+## 2026-10-23 Standalone creation choice in sheet review (locally verified; release pending)
+
+- Frontend-only explicit standalone vs existing-record-linked choice; same-source contract identities and existing financial/ambiguity holds unchanged. Standalone creates a new KPI lead/contract row with empty parent, never an external CRM customer; linked mode still requires a current candidate. Customer type is separately selected and applied consistently to the created lead and contract event. Original source type stays in source data/provenance fields and approval metadata. No historical-record edits, source collection, receipt-date fabrication, auth/API/schema/RLS/collector changes or backend deployment.
+- Same existing role gate/V3 write path, pre-write ACK/fresh primary duplicate check and post-write finance verification. Post-write checks now also verify selected type/mode/parent/source-type; disagreement cannot announce completion. 466 tests including actual JSX control events/SSR and synthetic real-handler invariants, security257sources/build/audit0 passed. Real production creation/employee DOM/mobile/zoom not used to test this release.
+
 ## 2026-10-22 Missing-sheet review month selector (deployed; employee UI unverified)
 
 - Web38acad6eb707bebf4ff78c223377629d097b3ef6 / Actions39775507711 build+deployment success21:06:01KST.21:06:53KST actual HTML/14 static assets200; entry index-CQk0JD9R.js/main-C9NFLI5o.js match tested local build after hashed asset-name normalization. Month selector/A-column basis/whole-report count present. Shared CSS unchanged from prior verified index-CQD1ZRH3.css. Security257sources/462tests/build/audit0 passed. No backend redeployment/business-data writes; positive employee UI remains unverified.

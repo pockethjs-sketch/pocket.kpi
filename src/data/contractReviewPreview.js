@@ -4,8 +4,13 @@ import { _crmSyncDate, _crmSyncPaymentPercent } from '../../scripts/contract-she
 export function contractReviewPreview(item) {
   const rows = item?.sourceRows || [];
   const dates = [...new Set(rows.map(r => r.date))];
+  const creationMode = item?.creationMode ?? (item?.matchType === 'new_contract' ? 'linked' : 'standalone');
+  const customerType = item?.customerTypeOverride ?? item?.ctype ?? '신규';
+  const parentId = creationMode === 'linked' ? item?.targetId || '' : '';
   let reason = item?.reviewReason || '';
-  if (!reason && item?.matchType === 'new_contract' && !(item.candidates || []).some(c => c.id === item.targetId)) reason = '연결할 기존 업체/계약을 선택해주세요 · 기존 계약 금액은 변경하지 않습니다';
+  if (!reason && !['linked','standalone'].includes(creationMode)) reason = '등록 방식을 확인해주세요';
+  if (!reason && ((item?.customerTypeOverride !== undefined && !['신규','기존'].includes(item.customerTypeOverride)) || !['신규','기존'].includes(customerType || '신규'))) reason = '신규/기존 고객 구분을 확인해주세요';
+  if (!reason && creationMode === 'linked' && !(item?.candidates || []).some(c => c.id === parentId)) reason = '기존 기록을 선택하거나 연결 없이 신규 생성을 선택해주세요 · 기존 계약 금액은 변경하지 않습니다';
   if (!rows.length) reason = '원본 계약 행이 없습니다';
   else if (item.company && !/^[a-f0-9]{64}$/i.test(item.sourceHash || '')) reason = '원본 해시 확인이 필요합니다';
   else if (/[\/·,]/.test(item.company || '')) reason = '복합 업체명입니다 · 기존 업체 식별을 먼저 확인해주세요';
@@ -25,5 +30,5 @@ export function contractReviewPreview(item) {
   }
   const contractAmount = rows.reduce((sum,r) => sum + Number(r.amount || 0),0);
   if (!Number.isSafeInteger(contractAmount) || !Number.isSafeInteger(confirmedPaid)) reason = '금액 범위를 확인해주세요';
-  return { canAdd:!reason,reason,contractAmount,confirmedPaid,paymentNotCompared };
+  return { canAdd:!reason,reason,contractAmount,confirmedPaid,paymentNotCompared,creationMode,customerType:customerType || '신규',parentId };
 }

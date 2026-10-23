@@ -22,11 +22,12 @@ test('existing company, existing type and no October meeting cannot suppress a n
   assert.equal(result.items[0].firstDate,'2026-10-15');assert.equal(result.items[0].matchType,'new_contract');
   assert.equal(contractReviewPreview(result.items[0]).canAdd,true);assert.equal(result.items[0].sourceRows.length,1);
 });
-test('three historical same-company contracts still reveal the next monthly contract; parent choice is required',async()=>{
+test('three historical contracts require a parent only in linked mode; standalone is explicitly available',async()=>{
   const result=await review([row()],[lead(),lead({id:'older',contractAt:'2026-08-01'}),lead({id:'other',contractAt:'2026-07-01'})]);
   const item=result.items[0];assert.equal(result.pending,1);assert.equal(item.candidates.length,3);
   assert.equal(contractReviewPreview(item).canAdd,false);
   assert.equal(contractReviewPreview({...item,targetId:'older'}).canAdd,true);
+  assert.equal(contractReviewPreview({...item,creationMode:'standalone',customerTypeOverride:'신규'}).canAdd,true);
 });
 test('different months/projects are separate; large amounts are not split or added to past contracts',async()=>{
   const result=await review([row({amount:22000000}),row({row:3,date:'2026-10-16',dealText:'개발',amount:33000000})],[lead()]);
@@ -100,7 +101,9 @@ test('actual review dialog renders monthly candidates, real select options, expl
  const scope={contractReviewOpen:true,contractApplyingId:'',contractReview:{pending:2,comparedRows:3,represented:1,excluded:0,databaseRevision:'synthetic',sourceCutoff:'2026-08-01'},contractReviewBusy:false,contractReviewError:'',contractReviewVisible:[first,second],setContractReviewOpen:noop,refreshContractReview:noop,contractReviewPreview,contractReviewErrorText,currentAccount:{serverRole:'OWNER'},fmtWon:v=>String(v),setContractReviewTargets:noop,openLead:noop,ignoreContractReviewItem:noop,applyContractReviewItem:noop,Modal:({children,title})=>React.createElement('section',null,title,children),Empty:({text})=>React.createElement('p',null,text),RefreshCw:icon,ExternalLink:icon,Plus:icon,Sel,Btn,Chip};
  const transformed=await transformWithOxc('function Dialog(){return ('+jsx+');}','dialog.jsx',{jsx:{runtime:'classic'}});
  Object.assign(scope,{contractReviewMonth:'2026-10',setContractReviewMonth:noop,contractReviewMonthLabel,contractReviewAll:[first,second],contractReviewMonths:contractReviewMonthOptions([first,second],{start:'2026-08-01',today:'2026-10-22',selected:'2026-10'})});
- const render=values=>{const s={...scope,...values};const Dialog=new Function('React',...Object.keys(s),transformed.code+';return Dialog;')(React,...Object.values(s));return renderToStaticMarkup(React.createElement(Dialog));};
+ Object.assign(scope,{setContractReviewChoices:noop});
+ const makeDialog=values=>{const s={...scope,...values};return new Function('React',...Object.keys(s),transformed.code+';return Dialog;')(React,...Object.values(s));};
+ const render=values=>renderToStaticMarkup(React.createElement(makeDialog(values)));
  const html=render({});assert.match(html,/가상 월정액A/);assert.match(html,/가상 월정액B/);assert.match(html,/2026-10-15/);assert.match(html,/별도 계약으로 추가/);assert.match(html,/aria-label="별도 계약의 기존 업체 연결"/);assert.match(html,/<option value="two"/);
  const failed=render({contractReviewError:'sheet_source_unavailable'});assert.match(failed,/시트 원본 검증 실패/);assert.doesNotMatch(failed,/별도 계약으로 추가/);
  const loading=render({contractReviewBusy:true});assert.match(loading,/계약 시트와 현재 DB를 대조/);assert.doesNotMatch(loading,/별도 계약으로 추가/);
@@ -110,4 +113,13 @@ test('actual review dialog renders monthly candidates, real select options, expl
  const all=render({contractReviewMonth:'all'});assert.match(all,/전체 기간 2건/);assert.match(all,/가상 월정액A/);assert.match(all,/가상 월정액B/);
  const august={...first,id:'synthetic-august',company:'가상 8월 전용',firstDate:'2026-08-15',sourceRows:[{...first.sourceRows[0],date:'2026-08-15'}],candidates:[]};
  const mixed=[first,august],augustHtml=render({contractReviewMonth:'2026-08',contractReviewAll:mixed,contractReviewVisible:filterContractReviewMonth(mixed,'2026-08')});assert.match(augustHtml,/가상 8월 전용/);assert.doesNotMatch(augustHtml,/가상 월정액A/);
+ let choices={};const setChoices=fn=>{choices=fn(choices);};
+ const find=(node,predicate)=>{if(!node||typeof node!=='object')return null;if(predicate(node))return node;for(const child of React.Children.toArray(node.props?.children)){const hit=find(child,predicate);if(hit)return hit;}return null;};
+ const Dialog=makeDialog({contractReviewVisible:[second],setContractReviewChoices:setChoices});
+ const chooseNew=find(Dialog(),node=>node.type===Btn&&node.props.children==='연결 없이 신규 생성');assert.ok(chooseNew);chooseNew.props.onClick();
+ assert.deepEqual(choices[second.id],{creationMode:'standalone',customerTypeOverride:'신규'});
+ const standalone={...second,...choices[second.id]},standaloneHtml=render({contractReviewVisible:[standalone]});
+ assert.match(standaloneHtml,/기존 기록 선택 없이 새 계약 행/);assert.match(standaloneHtml,/시트 원본: 기존/);assert.doesNotMatch(standaloneHtml,/aria-label="별도 계약의 기존 업체 연결"/);assert.doesNotMatch(standaloneHtml,/생성 보류/);
+ const typeControl=find(makeDialog({contractReviewVisible:[standalone],setContractReviewChoices:setChoices})(),node=>node.type===Sel&&node.props['aria-label']==='생성할 계약의 고객 구분');assert.ok(typeControl);typeControl.props.onChange({target:{value:'기존'}});assert.equal(choices[second.id].customerTypeOverride,'기존');assert.equal(choices[second.id].creationMode,'standalone');
+ const repeat=find(makeDialog({contractReviewVisible:[{...second,...choices[second.id]}],setContractReviewChoices:setChoices})(),node=>node.type===Btn&&node.props.children==='연결 없이 신규 생성');repeat.props.onClick();assert.equal(choices[second.id].customerTypeOverride,'기존');
 });

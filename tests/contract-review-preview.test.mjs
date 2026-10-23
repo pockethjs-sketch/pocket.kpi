@@ -76,6 +76,55 @@ test('pending save failure cannot create an existing-company contract or discard
  await h.apply(found.items[0]);assert.equal(h.db.leads.length,1);assert.ok(!h.calls.includes('up'));
 });
 
+test('standalone creation works with three prior contracts, stores explicit new type, and preserves all old records/source',async()=>{
+ const h=harness();
+ h.db.leads.push(...['2026-07-08','2026-09-07','2026-09-18'].map((contractAt,index)=>({id:'old-'+index,company:'가상 기존고객',contractAt,contractAmount:3300000,paid:3300000,payments:[{amount:3300000,paidConfirmed:true,paidAt:'2026-09-20'}],memo:'보존할 합성 메모'})));
+ const old=JSON.stringify(h.db.leads),source={...row(),company:'가상 기존고객',amount:50050000,paymentPercent:50,paymentText:'50%',paymentAmount:0};
+ const report={ok:true,schemaVersion:'contract-review-source-v1',sourceHash:'a'.repeat(64),start:'2026-08-01',rangeRows:1,rows:[source],fetchedAt:new Date().toISOString()};
+ const found=await buildContractReviewItems(report,h.db);h.sandbox.contractReview={sourceHash:report.sourceHash,sourceCutoff:report.start,checkedAt:report.fetchedAt};
+ const candidate={...found.items[0],creationMode:'standalone',customerTypeOverride:'신규',targetId:'old-0'},before=JSON.stringify(candidate.sourceRows);
+ await h.apply(candidate);
+ assert.equal(h.db.leads.length,4);assert.equal(JSON.stringify(h.db.leads.filter(x=>x.id.startsWith('old-'))),old);
+ const created=h.db.leads.find(x=>x.id===reviewLeadId(candidate));
+ assert.equal(created.ctype,'신규');assert.equal(created.contractCompanyLeadId,'');assert.equal(created.contractSheetCreationMode,'standalone');assert.equal(created.contractSheetSourceCustomerType,'기존');
+ assert.equal(created.contractAmount,50050000);assert.equal(created.paid,25025000);assert.equal(created.payments.reduce((s,p)=>s+p.amount,0),50050000);assert.ok(created.payments.every(p=>p.paidAt===''));assert.equal(created.premeetingAt,'');
+ assert.equal(h.db.contractEvents[0].ctype,'신규');assert.equal(h.db.contractEvents[0].sourceCustomerType,'기존');assert.equal(h.db.contractEvents[0].sourceData[0].ctype,'기존');assert.equal(JSON.stringify(candidate.sourceRows),before);
+ assert.equal(h.db.contractStatusLogs.at(-1).meta.creationMode,'standalone');assert.equal(h.db.contractStatusLogs.at(-1).meta.customerType,'신규');
+ await h.apply({...candidate,creationMode:'linked',targetId:'old-1'});assert.equal(h.db.leads.length,4);assert.equal(h.db.contractEvents.length,1);
+});
+
+test('standalone mode and customer classification are independent, while financial and identity holds stay enforced',async()=>{
+ const target=item({contractKey:'b'.repeat(64),matchType:'new_contract',candidates:[{id:'old'}],targetId:'',creationMode:'standalone',customerTypeOverride:'기존'});
+ const preview=contractReviewPreview(target);assert.equal(preview.canAdd,true);assert.equal(preview.customerType,'기존');assert.equal(preview.parentId,'');
+ for(const extra of [{reviewReason:'같은 날짜의 기존 계약 충돌'},{creationMode:'invalid'},{customerTypeOverride:'VIP'},{customerTypeOverride:''},{sourceRows:[row(),row({row:3})]},{sourceRows:[row({amount:0})]},{company:'가상A/가상B'}])assert.equal(contractReviewPreview({...target,...extra}).canAdd,false);
+ assert.equal(contractReviewPreview({...target,creationMode:'linked'}).canAdd,false);
+ const denied=harness('VIEWER');await denied.apply(target);assert.equal(denied.db.leads.length,0);
+});
+
+test('fresh server duplicate/conflict and save-ACK failures still refuse standalone creation',async()=>{
+ for(const kind of ['duplicate','conflict','ack']){
+  const h=harness(),source={...row(),company:'가상 기존고객',paymentPercent:100,paymentAmount:0};
+  h.db.leads.push({id:'old',company:'가상 기존고객',contractAt:'2026-09-01',contractAmount:100});
+  const report={ok:true,schemaVersion:'contract-review-source-v1',sourceHash:'a'.repeat(64),start:'2026-08-01',rangeRows:1,rows:[source],fetchedAt:new Date().toISOString()};
+  const found=await buildContractReviewItems(report,h.db),candidate={...found.items[0],creationMode:'standalone',customerTypeOverride:'신규'};
+  h.sandbox.contractReview={sourceHash:report.sourceHash,sourceCutoff:report.start,checkedAt:report.fetchedAt};
+  if(kind==='ack')h.sandbox.window.crmWaitForRemoteCommit=async()=>{throw Error('remote_save_timeout');};
+  else h.sandbox.window.crmReadPrimaryContractState=async()=>({state:{leads:[{id:'fresh',company:source.company,status:'계약 완료',contractAt:source.date,contractAmount:kind==='duplicate'?source.amount:123,paid:source.amount,contractSheetContractKey:kind==='duplicate'?candidate.contractKey:undefined}]}});
+  await h.apply(candidate);assert.equal(h.db.leads.length,1);assert.ok(!h.calls.includes('up'));
+ }
+});
+
+test('post-save classification or parent mismatch cannot announce successful standalone creation',async()=>{
+ for(const field of ['ctype','contractCompanyLeadId','contractSheetCreationMode','contractSheetSourceCustomerType']){
+  const h=harness(),source={...row(),company:'가상 기존고객',paymentPercent:100,paymentAmount:0};
+  const report={ok:true,schemaVersion:'contract-review-source-v1',sourceHash:'a'.repeat(64),start:'2026-08-01',rangeRows:1,rows:[source],fetchedAt:new Date().toISOString()};
+  const candidate={...(await buildContractReviewItems(report,h.db)).items[0],creationMode:'standalone',customerTypeOverride:'신규'};
+  h.sandbox.contractReview={sourceHash:report.sourceHash,sourceCutoff:report.start,checkedAt:report.fetchedAt};
+  h.sandbox.window.crmReadPrimaryContractState=async()=>({state:{leads:h.db.leads.map(x=>({...x,[field]:'mismatch'}))}});
+  await h.apply(candidate);assert.equal(h.db.leads.length,1);assert.ok(!h.calls.includes('remove'));
+ }
+});
+
 test('existing review backend includes existing-type and no-meeting source customers, excluding actual DB duplicates',{skip:opsCode==null?missingOperationsSource:false},()=>{
  const normalize=s=>String(s).replace(/\s/g,'').toLowerCase();
  const group=(name,type)=>({changeId:'synthetic-'+type,sourceKey:normalize(name),sourceHash:type,company:name,aliases:[normalize(name)],rows:[row()],amount:5500000,numericPaid:0,ctype:type,firstDate:'2026-10-22',lastDate:'2026-10-22',services:['AX 개발']});
