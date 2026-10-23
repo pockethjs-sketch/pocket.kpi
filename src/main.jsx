@@ -5,6 +5,7 @@ import { calendarActivityLeads, calendarPeriodEntries } from "./data/calendarAct
 import { CalendarConsistencyNotice } from './components/CalendarConsistencyNotice.jsx';
 import "./design.css";
 import "./styles.css";
+import "./contract-review-sheet.css";
 import { Chip, Btn, Inp, IconInput, Ta, Sel, Fld, Card, SecTitle, Seg } from './components/KpiUi.jsx';
 import WorkspaceShell from './WorkspaceShell.jsx';
 import { ExcelExportProvider, ExcelExportButton, useExcelExport } from './ExcelExport.jsx';
@@ -19,6 +20,7 @@ import ContractSheetPayments from './ContractSheetPayments.jsx';
 import { contractReviewPreview } from './data/contractReviewPreview.js';
 import { buildContractReviewItems, contractReviewErrorText, reviewLeadId } from './data/contractReviewMatches.js';
 import { defaultContractReviewMonth, contractReviewMonthLabel, filterContractReviewMonth, contractReviewMonthOptions } from './data/contractReviewMonth.js';
+import { CONTRACT_REVIEW_COLUMNS, contractReviewSheetCells, contractReviewSheetOrder } from './data/contractReviewSheet.js';
 import ChannelRoasDetails from "./ChannelRoasDetails.jsx";
 import RecentSyncActivity from "./RecentSyncActivity.jsx";
 import DailyActivityChart from "./DailyActivityChart.jsx";
@@ -2646,7 +2648,7 @@ function useDB() {
 
 /* --- 공용 UI --- */
 const BChip = ({ b }) => <Chip cls={(BSTYLE[b] || {}).chip}><span className={"w-1.5 h-1.5 rounded-full " + ((BSTYLE[b] || {}).dot || "bg-slate-400")} />{b}</Chip>;
-const Modal = ({ open, onClose, title, children, wide }) => {
+const Modal = ({ open, onClose, title, children, wide, panelClassName = '' }) => {
   useEffect(() => {
     if (!open) return;
     const h = (e) => { if (e.key === "Escape") onClose && onClose(); };
@@ -2657,7 +2659,7 @@ const Modal = ({ open, onClose, title, children, wide }) => {
   if (!open) return null;
   return (
     <div className="ui-dialog-backdrop fixed inset-0 z-50 flex items-start justify-center p-3 sm:p-6 overflow-y-auto" style={{ background: "rgba(15,23,42,.45)" }} onClick={onClose}>
-      <div role="dialog" aria-modal="true" aria-label={title} className={"ui-dialog-panel bg-white rounded-2xl shadow-2xl w-full my-4 " + (wide ? "max-w-4xl" : "max-w-xl")} onClick={(e) => e.stopPropagation()}>
+      <div role="dialog" aria-modal="true" aria-label={title} className={"ui-dialog-panel bg-white rounded-2xl shadow-2xl w-full my-4 " + (wide ? "max-w-4xl" : "max-w-xl") + ' ' + panelClassName} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 sticky top-0 bg-white rounded-t-2xl z-10">
           <h3 className="font-bold text-slate-900 text-sm">{title}</h3>
           <button type="button" aria-label="창 닫기" onClick={onClose} className="ui-dialog-close p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X size={16} /></button>
@@ -3844,6 +3846,7 @@ function DealsView() {
   const [contractReviewError, setContractReviewError] = useState("");
   const [contractReviewTargets, setContractReviewTargets] = useState({});
   const [contractReviewChoices, setContractReviewChoices] = useState({});
+  const [contractReviewExpandedId, setContractReviewExpandedId] = useState('');
   const [contractApplyingId, setContractApplyingId] = useState("");
   const [contractLogOpen, setContractLogOpen] = useState(false);
   const [dealsTab, setDealsTab] = useState('companies');
@@ -4703,8 +4706,8 @@ function DealsView() {
           <div className="flex justify-end gap-2"><Btn disabled={crmImportBusy} onClick={() => setCrmImportOpen(false)}>취소</Btn><Btn kind="primary" disabled={crmImportBusy} onClick={importCrmDeal}><RefreshCw size={13} className={crmImportBusy ? "animate-spin" : ""} />{crmImportBusy ? "CRM 확인 중" : "불러와서 추가"}</Btn></div>
         </div>
       </Modal>
-      <Modal open={contractReviewOpen} onClose={() => { if (!contractApplyingId) setContractReviewOpen(false); }} wide title={"시트 미등록 계약 확인" + (contractReviewBusy ? ' · 대조 중' : contractReviewError ? ' · 확인 실패' : ' · ' + contractReviewMonthLabel(contractReviewMonth) + ' ' + contractReviewVisible.length + '건')}>
-        <div className="space-y-4">
+      <Modal open={contractReviewOpen} onClose={() => { if (!contractApplyingId) setContractReviewOpen(false); }} wide panelClassName="contract-review-dialog" title={"시트 미등록 계약 확인" + (contractReviewBusy ? ' · 대조 중' : contractReviewError ? ' · 확인 실패' : ' · ' + contractReviewMonthLabel(contractReviewMonth) + ' ' + contractReviewVisible.length + '건')}>
+        <div className="space-y-3">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <p className="text-xs font-bold text-slate-500">{contractReview.sourceCutoff || "2026-08-01"} 이후 전체 원본 대조 · 신규/기존 모두 · 프리미팅 이력 없어도 추가 가능</p>
             <div className="flex items-center gap-2">
@@ -4712,7 +4715,7 @@ function DealsView() {
               <Btn size="xs" disabled={contractReviewBusy || !!contractApplyingId} onClick={() => refreshContractReview(true, false)}><RefreshCw size={11} className={contractReviewBusy ? "animate-spin" : ""} />시트 다시 대조</Btn>
             </div>
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 border border-slate-200 bg-white px-3 py-2">
             <label className="flex flex-wrap items-center gap-2 text-sm font-bold text-slate-800">
               계약 월
               <Sel aria-label="시트 계약 조회 월" value={contractReviewMonth} onChange={e => setContractReviewMonth(e.target.value)} disabled={contractReviewBusy || !!contractApplyingId} options={contractReviewBusy || contractReviewError ? contractReviewMonths.map(option => ({...option,label:contractReviewMonthLabel(option.value)})) : contractReviewMonths} />
@@ -4722,59 +4725,35 @@ function DealsView() {
               {!contractReviewBusy && !contractReviewError && <p role="status" aria-live="polite" className="mt-1 font-bold text-indigo-800">{contractReviewMonthLabel(contractReviewMonth)} {contractReviewVisible.length}건 / 전체 대조 후보 {contractReviewAll.length}건</p>}
             </div>
           </div>
-          <div className="border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
-            회사가 이미 있어도 날짜·프로젝트가 다른 시트 계약은 따로 대조합니다. 추가 버튼을 누른 계약만 별도 계약 행으로 저장하며, 기존 계약 금액·입금·프리미팅 이력은 변경하지 않습니다. H 체크/V는100%, 백분율은 누적 확인액으로 계산하고 실제 입금일·프리미팅일은 만들지 않습니다. 동일 날짜·금액 충돌과 동명 업체는 연결 검토가 필요합니다.
-          </div>
+          <p className="text-xs text-slate-600">시트 열·원본 행 순서 그대로 · 별도가 기본 단위 만원(원본에 원/포함가 표기 시 그대로 표시) · 오른쪽 추가에서 개별 승인 · 실제 입금일은 추정하지 않습니다.</p>
           {contractReview.localSavePending && <p role="note" className="text-xs font-bold text-amber-800">미저장 변경이 있어 마지막 서버 확정본 기준으로 조회했습니다. 로컬 변경은 삭제하지 않으며, 계약 추가는 저장 완료 후에만 가능합니다.</p>}
           {contractReview.databaseRevision && <p className="text-xs text-slate-500">서버 확정본 대조 · 원본 {contractReview.comparedRows}행 · 기존 계약 일치 {contractReview.represented}건 · 계약별 제외 {contractReview.excluded}건</p>}
           {contractReviewBusy && <p role="status" className="text-sm text-slate-600">계약 시트와 현재 DB를 대조하고 있습니다.</p>}
           {contractReviewError && <p role="alert" className="text-sm text-red-700">{contractReviewErrorText(contractReviewError)} · 미등록 0건으로 판정하지 않습니다.</p>}
-          <div className="space-y-3 max-h-[62vh] overflow-y-auto pr-1">
-            {!contractReviewBusy && !contractReviewError && contractReviewVisible.map((item) => {
+          {!contractReviewBusy && !contractReviewError && contractReviewVisible.length > 0 && <div className="contract-review-scroll" role="region" aria-label="시트 미등록 계약 표 · 가로 스크롤" tabIndex={0}>
+            <table className="contract-review-sheet" aria-label="시트 원본 열 기준 미등록 계약">
+              <colgroup>{CONTRACT_REVIEW_COLUMNS.map(([key,,width]) => <col key={key} style={{width}} />)}</colgroup>
+              <thead><tr>{CONTRACT_REVIEW_COLUMNS.map(([key,label]) => <th key={key} scope="col" className={key === 'action' ? 'review-action-cell' : ''}>{label}</th>)}</tr></thead>
+              <tbody>{contractReviewSheetOrder(contractReviewVisible).map((item) => {
               const preview = contractReviewPreview(item);
-              const previewRows = [
-                ["업체명", item.company || "-"],
-                ["상태", "계약 완료"],
-                ["계약일", item.firstDate || "미확인"],
-                ["영업담당", item.owner || "미지정"],
-                ["신규/기존", preview.customerType],
-                ["프로젝트", (item.sourceRows || []).map(r => r.dealText).join(' · ') || "미지정"],
-                ["계약금액", Number(item.sourceAmount || 0) > 0 ? fmtWon(Number(item.sourceAmount || 0)) : "금액 미확인 · 합계 제외"],
-                ["확인 입금액", preview.confirmedPaid > 0 ? fmtWon(preview.confirmedPaid) + (preview.paymentNotCompared ? ' · 일부 확인 필요' : ' · 실제 입금일 미상') : preview.paymentNotCompared ? '지급 확인 미상 · 미지급0원 판정 아님' : '확인액0원'],
-              ];
+              const cells = contractReviewSheetCells(item);
+              const expanded = contractReviewExpandedId === item.id;
               return (
-                <div key={item.id} className="border border-indigo-200 bg-white p-4">
-                  <div className="flex items-start justify-between gap-3 flex-wrap">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-sm font-extrabold text-slate-900">{item.company}</p>
-                        <Chip cls="bg-indigo-50 text-indigo-700 border-indigo-200">{preview.creationMode === 'standalone' && item.matchType === 'new_contract' ? '연결 없이 신규 생성' : item.changeType || 'KPI DB 미등록'}</Chip>
-                      </div>
-                      <p className="text-xs text-slate-400 mt-1">원본 {item.firstDate || "날짜 없음"}{item.lastDate && item.lastDate !== item.firstDate ? " ~ " + item.lastDate : ""} · 계약 행 {(item.sourceRows || []).length}건</p>
-                    </div>
-                  </div>
-                  <div className="mt-3 border border-slate-200">
-                    <p className="px-3 py-2 text-xs font-extrabold text-slate-700 bg-slate-50 border-b border-slate-200">{preview.creationMode === 'standalone' ? '신규 생성 미리보기 · 기존 기록과 연결하지 않음' : '별도 계약 추가 미리보기 · 과거 계약에 합산하지 않음'}</p>
-                    <div className="grid sm:grid-cols-2">
-                      {previewRows.map(([label, value], index) => (
-                        <div key={label} className={"px-3 py-2.5 flex items-start justify-between gap-3 text-xs " + (index < previewRows.length - 2 ? "border-b border-slate-100 " : "") + (index % 2 === 0 ? "sm:border-r border-slate-100" : "")}>
-                          <span className="text-slate-400 shrink-0">{label}</span><b className="text-slate-800 text-right break-words">{value}</b>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <details className="mt-2 border border-slate-100 bg-slate-50 px-3 py-2">
-                    <summary className="cursor-pointer text-xs font-bold text-slate-600">원본 계약 내용 {(item.sourceRows || []).length}건 보기</summary>
-                    <div className="mt-2 space-y-2">
-                      {(item.sourceRows || []).map((row) => (
-                        <div key={row.row} className="bg-white border border-slate-100 px-3 py-2 text-xs leading-5">
-                          <div className="flex items-center justify-between gap-3"><b className="text-slate-700">{row.date || "날짜 없음"} · {row.service || "상품 미분류"}</b><b className="text-slate-900">{row.amount ? fmtWon(Number(row.amount)) : "금액 미확인"}</b></div>
-                          <p className="text-slate-500 mt-0.5 break-words">{row.dealText || "계약 내용 없음"}</p>
-                          {(row.paymentText || row.memo) && <p className="text-slate-400 mt-0.5 break-words">입금: {row.paymentText || "-"}{row.memo ? " · 메모: " + row.memo : ""}</p>}
-                        </div>
-                      ))}
-                    </div>
-                  </details>
+                <React.Fragment key={item.id}>
+                  <tr className="review-source-row">
+                    <td><span className="review-cell-text" title={item.firstDate}>{cells.date}</span></td>
+                    <td><span className="review-cell-text" title={cells.company}>{cells.company}</span></td>
+                    <td><span className={'review-pill review-owner-' + cells.ownerTone} title={cells.owner}>{cells.owner || '—'}</span></td>
+                    <td><span className="review-cell-text" title={cells.payment || '지급 확인 미상 · 미지급 0원 판정 아님'}>{cells.payment || '—'}</span></td>
+                    <td><span className="review-cell-text" title={cells.project}>{cells.project || '—'}</span></td>
+                    <td><span className="review-cell-text" title={cells.price}>{cells.price}</span></td>
+                    <td><span className="review-methods" title={cells.methods.join(' · ') || (cells.methodStatus === 'unknown' ? '확인 필요' : cells.methodStatus === 'unavailable' ? '미제공' : '')}>{cells.methods.map((method,index) => <span key={index} className={'review-pill review-method' + (['완납','지원금'].includes(method) ? ' review-method-paid' : method === '잔금' ? ' review-method-balance' : '')}>{method}</span>)}{!cells.methods.length && (cells.methodStatus === 'unknown' ? '확인 필요' : cells.methodStatus === 'unavailable' ? '미제공' : '—')}</span></td>
+                    <td><span className={'review-pill ' + (cells.type === '신규' ? 'review-type-new' : cells.type === '기존' ? 'review-type-existing' : '')}>{cells.type || '—'}</span></td>
+                    <td className="review-action-cell"><button type="button" className="review-row-action" aria-label={cells.company + ' 계약 추가 설정'} aria-expanded={expanded} aria-controls={'review-options-' + item.id} data-held={!preview.canAdd} disabled={!!contractApplyingId} onClick={() => setContractReviewExpandedId(expanded ? '' : item.id)}>{contractApplyingId === item.id ? '추가 중' : expanded ? '설정 닫기' : preview.canAdd ? '추가' : item.matchType === 'existing_contract_difference' ? '대조 필요' : '추가 설정'}</button></td>
+                  </tr>
+                  {expanded && <tr><td colSpan={9} className="review-editor-cell"><div className="review-editor" id={'review-options-' + item.id}>
+                  <p className="text-xs font-bold">{item.company} · {item.firstDate} · {item.changeType || '계약 추가 설정'}</p>
+                  <p className="mt-1 text-xs">계약금액 {fmtWon(preview.contractAmount)} · 확인 입금액 {fmtWon(preview.confirmedPaid)}{preview.paymentNotCompared ? ' · 지급 확인 미상 포함(미지급 0원 판정 아님)' : ''} · 실제 입금일 미상 · 기존 계약에 합산하지 않음</p>
                   {['new','new_contract'].includes(item.matchType) && <div className="mt-3 space-y-3 rounded-lg border border-indigo-200 bg-indigo-50 p-3 text-xs">
                     <div role="group" aria-label="계약 등록 방식" className="flex flex-wrap items-center gap-2">
                       <b className="mr-1">등록 방식</b>
@@ -4800,14 +4779,16 @@ function DealsView() {
                       {contractApplyingId === item.id ? <RefreshCw size={12} className="animate-spin" /> : <Plus size={12} />}{item.matchType === 'existing_contract_difference' ? '기존 계약 대조 필요' : preview.creationMode === 'standalone' ? '연결 없이 신규 생성' : '별도 계약으로 추가'}
                     </Btn>
                   </div>
-                </div>
+                  </div></td></tr>}
+                </React.Fragment>
               );
-            })}
+            })}</tbody>
+            </table>
+          </div>}
             {!contractReviewBusy && !contractReviewError && contractReviewVisible.length === 0 && <div className="space-y-2 text-center">
               <Empty compact text={contractReviewMonthLabel(contractReviewMonth) + '에 새로 추가하거나 대조할 계약이 없습니다. 회사명뿐 아니라 계약 날짜·프로젝트·금액으로 대조한 결과입니다.'} />
               {contractReviewMonth !== 'all' && contractReviewAll.length > 0 && <Btn size="xs" onClick={() => setContractReviewMonth('all')}>다른 월 후보 {contractReviewAll.length}건 · 전체 기간 보기</Btn>}
             </div>}
-          </div>
         </div>
       </Modal>
       <Modal open={contractLogOpen} onClose={() => setContractLogOpen(false)} wide title={"프리미팅 기업 활동 로그 · " + contractStatusLogs.length + "건"}>

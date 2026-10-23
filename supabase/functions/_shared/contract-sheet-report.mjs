@@ -53,14 +53,27 @@ export function buildSheetPaymentReport(csv, { start, end, fetchedAt, sourceHash
 // Reuse the payment report's strict source/header/date validation, never raw memos.
 export function buildSheetContractReport(csv, options) {
   const validated = buildSheetPaymentReport(csv, options);
-  const all = _crmParseContractSource(parseReportCsv(csv), () => 'review-only', options.start)
+  const values = parseReportCsv(csv), headers = values[0].map(h => h.replace(/\s/g, ''));
+  const methodColumns = headers.flatMap((h,i) => h === '계약방식' ? [i] : []);
+  if (methodColumns.length > 1) throw Error('sheet_headers_invalid');
+  const all = _crmParseContractSource(values, () => 'review-only', options.start)
     .flatMap(g => g.rows).filter(r => r.date <= options.end);
   if (!all.length) throw Error('sheet_source_empty');
-  const rows = all.map(r => ({ row:r.row, date:r.date, company:r.company, owner:r.owner,
+  const rows = all.map(r => {
+    const rawMethod = methodColumns.length ? String(values[r.row - 1][methodColumns[0]] || '').trim() : '';
+    const methods = rawMethod.split(/[,·\s]+/).filter(Boolean);
+    const methodKnown = methods.every(m => ['선금','중도금','잔금','완납','지원금','지정일'].includes(m));
+    // Display-only allowlist. Never return arbitrary payment notes or memo cells.
+    const paymentDisplay = r.paymentPercent !== null ? (r.paymentPercent === 100 ? '✓' : r.paymentPercent + '%') :
+      r.paymentAmount ? r.paymentText : /^(?:[1-9]|1[0-2])월(?:내|말)?지급예정$/.test(r.paymentText.replace(/\s/g,'')) ? r.paymentText.replace(/\s/g,'') : r.paymentText ? '확인 필요' : '';
+    return { row:r.row, date:r.date, company:r.company, owner:r.owner,
     ctype:r.ctype, dealText:r.dealText, amount:r.amount, service:r.service, taxBasis:r.taxBasis,
+    netAmount:r.netAmount, amountDisplay:r.amount !== null ? r.amountRaw : '', paymentDisplay,
+    contractMethods:methodKnown ? methods : [], contractMethodStatus:!methodColumns.length ? 'unavailable' : methodKnown ? 'available' : 'unknown',
     paymentPercent:r.paymentPercent, paymentAmount:r.paymentAmount,
-    paymentText:r.paymentPercent !== null ? r.paymentPercent + '%' : r.paymentAmount ? r.paymentAmount + '원' : '' }));
-  return { ok:true, schemaVersion:'contract-review-source-v1', start:options.start, end:options.end,
+    paymentText:r.paymentPercent !== null ? r.paymentPercent + '%' : r.paymentAmount ? r.paymentAmount + '원' : '' };
+  });
+  return { ok:true, schemaVersion:'contract-review-source-v1', displaySchemaVersion:1, start:options.start, end:options.end,
     fetchedAt:options.fetchedAt, sourceHash:options.sourceHash, sourceRowCount:validated.sourceRowCount,
     rangeRows:rows.length, rows };
 }

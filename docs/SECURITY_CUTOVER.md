@@ -1,5 +1,11 @@
 # Employee authentication cutover — 2026-09-18
 
+## 2026-10-23 Compact source-sheet review (locally tested; deployment confirmation pending)
+
+- Replace review cards with the eight requested sheet columns and rightmost add status. Source row order, 21px rows/12px type/fixed measured columns, sticky header/action and horizontal overflow; existing month selector and explicit standalone/linked/type/individual approval paths retained in an expandable row. No matching, creation handler, ACK, financial/identity guard or permission change; no real business write to test.
+- Existing authenticated GET contracts mode adds display-only verified O/net amount, allowlisted contract-method tokens from an exact unique header, normalized H confirmation/safe month-schedule label. Unknown notes/memos excluded. Gross contract amount/payment semantics/default payment report/parser remain unchanged. Entry/employee authorization/JWT/origins/DB/RLS/collector unchanged. Missing fields remain visibly unavailable, not inferred.
+- 471 synthetic tests/security/build/audit0 pass, including actual dialog/shared-control SSR/events and existing real-handler regressions. Product Design screenshot-to-code informs measured table sizing; user explicitly limited validation to code/automatic tests. Actual positive employee API/DOM/mobile/zoom/pixel comparison remain unverified.
+
 ## 2026-10-23 Standalone creation choice in sheet review (deployed; employee UI unverified)
 
 - Web2543a30a32130dd5ec0f469bf143c1c89e021466 / Actions39878374646 build+deployment success09:29:40KST.09:30:48KST actual public HTML/14 static assets200; entry index-6IDjpoRp.js/main-BgzBTN5W.js match tested build after hashed asset-name normalization. Standalone/type/provenance/post-save-mode verification and existing month selector present. Shared CSS index-CQD1ZRH3.css unchanged from prior verified release. 466 tests/security257sources/build/audit0. No backend deployment or production creation/mutation used to test this release; real employee DOM remains unverified.
