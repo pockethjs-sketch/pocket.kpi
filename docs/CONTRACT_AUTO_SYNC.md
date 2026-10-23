@@ -1,5 +1,10 @@
 # 신규 계약 → 프리미팅 기업 자동 반영
 
+## 2026-10-23 날짜 전체 표시 보완 (운영 배포 완료, 실제 직원 UI 미검증)
+
+- 날짜 열58→108px 및 YYYY-MM-DD 전체/고정폭 숫자/time 요소/말줄임 제거. 표1192px·창1250px로 날짜 증가분만 확보하며 다른 열/21px행/월선택/추가·금융 로직 불변. 작은 화면은 글자를 줄이지 않고 기존 가로스크롤 유지.
+- 웹ce7341e1f7ade7457b9bdf9e40898ce3c924978d/Actions39883527056 success10:22:50KST.10:24:07KST HTML/14자산200, entry index-BMk-ynqT.js/main-BTdTcgTy.js 자산명정규화후 검증빌드일치, main-Ct3JW-Rj.css 바이트일치.공통CSS는 이전검증본불변.472검사/보안260소스/빌드/audit0.실제직원DOM/모바일/확대는 코드자동검사한정으로 미검증.백엔드재배포/업무쓰기0.
+
 ## 2026-10-23 시트형 미등록 목록 (운영 배포 완료, 실제 직원 UI 미검증)
 
 - 서버 kpi-contract-sheet-report v3 ACTIVE/verify_jwt=true, 4개 배포 소스 재조회 일치. index/직원인증/파서는 기존 v2와 동일, shared 보고서만 변경.09:45:41KST 무인증/합성 무효세션401, 승인origin preflight204. 웹81e94d06ac10835879d2181e6379dfb76063b06b/Actions39880225413 build+deployment success09:48:19KST.09:48:53KST HTML/14정적자산200,entry index-D6bTtyg_.js/main-DdqZkAfQ.js 자산명 정규화 후 검증빌드 일치,main-BWaHu2d4.css 바이트 일치. 공통CSS는 구조 동일/49개LAB반올림 차이 최대0.0001뿐.471검사/보안260소스/빌드/audit0. 실제 직원 API/DOM/모바일/확대/고객생성 미검증·업무쓰기0.

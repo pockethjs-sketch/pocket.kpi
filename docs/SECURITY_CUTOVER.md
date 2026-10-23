@@ -1,6 +1,8 @@
 # Employee authentication cutover — 2026-09-18
 
-## 2026-10-23 Review date truncation repair (local verification; deployment pending)
+## 2026-10-23 Review date truncation repair (deployed; employee UI unverified)
+
+- Web ce7341e1f7ade7457b9bdf9e40898ce3c924978d/Actions39883527056 build+deployment success10:22:50KST.10:24:07KST HTML/14static assets200; index-BMk-ynqT.js/main-BTdTcgTy.js normalized equal to tested build; main-Ct3JW-Rj.css byte equal. Full-date time element/108px date column/no ellipsis/1192px table present. Shared index-DZdzeJFz.css unchanged from prior verified release.472tests/security260sources/build/audit0 pass; no backend redeployment or business-data writes; actual employee DOM/mobile/zoom unverified.
 
 - Frontend only: replace shortened YY date/ellipsis with full ISO YYYY-MM-DD in a semantic time element; dedicated108px date column, fixed-width numeric font and non-truncating text. Table1192px/modal1250px, preserve horizontal scrolling and all other column widths. No API/DB/source/payment/matching/authentication/collector change or production business write.
 - Synthetic SSR asserts the visible full date, not only a tooltip. CSS guards dedicated date text/width/font/no ellipsis, month/year/leap-day fixtures plus existing regressions. Actual employee DOM/mobile/zoom remain unverified under the user's code/automatic-only scope.
