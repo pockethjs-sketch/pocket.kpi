@@ -1,6 +1,8 @@
 # Employee authentication cutover — 2026-09-18
 
-## 2026-10-23 Compact source-sheet review (locally tested; deployment confirmation pending)
+## 2026-10-23 Compact source-sheet review (deployed; employee UI unverified)
+
+- Edge kpi-contract-sheet-report v3 ACTIVE/verify_jwt=true; all four deployed files reread equal to tested sources, unchanged index/employee-access/parser from v2.09:45:41KST no-session/invalid synthetic session401, approved-origin preflight204. Web81e94d06ac10835879d2181e6379dfb76063b06b/Actions39880225413 build+deployment success09:48:19KST.09:48:53KST HTML/14assets200; index-D6bTtyg_.js/main-DdqZkAfQ.js normalized equal to tested build, main-BWaHu2d4.css byte equal. Shared CSS structure identical except49LAB components rounding<=0.0001.471tests/security260sources/build/audit0. No actual employee/customer request or financial write used as a deployment test.
 
 - Replace review cards with the eight requested sheet columns and rightmost add status. Source row order, 21px rows/12px type/fixed measured columns, sticky header/action and horizontal overflow; existing month selector and explicit standalone/linked/type/individual approval paths retained in an expandable row. No matching, creation handler, ACK, financial/identity guard or permission change; no real business write to test.
 - Existing authenticated GET contracts mode adds display-only verified O/net amount, allowlisted contract-method tokens from an exact unique header, normalized H confirmation/safe month-schedule label. Unknown notes/memos excluded. Gross contract amount/payment semantics/default payment report/parser remain unchanged. Entry/employee authorization/JWT/origins/DB/RLS/collector unchanged. Missing fields remain visibly unavailable, not inferred.
