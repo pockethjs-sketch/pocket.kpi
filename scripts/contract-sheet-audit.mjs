@@ -122,6 +122,9 @@ export function makeContractAuditSql(bundle) {
     case when exists(select 1 from jsonb_array_elements(e->'rows') r where (r->>'proof')::boolean and r->>'percent' is null) then 'PROOF_WITHOUT_PAYMENT_STATUS' end,
     case when lead is not null and schedule_total<>coalesce((lead->>'contractAmount')::numeric,0) then 'SCHEDULE_TOTAL_MISMATCH' end,
     case when lead is not null and schedule_paid<>coalesce((lead->>'paid')::numeric,0) then 'SCHEDULE_PAID_MISMATCH' end,
+    case when lead is not null and jsonb_array_length(e->'rows')=1 and lead->>'contractAt'=e#>>'{rows,0,date}'
+      and e#>>'{rows,0,percent}' is not null and exists(select 1 from jsonb_array_elements(coalesce(lead->'payments','[]')) p
+        where p->>'paidConfirmed' is distinct from 'true' and (coalesce(p->>'paidAt','')<>'' or e#>>'{rows,0,percent}'='100')) then 'PAYMENT_COMPLETION_FLAG_MISSING' end,
     case when lead is not null and (relational_count<>1 or deal_count<>1) then 'RELATIONAL_IDENTITY_UNVERIFIED' end,
     case when lead is not null and (ledger_contract is distinct from coalesce((lead->>'contractAmount')::numeric,0)
       or ledger_paid is distinct from coalesce((lead->>'paid')::numeric,0)
@@ -131,7 +134,7 @@ export function makeContractAuditSql(bundle) {
   report as(select e->>'keyHash' key_hash,issues,match_count,
     (select jsonb_agg(r->'row') from jsonb_array_elements(e->'rows') r) source_rows,
     md5(coalesce(e->>'amount','')||coalesce((select string_agg((r-'row')::text,',' order by (r-'row')::text) from jsonb_array_elements(e->'rows') r),'')||
-      coalesce(lead->>'contractAt','')||coalesce(lead->>'contractAmount','')||coalesce(lead->>'paid','')||coalesce(ledger_paid::text,'')) value_hash
+      coalesce(lead->>'contractAt','')||coalesce(lead->>'contractAmount','')||coalesce(lead->>'paid','')||coalesce(ledger_paid::text,'')||coalesce((lead->'payments')::text,'')) value_hash
     from checked)
   select jsonb_build_object('schemaVersion','contract-audit-v1','sourceHash',(select b->>'sourceHash' from bundle),
     'from',(select b->>'from' from bundle),'through',(select b->>'through' from bundle),

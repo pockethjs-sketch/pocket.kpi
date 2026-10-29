@@ -35,7 +35,7 @@ import { inquiryPeriod, inquiryReportOf, inquiryDailyActivity } from './data/inq
 import InquiryBreakdown from './components/InquiryBreakdown.jsx';
 import { contractRoasByType, contractRoasRows, dailyStageActivity, dailyComparisonWindow, relativeMetricChange, previousDatedSpend, weekdayActivity, absoluteCountChange, previousMonthCostWindow, completeDatedSpend } from "./data/performanceMetrics.js";
 import { accountFromEmployeeAccess } from "./data/employeeAccount.js";
-import { paymentRows, paymentScheduleSum, paymentTotalAmount, syncPaymentScheduleTotal } from "./data/paymentSchedule.js";
+import { paymentRows, paymentScheduleSum, paymentTotalAmount, syncPaymentScheduleTotal, setPaymentPaidDate, setPaymentConfirmed } from "./data/paymentSchedule.js";
 import { buildDailyMeetingRecord, dailyMeetingContent, dailyMeetingRecords } from "./data/dailyMeetingLog.js";
 import { preparePremeetingState } from './data/premeetingState.js';
 import { syncDataAndContracts, manualSyncError } from "./data/manualSync.js";
@@ -4846,19 +4846,21 @@ function PayModal({ id, onClose, upPay, applyPreset }) {
     if (x.status === "계약 완료") x.contractAmount = v;
     else x.expected = v;
   });
-  const setRow = (rid, k, v) => upPay(l.id, (x) => { const p = x.payments.find((y) => y.id === rid); if (p) p[k] = v; });
+  const setRow = (rid, k, v) => upPay(l.id, (x) => { const p = x.payments.find((y) => y.id === rid); if (p) { if (k === "paidAt") { if (!v && p.paidAt) { toast("기존 입금일 삭제·입금 취소는 별도 확인이 필요합니다"); return; } setPaymentPaidDate(p, v); } else p[k] = v; } });
   const addRow = () => upPay(l.id, (x) => {
     const rest = Math.max(0, (x.contractAmount || x.expected || 0) - paySum(x));
     x.payments.push({ id: uid(), no: x.payments.length + 1, label: x.payments.length ? "잔금" : "일시금", amount: rest, dueAt: "", paidAt: "", method: "", memo: "" });
   });
   const delRow = (rid) => upPay(l.id, (x) => { x.payments = x.payments.filter((y) => y.id !== rid); });
-  const togglePaid = (p) => upPay(l.id, (x) => {
+  const togglePaid = (p) => {
+    if (isPayDone(p) && p.paidAt) { toast("입금일이 있는 회차의 입금 취소는 별도 확인이 필요합니다"); return; }
+    upPay(l.id, (x) => {
     const t = x.payments.find((y) => y.id === p.id); if (!t) return;
     const wasDone = isPayDone(t);
-    t.paidAt = wasDone ? "" : (t.dueAt && t.dueAt <= todayISO() ? t.dueAt : todayISO());
-    t.paidConfirmed = false;
+    setPaymentConfirmed(t, !wasDone);
     x.history.push({ date: todayISO(), type: "결제", note: (!wasDone ? "입금 확인" : "입금 취소") + " · " + (t.label || t.no + "회차") + " " + fmtK(t.amount || 0) + "원" + (t.paidAt ? " (" + fmtDate(t.paidAt) + ")" : "") });
-  });
+    });
+  };
   return (
     <Modal open={!!id} onClose={onClose} wide title={"결제 금액 · 스케줄 — " + l.company}>
       <div className="space-y-3">
@@ -4912,11 +4914,11 @@ function PayModal({ id, onClose, upPay, applyPreset }) {
                     <td className="px-2 py-2"><Inp type="date" value={p.dueAt || ""} onChange={(e) => setRow(p.id, "dueAt", e.target.value)} className={"w-32 " + (od ? "border-red-300 text-red-600" : "")} /></td>
                     <td className="px-2 py-2">
                       <div className="flex items-center gap-1.5">
-                        <input type="checkbox" className="rounded w-4 h-4 accent-emerald-600" checked={done} onChange={() => togglePaid(p)} title="체크 = 입금 완료 (입금일 자동 입력)" />
+                        <input type="checkbox" className="rounded w-4 h-4 accent-emerald-600" checked={done} onChange={() => togglePaid(p)} title="체크 = 입금 완료 · 실제 입금일은 별도 입력" />
                         {p.paidAt
                           ? <Inp type="date" value={p.paidAt} onChange={(e) => setRow(p.id, "paidAt", e.target.value)} className="w-32" />
                           : p.paidConfirmed
-                            ? <span className="text-xs font-semibold text-emerald-700">지급완료 · 날짜 미상</span>
+                            ? <span className="text-xs font-semibold text-emerald-700">지급완료 · 날짜 미상<Inp type="date" value="" onChange={(e) => setRow(p.id, "paidAt", e.target.value)} className="w-32" /></span>
                             : <span className={"text-xs font-semibold " + (od ? "text-red-600" : "text-slate-400")}>{od ? "연체 " + Math.round((new Date(todayISO()) - new Date(p.dueAt)) / 86400000) + "일" : "미입금"}</span>}
                       </div>
                     </td>

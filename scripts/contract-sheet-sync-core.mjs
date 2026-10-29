@@ -211,6 +211,7 @@ export function _crmPlanContractPaymentSync(groups, state, now, hash, options) {
     if (row.date > today || !g.amountKnown || g.amount <= 0 || total !== g.amount || !eligible) {
       reject('계약 상태·금액·날짜 불일치'); return;
     }
+    if (l.contractAt && l.contractAt !== row.date) { reject('다른 계약일의 입금 반영 안 함'); return; }
     if (l.contractSheetSync && l.contractSheetSync.sourceKey && l.contractSheetSync.sourceKey !== g.sourceKey) {
       reject('다른 계약 원본과 연결됨'); return;
     }
@@ -223,18 +224,20 @@ export function _crmPlanContractPaymentSync(groups, state, now, hash, options) {
     var previous = l.contractSheetPaymentSync;
     if (Number(l.paid || 0) > paid) { reject('별도 입금 기록과 결제 회차 불일치'); return; }
     if (target < paid) { reject('시트 입금액 감소 · 기존 입금 취소 안 함'); return; }
-    if (target === paid) { unchanged += 1; return; }
+    var completionMissing = payments.some(function (p) { return !!p.paidAt && p.paidConfirmed !== true; });
+    if (target === paid && !completionMissing && Number(l.paid || 0) === target) { unchanged += 1; return; }
     if (previous && (previous.sourceKey !== g.sourceKey || (!sourceAuthoritative && previous.scheduleHash && previous.scheduleHash !== _crmPaymentScheduleHash(payments, hash)))) {
       reject('이전 자동 반영 이후 수동 결제 수정 확인 필요'); return;
     }
-    var paymentHash = hash(JSON.stringify([g.sourceKey, row.date, row.dealText, g.amount, percent]));
+    var paymentHash = hash(JSON.stringify([g.sourceKey, row.date, row.dealText, g.amount, percent, 'completion-v2']));
     var nextPayments = JSON.parse(JSON.stringify(payments));
     if (!nextPayments.length) nextPayments.push({ id: 'sheet-plan-' + hash(String(l.id) + g.sourceKey).slice(0, 24), no: 1, label: '일시금', amount: g.amount, dueAt: '', paidAt: '', paidConfirmed: false, memo: '' });
     var unpaid = nextPayments.filter(function (p) { return !p.paidAt && !p.paidConfirmed; });
     var delta = target - paid;
     var exact = unpaid.filter(function (p) { return Number(p.amount) === delta; });
     var deposit = exact.filter(function (p) { return p.label === '선금'; });
-    if (target === g.amount) unpaid.forEach(function (p) { p.paidConfirmed = true; });
+    if (delta === 0) { /* Amount already confirmed: repair flags without reallocating money. */ }
+    else if (target === g.amount) unpaid.forEach(function (p) { p.paidConfirmed = true; });
     else if (exact.length === 1) exact[0].paidConfirmed = true;
     else if (paid === 0 && deposit.length === 1) deposit[0].paidConfirmed = true;
     else if (unpaid.length === 1 && Number(unpaid[0].amount) > delta) {
@@ -264,6 +267,13 @@ export function _crmPlanContractPaymentSync(groups, state, now, hash, options) {
       });
       if (left !== 0) { reject('H열 확인액과 결제 회차 불일치'); return; }
     } else { reject('부분 입금에 대응하는 결제 회차가 불명확함'); return; }
+    nextPayments.forEach(function (p) {
+      if (p.paidAt) p.paidConfirmed = true;
+      else if (p.paidConfirmed === true) {
+        var old = payments.filter(function (x) { return x.id === p.id; })[0];
+        if (!old || old.paidConfirmed !== true) p.actualPaidAtUnknown = true;
+      }
+    });
     var metadata = { sourceKey: g.sourceKey, paymentHash: paymentHash, sourceDate: row.date, confirmedAt: now, amount: target,
       percent: percent, actualPaidAt: null, scheduleHash: _crmPaymentScheduleHash(nextPayments, hash) };
     patches.push({ id: String(l.id), ops: [
@@ -273,7 +283,7 @@ export function _crmPlanContractPaymentSync(groups, state, now, hash, options) {
     ] });
     logs.push({ id: 'contract-paid-' + hash(String(l.id) + paymentHash).slice(0, 32), at: now, date: today,
       company: l.company, leadId: l.id, action: '외부 시트 자동 반영', source: '계약 프로세스 시트', actor: '시스템',
-      detail: 'H열 ' + percent + '% 입금 확인 · ' + target.toLocaleString('en-US') + '원 · 실제 입금일 미기재',
+      detail: 'H열 ' + percent + '% 입금 확인 · ' + target.toLocaleString('en-US') + '원 · 기존 실제 입금일 보존 · 미기재 날짜 추정 안 함',
       meta: { sourceKey: g.sourceKey, paymentHash: paymentHash, before: { paid: Number(l.paid || 0) },
         after: { paid: target, outstanding: g.amount - target }, sourceRow: row.row } });
     updated.push({ id: l.id, company: l.company, paid: target, outstanding: g.amount - target, actualPaidAt: null });

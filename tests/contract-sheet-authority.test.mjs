@@ -36,7 +36,7 @@ test('H 50% uses the corrected O amount, not the old web total',()=>{
 });
 test('already received money and its date are preserved; only the increase becomes another confirmed receipt',()=>{
   const l=base();l.payments[0].paidAt='2026-09-29';l.paid=4400000;
-  const {next}=run(l);assert.deepEqual(next.payments[0],l.payments[0]);
+  const {next}=run(l);assert.deepEqual(next.payments[0],{...l.payments[0],paidConfirmed:true});
   assert.equal(next.payments[1].amount,1100000);assert.equal(next.payments[1].paidConfirmed,true);
   assert.equal(next.payments[1].paidAt,'');assert.equal(next.paid,5500000);
 });

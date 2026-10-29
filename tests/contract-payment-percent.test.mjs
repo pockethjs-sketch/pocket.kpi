@@ -41,7 +41,7 @@ test('partial progresses cumulatively, not by adding the source amount again',()
 });
 test('already paid installments keep actual dates when confirming the remaining balance',()=>{
   const original=lead({paid:2500000,payments:[{id:'a',amount:2500000,paidAt:'2026-09-19',memo:'확인'},{id:'b',amount:3000000,paidAt:''}]});
-  const {next}=run(original,'V');assert.deepEqual(next.payments[0],original.payments[0]);
+  const {next}=run(original,'V');assert.deepEqual(next.payments[0],{...original.payments[0],paidConfirmed:true});
   assert.equal(next.payments[1].paidConfirmed,true);assert.equal(next.paid,5500000);
 });
 test('equal 50/50 installments select the explicitly labeled advance, not the balance',()=>{
@@ -69,4 +69,24 @@ test('unrelated note edits and adding an actual date do not invalidate a later c
 });
 test('fractional percentages round in won and never change the schedule total',()=>{
   const {next}=run(lead(),'33.333%');assert.equal(next.paid,1833315);assert.equal(next.payments.reduce((s,p)=>s+p.amount,0),5500000);
+});
+
+test('equal full receipt still repairs dated completion flags and repeats as no-op',()=>{
+  for(const flag of [false,undefined]) {
+    const original=lead({contractAt:'2026-09-18',paid:5500000,payments:[{id:'a',amount:5500000,paidAt:'2026-09-19',paidConfirmed:flag,memo:'keep'}]});
+    const {r,next}=run(original,'V');assert.equal(r.updated.length,1);
+    assert.deepEqual(next.payments,[{...original.payments[0],paidConfirmed:true}]);
+    assert.equal(next.paid,5500000);assert.equal(run(next,'V').r.unchanged,1);
+  }
+});
+test('different contract date is held; new undated confirmations retain unknown dates',()=>{
+  assert.equal(run(lead({contractAt:'2026-09-17'}),'V').r.updated.length,0);
+  const {next}=run(lead({contractAt:'2026-09-18'}),'V');
+  assert.equal(next.payments[0].paidAt,'');assert.equal(next.payments[0].actualPaidAtUnknown,true);
+});
+test('equal partial receipt confirms dated advance only, never the unpaid balance',()=>{
+  const original=lead({contractAt:'2026-09-18',paid:2750000,payments:[{id:'a',amount:2750000,paidAt:'2026-09-19',paidConfirmed:false},{id:'b',amount:2750000,paidAt:'',paidConfirmed:false}]});
+  const {next,r}=run(original,'50%');assert.equal(r.updated.length,1);
+  assert.equal(next.payments[0].paidConfirmed,true);assert.deepEqual(next.payments[1],original.payments[1]);
+  assert.equal(next.paid,2750000);assert.equal(run(next,'50%').r.unchanged,1);
 });
