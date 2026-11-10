@@ -147,11 +147,11 @@ Deno.serve(async (req) => {
     calendar.aggregation = { ...verifyCalendarConsistency(allMeetings, {
       start: '2026-09-30', end: today, today }), completedAt: new Date().toISOString() };
     if (!calendar.aggregation.verified) throw new Error('calendar_aggregation_mismatch');
-    // Catch up previously collected but unapplied rows even when today's feed is empty.
-    // Keep the daily CRM request window unchanged; this reconciliation reads Supabase only.
+    // Promote only this fresh source window. Older stored backlog can have changed
+    // registration dates and requires its own current-source verification.
     const { data: inflow, error: inflowError } = await supabase.rpc("kpi_reconcile_crm_inflow", {
       p_organization_id: organizationId,
-      p_start: start < "2026-09-30" ? start : "2026-09-30",
+      p_start: start,
       p_end: end,
       p_dry_run: false,
     });

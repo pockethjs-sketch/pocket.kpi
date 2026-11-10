@@ -28,7 +28,7 @@ function harness({ leads = [], meetings = [], daily = false, inquiryError = fals
         return {data:{ok:true,verified:!projectionMismatch,blocked:0,stored:meetings.length},error:projectionError ? {code:'TEST'} : null};
       }
       calls.push('promote'); assert.equal(name,'kpi_reconcile_crm_inflow');
-      assert.equal(args.p_dry_run,false); assert.equal(args.p_start,'2026-09-30');
+      assert.equal(args.p_dry_run,false); assert.equal(args.p_start,'2026-10-05');
       return {data:{ok:!blocked,blocked:blocked ? 1 : 0,added:leads.length},error:rpcError ? {code:'TEST'} : null};
     },
   };
@@ -73,7 +73,7 @@ test('server reconciles raw leads before recording collection success',async()=>
   const r=await h.invoke(); assert.equal(r.status,200); assert.deepEqual(h.calls,['raw','calendar','aggregation','promote','COMPLETED']);
   assert.equal((await r.json()).inflow.added,1);
 });
-test('empty daily feed still reconciles the previously collected backlog',async()=>{
+test('empty daily feed still verifies the current source window without promoting stale historical backlog',async()=>{
   const h=harness(); assert.equal((await h.invoke()).status,200); assert.deepEqual(h.calls,['calendar','aggregation','promote','COMPLETED']);
 });
 
