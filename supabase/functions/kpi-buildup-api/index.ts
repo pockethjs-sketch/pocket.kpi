@@ -6,7 +6,7 @@ import {
 } from "../_shared/buildup-access.mjs";
 import { passwordChangeRequired } from "../_shared/account-access.mjs";
 import { kstDay, premeetingItem, premeetingSync } from "../_shared/premeeting-upcoming.mjs";
-import { crmLeadView } from "../_shared/crm-lead-tm.mjs";
+import { CRM_LEAD_LIMITS, crmLeadView, latestRawLead } from "../_shared/crm-lead-tm.mjs";
 import {
   AUDIO_BUCKET, AUDIO_KEY, AUDIO_LIMITS, RECORDING_ID, audioPath, validateAudioUpload, validateTranscribe, clovaRequest, clovaStartError,
   recordingItem, transcribeRateLimited, processingIsStale, newCallbackSecret, secretHash,
@@ -204,6 +204,7 @@ Deno.serve(async (req) => {
 
   // TM memo, first inquiry and TM diagnosis that the TM team keeps on the KPI lead of a CRM premeeting company.
   // Resolved from the stored premeeting schedule (client number, then project number); returns only those fields.
+  // The memo/inquiry prefer the newest CRM inquiry record the KPI sync stored, which can be newer than the KPI lead.
   if (action === "crmLead") {
     const scheduleNo = String(body.scheduleNo ?? "");
     const projectNo = body.projectNo === undefined || body.projectNo === "" ? "" : String(body.projectNo);
@@ -211,8 +212,9 @@ Deno.serve(async (req) => {
     const { data: schedule, error: scheduleError } = await supabase.from("buildup_premeetings").select("crm_client_no,crm_project_no")
       .eq("organization_id", organizationId).eq("schedule_no", scheduleNo).maybeSingle();
     if (scheduleError) return reply(req, { error: "crm_lead_read_failed" }, 500);
-    const clientNo = schedule?.crm_client_no || "";
-    const project = schedule?.crm_project_no || projectNo;
+    const digitsOnly = (value: unknown) => /^[0-9]{1,20}$/.test(String(value ?? "")) ? String(value) : "";
+    const clientNo = digitsOnly(schedule?.crm_client_no);
+    const project = digitsOnly(schedule?.crm_project_no) || projectNo;
     // One unambiguous active lead only; two matches are never guessed between.
     const findOne = async (column: string, value: string) => {
       const { data, error } = await supabase.from("leads").select("source_payload")
@@ -225,8 +227,25 @@ Deno.serve(async (req) => {
       if (clientNo) row = await findOne("source_payload->>id", "crm-" + clientNo) || await findOne("source_payload->crmSheet->>clientNo", clientNo);
       if (!row && project) row = await findOne("source_payload->>projNo", project);
     } catch { return reply(req, { error: "crm_lead_read_failed" }, 500); }
-    if (!row) return reply(req, { ok: true, found: false });
-    return reply(req, { ok: true, found: true, lead: crmLeadView(row.source_payload) });
+    // Newest stored CRM inquiry records of this company (by client number, and by project number), memo/inquiry only.
+    const rawRows = async (column: string, value: string) => {
+      const { data, error } = await supabase.from("crm_raw_records")
+        .select("client_no:payload->>client_no,client_memo:payload->>client_memo,iciq_content:payload->>iciq_content,last_seen_at")
+        .eq("organization_id", organizationId).eq("record_type", "LEAD").eq(column, value)
+        .order("last_seen_at", { ascending: false }).limit(CRM_LEAD_LIMITS.rawRows);
+      if (error) throw new Error("crm_lead_read_failed");
+      return data || [];
+    };
+    let raw: any = null;
+    try {
+      const [byClient, byProject] = await Promise.all([
+        clientNo ? rawRows("payload->>client_no", clientNo) : Promise.resolve([]),
+        project ? rawRows("external_id", project) : Promise.resolve([]),
+      ]);
+      raw = latestRawLead([...byClient, ...byProject]);
+    } catch { return reply(req, { error: "crm_lead_read_failed" }, 500); }
+    if (!row && !raw) return reply(req, { ok: true, found: false });
+    return reply(req, { ok: true, found: true, lead: crmLeadView(row?.source_payload ?? null, raw) });
   }
 
   // Meeting recordings: kept in the private bucket (signed URLs only), transcribed by CLOVA Speech on request.
