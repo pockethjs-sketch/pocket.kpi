@@ -1,6 +1,6 @@
 # KPI / 빌드업 상위 작업 공간 — 2026-10-20
 
-상태: 빌드업 v4.8 운영 반영(PR #1). 계정 관리·첫 로그인 비밀번호 변경 — Edge Function 운영 반영, 프런트엔드는 이 브랜치 PR 병합 후 GitHub Actions 배포 기준. 실제 직원 로그인/브라우저 조작 검증은 미실시.
+상태(2026-10-21 17:48 KST): 빌드업 인텔리전스 v4.9 운영 반영 — PR #5(녹음 정밀 받아쓰기 · AI 비용 줄이기 · 목록 날짜 묶음 · KPI TM 메모 · 임시 비밀번호 12자) · #6(Vite 8.3.5) · #7(회사 키 AI Haiku 5.5) 병합 후 GitHub Actions 배포 성공. 서버: `kpi-buildup-api` v9 · `kpi-buildup-stt-callback` v1 · `kpi-account-api` v4. 남은 설정: Anthropic 크레딧 충전, CLOVA Speech 비밀(`CLOVA_SPEECH_INVOKE_URL` · `CLOVA_SPEECH_SECRET`). 실제 직원 로그인/브라우저 조작 검증은 미실시.
 
 ## 빌드업 인텔리전스 v4.9 — 회사 키 AI를 모두 Claude Haiku 5.5로 (2026-10-21)
 
@@ -9,6 +9,7 @@
 - 서버 변경 없음: `kpi-buildup-api` 허용 모델에 이미 `claude-haiku-5-5`가 있다(v9). 자산 SHA-256 고정만 갱신.
 - 같은 날 함께 처리: PR #5 병합(16:57 KST) 뒤 `kpi-account-api` v4 배포(17:32 KST, verify_jwt) — 임시 비밀번호 12자(`account-access.mjs` `tempMin` 12), 배포본을 다시 읽어 확인. PR #5 병합 직후 배포 실행은 `npm run audit`(Vite 8.2.2 고위험 권고)에서 멈춰 사이트는 아직 이전 화면 — Dependabot PR #6(Vite 8.3.5) 병합이 필요하다.
 - 검증(로컬): KPI 413개 중 398 통과 · 13 skip · 2 환경 실패, 보안 린트 · 번들 확인 통과. 인텔리전스 웹 하네스 78/78(모든 요청이 Haiku 5.5 · 키 없음 안내 문구 포함), 로컬 63/63 · 공유 31/31 · 키 파일 6/6 · 단위 테스트 통과.
+- 배포 기록: 2026-10-21 17:47 KST PR #6(Vite 8.2.2 → 8.3.5) · #7 병합 → 배포 실행 39571985960 성공(17:47:51~17:48:44 KST — `npm ci` · 보안 린트 · `npm test` · `npm run check`(빌드 · 빌드 확인) · `npm run audit` · Pages 배포 모두 통과, #6 단독 실행은 #7 실행으로 대체되어 취소). main `aaae450`의 고정 자산 SHA-256 `5866d941180c927ba418f78773a81f0c77fa8459afc7365e8c83b5682d7ecc8f`(Haiku 빌드)를 CI 테스트가 확인. 사이트 · 배포 산출물 직접 내려받기는 이 작업 환경의 네트워크 정책으로 막혀 실행 기록으로 확인했다.
 
 ## 빌드업 인텔리전스 v4.9 — AI 비용 줄이기: 자동 분석 Haiku · 녹음 보정 Sonnet · 생각 깊이 · 잘림 수정 (2026-10-21)
 
