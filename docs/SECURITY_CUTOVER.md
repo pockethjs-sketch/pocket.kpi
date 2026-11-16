@@ -1,5 +1,7 @@
 # Employee authentication cutover — 2026-09-18
 
+- 2026-11-16 release verified: Web commit35a656f083ef51f685b593d95aeba6494186c1d3 / Actions43789472510 build and deployment SUCCESS02:00:46UTC. At02:01:41UTC public HTML/entry index-BKbKn_YN.js/main-B9zaMN-q.js HTTP200; main is asset-name-normalized equal to tested build; intelligence chunk byte-identical. Remote collector v22(7 files)/domain v23(9 files) all source-equal; unauthenticated probes401 and fresh RPC anon/authenticated denied/service only. Stored November list57 schedules/56 companies includes the one retained original-absent schedule; current original56 schedules verified separately. Actual employee DOM remains unverified because supported accessibility read returned no text; no screenshot with personal data or browser credential access. Next scheduled09:00 still unobserved.
+
 ## 2026-11-16 Fresh monthly premeeting repair (backend deployed; web verification pending)
 
 - Direct user authorization to repair and deploy premeeting freshness. Current collector credential file rotated into the existing CRM_BEARER_TOKEN Secret without printing or persisting its value. Current hosted runtime service credential is the default secret key, not the legacy JWT listed by CLI; internal exact-key validation accepts the documented apikey header and retains existing server Bearer/HMAC callers. No employee impersonation or permission/RLS widening.
