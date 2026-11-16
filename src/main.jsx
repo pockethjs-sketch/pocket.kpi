@@ -1400,7 +1400,8 @@ const premeetingCompanyDateInRange = (lead, range) => {
   const legacyDate = String(meetingDoneDate(lead) || lead.premeetingAt || lead.bookedAt || lead.contractAt || lead.createdAt || "").slice(0, 10);
   return inR(legacyDate, range) ? legacyDate : "";
 };
-const isPremeetingCompanyInRange = (lead, range) => PREMEETING_COMPANY_STATUSES.includes(lead && lead.status) && !!premeetingCompanyDateInRange(lead, range);
+const isPremeetingCompanyInRange = (lead, range) => !!lead && !lead.archivedAt && !lead.archived_at && !lead.deletedAt &&
+  (PREMEETING_COMPANY_STATUSES.includes(lead.status) || crmMeetingDates(lead).some(date => inR(date, range))) && !!premeetingCompanyDateInRange(lead, range);
 const SSTYLE = {
   "신규 DB": "bg-slate-100 text-slate-600 border-slate-200",
   "TM 진행중": "bg-sky-50 text-sky-700 border-sky-200",

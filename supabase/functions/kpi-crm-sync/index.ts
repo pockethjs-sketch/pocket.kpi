@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { verifyCalendarConsistency } from '../_shared/calendar-consistency.mjs';
 import { collectWebsiteInquiries, commitInquiryReport, recordInquiryFailure } from '../_shared/website-inquiries.mjs';
+import { premeetingWindow, collectPremeetingPages } from '../_shared/premeeting-window.mjs';
 
 const encoder = new TextEncoder();
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
@@ -18,7 +19,8 @@ function safeEqual(left: string, right: string) {
 
 function verifyInternalService(req: Request) {
   const expected = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-  const supplied = String(req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
+  // Current hosted secret keys use apikey; retain the existing internal Bearer caller.
+  const supplied = String(req.headers.get("apikey") || req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
   return safeEqual(supplied, expected);
 }
 
@@ -70,6 +72,10 @@ Deno.serve(async (req) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end) || start > end) {
     return json({ error: "invalid_date_range" }, 400);
   }
+  const today = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
+  const repairOnly = internalService && body.premeetingRepair === true;
+  const meetingWindow = premeetingWindow(start, end, today, internalService, repairOnly);
+  if (repairOnly && !meetingWindow.project) return json({ error: 'invalid_repair_range' }, 400);
   // crmToken fallback is accepted only on the legacy HMAC path and is never persisted or returned.
   const token = String(Deno.env.get("CRM_BEARER_TOKEN") || (!internalService ? body.crmToken : "") || "");
   const organizationId = Deno.env.get("KPI_ORGANIZATION_ID") || "";
@@ -87,23 +93,29 @@ Deno.serve(async (req) => {
   // Never promote these counts into customers, contracts, receipts or raw LEAD rows.
   let websiteInquiries: any;
   try {
+    if (repairOnly) websiteInquiries = { skipped: true, scope: 'premeeting-only' };
+    else {
     const report = await collectWebsiteInquiries({ fetcher: fetch, headers, start: end.slice(0, 7) + '-01', end, hash: sha256 });
     websiteInquiries = await commitInquiryReport(supabase, organizationId, report);
+    }
   } catch (error) {
     websiteInquiries = await recordInquiryFailure(supabase, organizationId, 'WEBSITE', error instanceof Error ? error.message : 'inquiry_collection_failed');
   }
   const { error: inquiryStatusError } = await supabase.from('crm_sync_runs').update({ website_inquiry_result: websiteInquiries }).eq('id', run.id);
   if (inquiryStatusError) return json({ error: 'inquiry_status_write_failed' }, 502);
   const leadUrl = `https://api.xn--9i1b674cwc38r6pa.com/crm/v3/projects/newarrivals/v2?keyword=&start_dt=${encodeURIComponent(start + "T00:00:00+09:00")}&end_dt=${encodeURIComponent(end + "T23:59:59+09:00")}&is_inquiry=true`;
-  const meetingUrl = `https://api.xn--9i1b674cwc38r6pa.com/crm/v3/mr_schedules?offset=0&limit=1000&state=1&page=schedule&start_dt=${encodeURIComponent(start + "T00:00:00+09:00")}&end_dt=${encodeURIComponent(end + "T23:59:59+09:00")}`;
+  const meetingUrl = `https://api.xn--9i1b674cwc38r6pa.com/crm/v3/mr_schedules?state=1&page=schedule&start_dt=${encodeURIComponent(meetingWindow.start + "T00:00:00+09:00")}&end_dt=${encodeURIComponent(meetingWindow.end + "T23:59:59+09:00")}`;
   let calendar: any = null;
   try {
-    const [leadResponse, meetingResponse] = await Promise.all([fetch(leadUrl, { headers }), fetch(meetingUrl, { headers })]);
-    if (!leadResponse.ok || !meetingResponse.ok) throw new Error(`crm_http_${leadResponse.status}_${meetingResponse.status}`);
-    const leadRows = rows(await leadResponse.json()).filter((row: any) => {
+    const [leadResponse, pagedMeetings] = await Promise.all([repairOnly ? null : fetch(leadUrl, { headers }), collectPremeetingPages(meetingUrl, headers, fetch, rows)]);
+    if (leadResponse && !leadResponse.ok) throw new Error(`crm_http_${leadResponse.status}_200`);
+    const leadRows = (leadResponse ? rows(await leadResponse.json()) : []).filter((row: any) => {
       const day = String(row?.reg_dt || "").slice(0, 10); return day && day >= start && day <= end;
     });
-    const meetingRows = rows(await meetingResponse.json()).filter((row: any) => Number(row?.mr_type) === 1);
+    const meetingRows = pagedMeetings.filter((row: any) => {
+      const day = sourceDate(row, 'MEETING');
+      return Number(row?.mr_type) === 1 && day && day >= meetingWindow.start && day <= meetingWindow.end;
+    });
     const rawRows = [];
     for (const [type, values] of [["LEAD", leadRows], ["MEETING", meetingRows]] as const) {
       for (let i = 0; i < values.length; i++) rawRows.push({
@@ -132,7 +144,10 @@ Deno.serve(async (req) => {
     }
     if (expectedMeetings.size !== storedMeetings.size || [...expectedMeetings].some(key => !storedMeetings.has(key))) throw new Error('calendar_storage_mismatch');
     calendar = { verified: true, source: 'crm_raw_records', collected: expectedMeetings.size, stored: storedMeetings.size,
-      start, end, completedAt: new Date().toISOString() };
+      start: meetingWindow.start, end: meetingWindow.end, completedAt: new Date().toISOString() };
+    // Persist this run's verified source membership before the scoped projection.
+    const { error: sourceStatusError } = await supabase.from('crm_sync_runs').update({ meeting_count: meetingRows.length, inflow_result: { calendar } }).eq('id', run.id);
+    if (sourceStatusError) throw new Error('calendar_verify_failed');
     // Existing daily job: recheck the full reporting window, not only today's feed.
     const allMeetings: any[] = [];
     for (let offset = 0; ; offset += 500) {
@@ -143,13 +158,12 @@ Deno.serve(async (req) => {
       if ((result.data || []).length < 500) break;
       if (offset >= 49500) throw new Error('calendar_aggregation_read_failed');
     }
-    const today = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
     calendar.aggregation = { ...verifyCalendarConsistency(allMeetings, {
       start: '2026-09-30', end: today, today }), completedAt: new Date().toISOString() };
     if (!calendar.aggregation.verified) throw new Error('calendar_aggregation_mismatch');
     // Promote only this fresh source window. Older stored backlog can have changed
     // registration dates and requires its own current-source verification.
-    const { data: inflow, error: inflowError } = await supabase.rpc("kpi_reconcile_crm_inflow", {
+    const { data: inflow, error: inflowError } = repairOnly ? { data: { ok: true, scope: 'premeeting-only', added: 0, enriched: 0, blocked: 0 }, error: null } : await supabase.rpc("kpi_reconcile_crm_inflow", {
       p_organization_id: organizationId,
       p_start: start,
       p_end: end,
@@ -159,10 +173,9 @@ Deno.serve(async (req) => {
     if (!inflow?.ok || inflow.blocked > 0) throw new Error("inflow_identity_blocked");
     // Existing Apps Script daily/manual premeeting path only. Broad employee
     // crm_refresh/TM reads must not become historical company-list writers.
-    const recentStart = new Date(Date.parse(today + 'T00:00:00Z') - 2 * 86400000).toISOString().slice(0, 10);
-    if (!internalService && start === recentStart && end === today) {
-      const { data: projection, error } = await supabase.rpc('kpi_reconcile_crm_premeetings', {
-        p_organization_id: organizationId, p_start: start, p_end: end, p_dry_run: false,
+    if (meetingWindow.project) {
+      const { data: projection, error } = await supabase.rpc('kpi_reconcile_crm_premeetings_fresh', {
+        p_organization_id: organizationId, p_start: meetingWindow.start, p_end: meetingWindow.end, p_dry_run: false, p_sync_run_id: run.id,
       });
       if (error) throw new Error('premeeting_reconcile_failed');
       calendar.companyProjection = projection;
@@ -174,11 +187,11 @@ Deno.serve(async (req) => {
       completed_at: completedAt, inflow_completed_at: completedAt, inflow_result: { ...inflow, calendar },
     }).eq("id", run.id);
     if (completeError) throw new Error("sync_completion_failed");
-    const inquiryOk = websiteInquiries?.verified === true;
+    const inquiryOk = repairOnly || websiteInquiries?.verified === true;
     return json({ ok: inquiryOk, ...(inquiryOk ? {} : { error: 'website_inquiry_sync_failed' }), start, end, leads: leadRows, meetings: meetingRows, inflow, calendar, websiteInquiries, fetchedAt: completedAt, syncRunId: run.id, readBackend: "supabase-edge" }, inquiryOk ? 200 : 502);
   } catch (error) {
     const detail = String(error instanceof Error ? error.message : error);
-    const message = /^(crm_http_\d+_\d+|raw_upsert_[a-zA-Z0-9]+|crm_response_invalid|inflow_reconcile_failed|inflow_identity_blocked|sync_completion_failed|calendar_verify_failed|calendar_storage_mismatch|calendar_aggregation_read_failed|calendar_aggregation_mismatch|premeeting_reconcile_failed|premeeting_projection_mismatch)$/.test(detail)
+    const message = /^(crm_http_\d+_\d+|calendar_http_\d+|calendar_identity_invalid|calendar_page_changed|calendar_page_repeated|calendar_page_limit|raw_upsert_[a-zA-Z0-9]+|crm_response_invalid|inflow_reconcile_failed|inflow_identity_blocked|sync_completion_failed|calendar_verify_failed|calendar_storage_mismatch|calendar_aggregation_read_failed|calendar_aggregation_mismatch|premeeting_reconcile_failed|premeeting_projection_mismatch)$/.test(detail)
       ? detail : "crm_sync_internal_error";
     await supabase.from("crm_sync_runs").update({ status: "FAILED", error_code: message.slice(0, 200), completed_at: new Date().toISOString(), ...(calendar ? { inflow_result: { calendar } } : {}) }).eq("id", run.id);
     return json({ error: "crm_sync_failed", message }, 502);

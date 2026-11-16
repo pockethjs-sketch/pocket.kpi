@@ -1,5 +1,9 @@
 export const PREMEETING_STAGES = ['프리미팅 확정', '프리미팅 완료', '견적·제안 발송', '계약 완료'];
 export const isPremeetingLead = lead => !!lead && !lead.archived_at && PREMEETING_STAGES.includes(lead.status);
+// List membership is independent of the current sales stage. Mutation eligibility stays unchanged.
+export const isPremeetingReadLead = lead => !!lead && !lead.archived_at && !lead.archivedAt && !lead.deletedAt &&
+  (isPremeetingLead(lead) || [...(Array.isArray(lead.crmMeetings) ? lead.crmMeetings : []), ...(lead.crmMeeting ? [lead.crmMeeting] : [])]
+    .some(m => Number(m?.type) === 1 && !!m?.msNo && Number.isFinite(Date.parse(m.startAt))));
 export const isPremeetingOnly = access => access?.scope === 'premeeting';
 
 export function canAccessAction(access, action, body = {}) {
@@ -9,7 +13,7 @@ export function canAccessAction(access, action, body = {}) {
 }
 
 export function premeetingDocuments(documents, leads) {
-  const ids = new Set(leads.filter(isPremeetingLead).map(l => String(l.id)));
+  const ids = new Set(leads.filter(isPremeetingReadLead).map(l => String(l.id)));
   return {
     users: (documents.users || []).map(u => ({ id: u.id, name: u.name, team: u.team, role: u.role })),
     contractStatusLogs: (documents.contractStatusLogs || []).filter(x => ids.has(String(x.leadId))),

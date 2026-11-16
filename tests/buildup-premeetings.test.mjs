@@ -36,7 +36,8 @@ test('the window is today (KST) through +30 days and uses the same CRM calendar 
   assert.deepEqual(premeetingWindow(new Date('2026-10-19T23:00:00Z')), { start: '2026-10-20', end: '2026-11-19' });
   const query = premeetingQuery(WINDOW);
   assert.match(query, /^offset=0&limit=1000&state=1&page=schedule&start_dt=2026-10-20T00%3A00%3A00%2B09%3A00&end_dt=2026-11-19T23%3A59%3A59%2B09%3A00$/);
-  assert.match(crmSync, /crm\/v3\/mr_schedules\?offset=0&limit=1000&state=1&page=schedule/);
+  assert.match(crmSync, /crm\/v3\/mr_schedules\?state=1&page=schedule/);
+  assert.match(crmSync, /collectPremeetingPages/);
   assert.match(fetcher, /crm\/v3\/mr_schedules\?/);
 });
 

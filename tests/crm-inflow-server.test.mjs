@@ -6,10 +6,11 @@ import { readFileSync } from 'node:fs';
 import { webcrypto } from 'node:crypto';
 import { verifyCalendarConsistency } from '../supabase/functions/_shared/calendar-consistency.mjs';
 import { collectWebsiteInquiries, commitInquiryReport, recordInquiryFailure } from '../supabase/functions/_shared/website-inquiries.mjs';
+import { premeetingWindow, collectPremeetingPages } from '../supabase/functions/_shared/premeeting-window.mjs';
 
 const source = readFileSync(new URL('../supabase/functions/kpi-crm-sync/index.ts', import.meta.url), 'utf8');
 const js = stripTypeScriptTypes(source.replace(/^import .*\r?\n/gm, ''));
-function harness({ leads = [], meetings = [], daily = false, inquiryError = false, projectionError = false, projectionMismatch = false, calendarMismatch = false, aggregationMismatch = false, aggregationReadError = false, rpcError = false, blocked = false, completionError = false, invalid = false, rawError = false } = {}) {
+function harness({ leads = [], meetings = [], daily = false, repair = false, inquiryError = false, projectionError = false, projectionMismatch = false, calendarMismatch = false, aggregationMismatch = false, aggregationReadError = false, rpcError = false, blocked = false, completionError = false, invalid = false, rawError = false } = {}) {
   const calls = []; let handler;
   let rawRows = [];
   const client = {
@@ -23,8 +24,8 @@ function harness({ leads = [], meetings = [], daily = false, inquiryError = fals
     }; },
     async rpc(name,args) {
       if(name==='kpi_commit_inquiry_days') { assert.equal(args.p_source,'WEBSITE'); assert.equal(args.p_start,'2026-10-01'); assert.equal(args.p_end,'2026-10-07'); return {data:{verified:true,total:args.p_total,days:args.p_daily.length},error:null}; }
-      if(name==='kpi_reconcile_crm_premeetings') {
-        calls.push('companyProjection'); assert.equal(args.p_start,'2026-10-05');assert.equal(args.p_end,'2026-10-07');assert.equal(args.p_dry_run,false);
+      if(name==='kpi_reconcile_crm_premeetings_fresh') {
+        calls.push('companyProjection'); assert.equal(args.p_start,'2026-10-01');assert.equal(args.p_end,'2026-10-31');assert.equal(args.p_dry_run,false); assert.equal(args.p_sync_run_id,'synthetic-run');
         return {data:{ok:true,verified:!projectionMismatch,blocked:0,stored:meetings.length},error:projectionError ? {code:'TEST'} : null};
       }
       calls.push('promote'); assert.equal(name,'kpi_reconcile_crm_inflow');
@@ -35,14 +36,15 @@ function harness({ leads = [], meetings = [], daily = false, inquiryError = fals
   vm.runInNewContext(js, {
     TextEncoder, Response, URL, AbortSignal, crypto:webcrypto, createClient:()=>client,
     collectWebsiteInquiries, commitInquiryReport, recordInquiryFailure,
+    premeetingWindow, collectPremeetingPages,
     Date:class extends Date {constructor(...args){super(...(args.length ? args : ['2026-10-07T01:00:00Z']));}static now(){return Date.parse('2026-10-07T01:00:00Z');}},
     verifyCalendarConsistency: (raw, options) => ({...verifyCalendarConsistency(raw, options), ...(aggregationMismatch ? {verified:false} : {})}),
     Deno:{env:{get:name=>({KPI_SHADOW_HMAC_SECRET:'synthetic-hmac-only',SUPABASE_SERVICE_ROLE_KEY:'synthetic-only',CRM_BEARER_TOKEN:'synthetic-provider',KPI_ORGANIZATION_ID:'synthetic-org',SUPABASE_URL:'https://example.invalid'})[name]},serve:fn=>{handler=fn;}},
-    fetch:async url=>new Response(JSON.stringify(url.includes('income_inquiry') ? {query:[]} : url.includes('newarrivals') ? invalid ? {error:'bad'} : leads : meetings),{status:inquiryError&&url.includes('income_inquiry')?403:200}),
+    fetch:async url=>new Response(JSON.stringify(url.includes('income_inquiry') ? {query:[]} : url.includes('newarrivals') ? (invalid ? {error:'bad'} : leads) : Number(new URL(url).searchParams.get('offset'))>0 ? [] : meetings),{status:inquiryError&&url.includes('income_inquiry')?403:200}),
   });
   return {calls, invoke:async()=>{
-    const body=JSON.stringify({start:'2026-10-05',end:'2026-10-07'});
-    const headers={authorization:'Bearer synthetic-only'};
+    const body=JSON.stringify({start:'2026-10-05',end:'2026-10-07',...(repair?{premeetingRepair:true}:{})});
+    const headers=repair?{apikey:'synthetic-only'}:{authorization:'Bearer synthetic-only'};
     if(daily){
       delete headers.authorization;
       headers['x-kpi-timestamp']=String(Date.parse('2026-10-07T01:00:00Z'));
@@ -57,6 +59,13 @@ test('daily HMAC collection cannot complete before company-list projection verif
   const h=harness({daily:true});const r=await h.invoke();assert.equal(r.status,200);
   assert.deepEqual(h.calls,['calendar','aggregation','promote','companyProjection','COMPLETED']);
   assert.equal((await r.json()).calendar.companyProjection.verified,true);
+});
+test('explicit internal repair collects future schedules without website or inflow writes',async()=>{
+  const h=harness({repair:true,leads:[{client_no:9,reg_dt:'2026-10-06'}],meetings:[{ms_no:9,mr_type:1,mr_checked:0,start_dt:'2026-10-24T10:00:00+09:00'}]});
+  const r=await h.invoke(), body=await r.json();
+  assert.equal(r.status,200); assert.equal(body.meetings.length,1); assert.equal(body.leads.length,0);
+  assert.equal(body.websiteInquiries.scope,'premeeting-only'); assert.equal(body.inflow.scope,'premeeting-only');
+  assert.ok(!h.calls.includes('promote')); assert.ok(h.calls.includes('companyProjection'));
 });
 test('a website inquiry failure is reported separately and cannot return an all-source success',async()=>{
   const h=harness({inquiryError:true}); const r=await h.invoke(); const body=await r.json();

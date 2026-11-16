@@ -2,7 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { crmCalendar } from "../_shared/crm-calendar.mjs";
 import { verifyCalendarConsistency } from '../_shared/calendar-consistency.mjs';
 import { authorizeEmployee, canEmployeeAct, mutationPermission } from "../_shared/employee-access.mjs";
-import { canAccessAction, isPremeetingOnly, isPremeetingLead, premeetingDocuments, validatePremeetingMutation } from "../_shared/premeeting-access.mjs";
+import { canAccessAction, isPremeetingOnly, isPremeetingReadLead, premeetingDocuments, validatePremeetingMutation } from "../_shared/premeeting-access.mjs";
 import { RECEIVABLES_WRITE_PROFILE, RECEIVABLES_WRITE_PAGES, validateReceivablesMutation } from "../_shared/receivables-access.mjs";
 import { buildInquiryReport } from '../../../src/data/inquiryMetrics.js';
 
@@ -271,7 +271,7 @@ Deno.serve(async (req) => {
     if (isPremeetingOnly(access)) {
       const { data, error } = await readScopeLeads(supabase, organizationId);
       if (error) return reply(req, { error: 'scope_read_failed' }, 503);
-      return reply(req, { ok: true, leads: data!.map(r => r.source_payload).filter(isPremeetingLead), revision: data?.[0]?.projected_revision || '' });
+      return reply(req, { ok: true, leads: data!.map(r => r.source_payload).filter(isPremeetingReadLead), revision: data?.[0]?.projected_revision || '' });
     }
     // Never rely on PostgREST's default max_rows: new companies are beyond row1000.
     let read = await readScopeLeads(supabase, organizationId, false, true);
