@@ -36,6 +36,7 @@ import InquiryBreakdown from './components/InquiryBreakdown.jsx';
 import { contractRoasByType, contractRoasRows, dailyStageActivity, dailyComparisonWindow, relativeMetricChange, previousDatedSpend, weekdayActivity, absoluteCountChange, previousMonthCostWindow, completeDatedSpend } from "./data/performanceMetrics.js";
 import { accountFromEmployeeAccess } from "./data/employeeAccount.js";
 import { paymentRows, paymentScheduleSum, paymentTotalAmount, syncPaymentScheduleTotal, setPaymentPaidDate, setPaymentConfirmed } from "./data/paymentSchedule.js";
+import { receiptPeriodMetrics } from './data/receiptMetrics.js';
 import { buildDailyMeetingRecord, dailyMeetingContent, dailyMeetingRecords } from "./data/dailyMeetingLog.js";
 import { preparePremeetingState } from './data/premeetingState.js';
 import { syncDataAndContracts, manualSyncError } from "./data/manualSync.js";
@@ -6817,6 +6818,7 @@ function MarketingHubView() {
   const periodMeetings = (hubCalendarEntries || []).map(entry => entry.lead);
   const met = periodMeetings;
   const paid = leads.filter((l) => actualPaid(l) > 0);
+  const datedReceipts = receiptPeriodMetrics(db.leads, r);
   const spend = marketingSpendForPeriod(db, period);
   const contractPerformance = contractRoasByType(db.leads, r, spend);
   const hubChannelNames = [...new Set(['META','NAVER','GOOGLE','기타', ...db.channels.map((c) => c.name), ...db.leads.filter((l) => inR(l.createdAt, r) || (l.status === "계약 완료" && inR(l.contractAt, r))).map((l) => l.channel).filter(Boolean), ...periodMeetings.map(l => l.channel)].map(channelGroupName))];
@@ -6984,7 +6986,7 @@ function MarketingHubView() {
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
         <div><StatBig label="유입 DB" value={inquiries.total ?? '조회 미확인'} unit="건" accent="border-sky-500" sub={totalCpl == null ? "문의 원본 기준" : "CPL " + fmtK(totalCpl) + "원"} /><InquiryBreakdown value={inquiries} compact /></div>
         <button className="text-left" onClick={() => go("premeetingHub")}><StatBig label="프리미팅" value={hubCalendarEntries == null ? "조회 미확인" : periodMeetings.length} unit="건" accent="border-indigo-500" sub="CRM 일정 ID별 · 오늘까지 · 통합 성과와 동일 기준" /></button>
-        <StatBig label="결제 기업 (유입일 기준)" value={paid.length} unit="개사" accent="border-emerald-500" sub={"선택 기간 유입 기업 중 입금 확인 · 유입 대비 " + pct(paid.length, leads.length) + "%"} />
+        <div className="space-y-2"><StatBig label="입금 업체 (입금일 기준)" value={datedReceipts.companyCount} unit="개사" accent="border-emerald-500" sub={datedReceipts.contractCount + "개 계약 · " + fmtK(datedReceipts.amount) + "원 · 유입월 무관"} /><p className="text-[10px] text-slate-500">결제 기업 (유입일 기준): {paid.length}개사 · 선택 기간 유입 중 현재 입금 확인 {pct(paid.length, leads.length)}% · 실제 입금일 없는 확인은 위 입금월 집계에서 제외</p></div>
         <Card cls="border-l-4 border-rose-500 p-4">
           <p className="text-xs font-semibold text-slate-400">ROAS · 계약액 기준</p>
           <div className="mt-2 space-y-1.5">

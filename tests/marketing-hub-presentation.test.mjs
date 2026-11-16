@@ -7,6 +7,7 @@ import { transformWithOxc } from 'vite';
 import { contractRoasByType, contractRoasRows } from '../src/data/performanceMetrics.js';
 import { calendarPeriodEntries } from '../src/data/calendarActivity.js';
 import { buildInquiryReport, inquiryPeriod, inquiryReportOf } from '../src/data/inquiryMetrics.js';
+import { receiptPeriodMetrics } from '../src/data/receiptMetrics.js';
 const componentSource = readFileSync(new URL('../src/components/InquiryBreakdown.jsx', import.meta.url),'utf8').replace(/^import .*\r?\n/gm,'').replace('export default ','');
 const componentCode = (await transformWithOxc(componentSource,'InquiryBreakdown.jsx',{jsx:{runtime:'classic'}})).code;
 const RealInquiryBreakdown = new Function('React',componentCode+';return InquiryBreakdown;')(React);
@@ -18,7 +19,7 @@ const inR = (d, r) => !!d && d >= r[0] && d <= r[1];
 function render(spend = 2500000, calendar = [], today = '2026-10-07', inquiryReport = null, exported = null) {
   const db = { leads: [{ id:'synthetic-prior-inflow', createdAt:'2026-09-15', contractAt:'2026-10-02', status:'계약 완료', contractAmount:11000000, paid:11000000, channel:'기타' }], channels:[{ name:'기타' }], settings:{ kpi:{ inflow:600, conv:0.25, roasTarget:550 } }, adSpend:{} };
   const scope = {
-    inquiryPeriod, inquiryReportOf, InquiryBreakdown:RealInquiryBreakdown,
+    inquiryPeriod, inquiryReportOf, receiptPeriodMetrics, InquiryBreakdown:RealInquiryBreakdown,
     calendarPeriodEntries, window: { crmCalendarSchedules: calendar },
     React, useApp:()=>({ db, period:{ mode:'month', y:2026, m:10 }, go:()=>{}, openLead:()=>{} }), useState:()=>[null,()=>{}],
     pRange:p=>[`${p.y}-${String(p.m).padStart(2,'0')}-01`, `${p.y}-${String(p.m).padStart(2,'0')}-31`], inR,
@@ -42,9 +43,10 @@ function render(spend = 2500000, calendar = [], today = '2026-10-07', inquiryRep
 test('labels explicitly preserve inflow-based paid companies alongside contract ROAS',()=>{
   const html=render();
   assert.match(html,/결제 기업 \(유입일 기준\)/);
-  assert.match(html,/선택 기간 유입 기업 중 입금 확인/);
-  assert.match(html,/입금일 기준이 아닙니다/);
-  assert.match(html,/<h3>결제 기업 \(유입일 기준\)<\/h3><b>0<\/b>/);
+  assert.match(html,/선택 기간 유입 중 현재 입금 확인/);
+  assert.match(html,/실제 입금일 없는 확인은 위 입금월 집계에서 제외/);
+  assert.match(html,/<h3>입금 업체 \(입금일 기준\)<\/h3><b>0<\/b>/);
+  assert.match(html,/결제 기업 \(유입일 기준\): 0/);
   assert.match(html,/440%/);
   assert.match(view,/const paid = leads.filter\(\(l\) => actualPaid\(l\) > 0\)/);
 });

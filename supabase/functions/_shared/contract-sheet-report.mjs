@@ -1,4 +1,5 @@
 import { _crmParseContractSource, _crmSyncDate } from '../../../scripts/contract-sheet-sync-core.mjs';
+import { explicitReceiptDate } from './contract-receipt-date.mjs';
 
 export const CONTRACT_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1vNlj417n1JE0HTOky5FCKS0_Y5daeor7oIok3SXMbss/export?format=csv&gid=0';
 export function parseReportCsv(csv) {
@@ -21,14 +22,14 @@ export function parseReportCsv(csv) {
 export function buildSheetPaymentReport(csv, { start, end, fetchedAt, sourceHash }) {
   if (!_crmSyncDate(start) || _crmSyncDate(start) !== start || !_crmSyncDate(end) || _crmSyncDate(end) !== end || start > end) throw Error('sheet_range_invalid');
   const values = parseReportCsv(csv), headers = values[0].map(x => x.replace(/\s/g, ''));
-  // The approved A/H/O semantics are not inferred from approximate header positions.
-  if (headers[0] !== '날짜' || headers[7] !== '대금지급확인' || headers[14] !== '별도가') throw Error('sheet_headers_invalid');
+  // Exact header identity, not a stale column offset after an inserted receipt-date column.
+  if (['날짜','대금지급확인','별도가'].some(h=>headers.filter(x=>x===h).length!==1) || headers.filter(x=>x==='입금일').length>1) throw Error('sheet_headers_invalid');
   let groups;
   try { groups = _crmParseContractSource(values, () => 'report-only', start); }
   catch { throw Error('sheet_headers_invalid'); }
   const ix = Object.fromEntries(headers.map((h, i) => [h, i]));
-  if (values.slice(1).some(v => (String(v[ix['프로젝트']] || '').trim() || String(v[14] || '').trim()) &&
-      ((String(v[0] || '').trim() && !_crmSyncDate(v[0])) || (String(v[ix['업체명']] || '').trim() && !String(v[0] || '').trim())))) throw Error('sheet_row_date_invalid');
+  if (values.slice(1).some(v => (String(v[ix['프로젝트']] || '').trim() || String(v[ix['별도가']] || '').trim()) &&
+      ((String(v[ix['날짜']] || '').trim() && !_crmSyncDate(v[ix['날짜']])) || (String(v[ix['업체명']] || '').trim() && !String(v[ix['날짜']] || '').trim())))) throw Error('sheet_row_date_invalid');
   const all = groups.flatMap(g => g.rows).filter(r => r.date <= end);
   const signatures = all.map(r => JSON.stringify([r.company,r.date,r.owner,r.ctype,r.dealText,r.amount,r.paymentPercent,r.paymentAmount]));
   const counts = new Map(); signatures.forEach(k => counts.set(k, (counts.get(k) || 0) + 1));
@@ -43,7 +44,8 @@ export function buildSheetPaymentReport(csv, { start, end, fetchedAt, sourceHash
     if (amount > r.amount) { issue('sheet_payment_exceeds_contract'); continue; }
     if (amount <= 0) continue;
     rows.push({ sourceRow:r.row, date:r.date, company:r.company, owner:r.owner || '미배정', ctype:r.ctype || '미확인', program:r.dealText,
-      contractAmount:r.amount, amount, percent:r.paymentPercent, taxBasis:r.taxBasis });
+      contractAmount:r.amount, amount, percent:r.paymentPercent, taxBasis:r.taxBasis,
+      actualPaidAt:explicitReceiptDate(ix['입금일']===undefined?'':values[r.row-1][ix['입금일']],r.date) });
   }
   return { ok:true, schemaVersion:'sheet-payment-report-v1', basis:'sheet-date-current-confirmation', start,end,fetchedAt,sourceHash,
     sourceRowCount:values.length, rangeRows:all.length, confirmedRows:rows.length, total:rows.reduce((s,r)=>s+r.amount,0), rows,issues };
@@ -70,6 +72,7 @@ export function buildSheetContractReport(csv, options) {
     ctype:r.ctype, dealText:r.dealText, amount:r.amount, service:r.service, taxBasis:r.taxBasis,
     netAmount:r.netAmount, amountDisplay:r.amount !== null ? r.amountRaw : '', paymentDisplay,
     contractMethods:methodKnown ? methods : [], contractMethodStatus:!methodColumns.length ? 'unavailable' : methodKnown ? 'available' : 'unknown',
+    actualPaidAt:explicitReceiptDate(headers.includes('입금일')?values[r.row-1][headers.indexOf('입금일')]:'',r.date),
     paymentPercent:r.paymentPercent, paymentAmount:r.paymentAmount,
     paymentText:r.paymentPercent !== null ? r.paymentPercent + '%' : r.paymentAmount ? r.paymentAmount + '원' : '' };
   });

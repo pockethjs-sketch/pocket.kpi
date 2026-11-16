@@ -67,6 +67,13 @@ Deno.serve(async (req) => {
   if (!internalService && !(await verify(req, raw))) return json({ error: "unauthorized" }, 401);
   let body: any;
   try { body = JSON.parse(raw); } catch { return json({ error: "bad_json" }, 400); }
+  if (body.contractPaymentRepair === true) {
+    if (!internalService) return json({ error: 'internal_service_required' }, 403);
+    const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {auth:{persistSession:false,autoRefreshToken:false}});
+    const { handleConfirmedContractRepair } = await import('../_shared/confirmed-contract-repair.mjs');
+    const result = await handleConfirmedContractRepair(body, supabase, Deno.env.get('KPI_ORGANIZATION_ID'));
+    return json(result.body, result.status);
+  }
   const start = String(body.start || "");
   const end = String(body.end || "");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end) || start > end) {

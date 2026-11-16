@@ -56,3 +56,12 @@ test('new reader uses existing employee verifier, explicit origins, no financial
   assert.match(source,/pk_password_change/);assert.match(source,/authorizeEmployee/);
   assert.doesNotMatch(source,/\.insert\(|\.update\(|\.upsert\(|\.delete\(|console\.|access-control-allow-origin.*['"]\*/);
 });
+
+test('inserted receipt-date columns do not shift the amount, and blank dates remain unknown',()=>{
+  const order=[...headers];order.splice(8,0,'입금일');
+  const a=row('2026-10-01','가상 A','100%','100');a.splice(8,0,'10/5');
+  const b=row('2026-10-02','가상 B','50%','200');b.splice(8,0,'');
+  const raw=[order,a,b].map(r=>r.join(',')).join('\n');
+  const report=buildSheetPaymentReport(raw,options);
+  assert.equal(report.total,2200000);assert.equal(report.rows[0].actualPaidAt,'2026-10-05');assert.equal(report.rows[1].actualPaidAt,'');
+});
