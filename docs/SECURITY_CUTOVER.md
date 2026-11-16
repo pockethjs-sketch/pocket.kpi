@@ -1,6 +1,8 @@
 # Employee authentication cutover — 2026-09-18
 
-## 2026-11-16 Scoped November confirmed-payment repair (DB/backend verified; web deployment pending)
+## 2026-11-16 Scoped November confirmed-payment repair (13 DB contracts and web/backend verified; 1 held)
+
+- Web af3498ed5f90773d8b8dad8e132019d6e4ff10da / Actions43802945346 build+deployment SUCCESS04:15:48UTC. Public04:16:38UTC HTML/entry index-B9w3Hq_A.js/main-PMKb2-vO.js HTTP200; main asset-name-normalized equal to tested build, receipt-date card and retained inflow basis present, intelligence chunk byte-identical. Actual stored13-contract source-review model represented13/targets-still-pending0; ambiguous source rows219/223 remain held. Actual employee DOM remains unverified.
 
 - Explicit user authorization covers fourteen source-confirmed November contracts, not an automatic financial backfill. Thirteen unambiguous contracts committed at2026-11-16T04:01:57.146408Z: contract48,983,000 / confirmed46,700,500; eleven fully confirmed, two partially confirmed. Each has an explicit source receipt date; unknown dates are never assigned a contract/inflow/sync date.
 - New contract records6 / existing empty financial records7 updated / new deals10 / receipt rows13 / payment-plan rows15. Other-date contracts remain separate; archived deals are not revived. Existing receipts, unrelated financial rows, accounts and archived lead payloads verified unchanged in rollback rehearsal and commit. Snapshot, lead/deal/plan/receipt amounts, completion checks and actual dates independently agree for all13 at04:09:45UTC; repeated apply is duplicate/no-op.
