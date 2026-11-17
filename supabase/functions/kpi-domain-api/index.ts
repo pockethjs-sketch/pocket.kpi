@@ -5,6 +5,7 @@ import { authorizeEmployee, canEmployeeAct, mutationPermission } from "../_share
 import { canAccessAction, isPremeetingOnly, isPremeetingReadLead, premeetingDocuments, validatePremeetingMutation } from "../_shared/premeeting-access.mjs";
 import { RECEIVABLES_WRITE_PROFILE, RECEIVABLES_WRITE_PAGES, validateReceivablesMutation } from "../_shared/receivables-access.mjs";
 import { buildInquiryReport } from '../../../src/data/inquiryMetrics.js';
+import { handleSheetContractCreate } from '../_shared/sheet-contract-create.mjs';
 
 const ALLOWED_ORIGINS = new Set([
   "https://pockethjs-sketch.github.io",
@@ -169,6 +170,11 @@ Deno.serve(async (req) => {
   const scopedWrite = action === 'mutation' && permission === 'write' && writeProfile === RECEIVABLES_WRITE_PROFILE;
   if (!canEmployeeAct(access, permission) && !scopedWrite) return reply(req, { error: "permission_denied" }, 403);
   if (!canAccessAction(access, action, body)) return reply(req, { error: "page_scope_denied" }, 403);
+  if (action === 'sheet_contract_create') {
+    if (req.method !== 'POST') return reply(req,{error:'method_not_allowed'},405);
+    const result=await handleSheetContractCreate(body,supabase,organizationId,access.userId);
+    return reply(req,result.body,result.status);
+  }
   if (action === "session") return reply(req, { ok: true, userId: access.userId, organizationId, role: access.role,
     ...(isPremeetingOnly(access) ? { scope: access.scope } : {}),
     ...(writeProfile ? { writeProfile, writePages: RECEIVABLES_WRITE_PAGES, menuPages: RECEIVABLES_WRITE_PAGES } : {}) });

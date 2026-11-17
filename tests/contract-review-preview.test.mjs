@@ -4,6 +4,8 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import {contractReviewPreview} from '../src/data/contractReviewPreview.js';
 import {reviewLeadId,buildContractReviewItems} from '../src/data/contractReviewMatches.js';
+import {prepareSheetContract} from '../supabase/functions/_shared/sheet-contract-create.mjs';
+import {boundedContractOperation,contractCreateError,verifyCreatedContract} from '../src/data/contractCreate.js';
 import {operationsFile,missingOperationsSource} from './operations-file.mjs';
 const opsCode=operationsFile('Code.gs');
 const row=(extra={})=>({row:2,date:'2026-10-22',amount:5500000,dealText:'예시 개발',paymentText:'V',ctype:'기존',...extra});
@@ -29,12 +31,25 @@ test('missing-sheet button sits directly after CRM link, always opens and refres
 function harness(role='OWNER'){
  const db={leads:[],contractEvents:[],contractStatusLogs:[]},calls=[];
  const sandbox={db,contractReviewPreview,reviewLeadId,buildContractReviewItems,currentAccount:{serverRole:role},contractCompanyAliases:value=>[String(value).replace(/\s/g,'')],
- setContractApplyingId:()=>{},up:fn=>{calls.push('up');fn(db);},actualPaid:l=>(l.payments||[]).reduce((s,p)=>s+(p.paidConfirmed||p.paidAt?Number(p.amount):0),0),
+ setContractApplyingId:()=>{},setContractCreateFailure:e=>{if(e)calls.push(['createError',e]);},setContractCreatePhase:()=>{},boundedContractOperation,contractCreateError,up:fn=>{calls.push('up');fn(db);},actualPaid:l=>(l.payments||[]).reduce((s,p)=>s+(p.paidConfirmed||p.paidAt?Number(p.amount):0),0),
  syncPaid:l=>l.paid=(l.payments||[]).reduce((s,p)=>s+(p.paidConfirmed||p.paidAt?Number(p.amount):0),0),todayISO:()=> '2026-10-22',fmtWon:v=>String(v),contractReviewActor:'예시 사용자',appendContractStatusLog:(d,l)=>d.contractStatusLogs.push(l),
  window:{crmWaitForRemoteCommit:async()=>calls.push('ack'),crmReadPrimaryContractState:async()=>{calls.push('verify');return {state:db};},crmSetContractSheetChangeStatus:async()=>calls.push('queue')},removeContractReviewItem:()=>calls.push('remove'),refreshContractReview:async(...args)=>{calls.push(['review',...args]);},toast:()=>{},Date};
  const start=main.indexOf('  const applyContractReviewItem = async');const end=main.indexOf('  const ignoreContractReviewItem',start);
  vm.createContext(sandbox);vm.runInContext(main.slice(start,end)+';globalThis.apply=applyContractReviewItem;',sandbox);
- return {db,calls,apply:sandbox.apply,sandbox};
+ let activeItem;
+ sandbox.window.crmCreateScopedSheetContract=async request=>{
+   calls.push('scopedCreate');
+   const primary=await sandbox.window.crmReadPrimaryContractState();
+   const rows=activeItem.sourceRows.map(r=>({...r,company:activeItem.company}));
+   const report={ok:true,schemaVersion:'contract-review-source-v1',sourceHash:request.reportSourceHash,start:'2026-08-01',rows,rangeRows:rows.length,fetchedAt:new Date().toISOString()};
+   const prepared=await prepareSheetContract(report,primary.state,request,'synthetic-actor');
+   const saved=db.leads.find(l=>l.id===prepared.lead.id);
+   if(saved&&JSON.stringify([saved.ctype,saved.contractSheetCreationMode,saved.contractCompanyLeadId])!==JSON.stringify([prepared.lead.ctype,prepared.lead.contractSheetCreationMode,prepared.lead.contractCompanyLeadId]))throw Error('contract_already_exists');
+   if(!saved){db.leads.push(prepared.lead);db.contractEvents.push(prepared.event);db.contractStatusLogs.push(prepared.log);}
+   return {ok:true,verified:true,leadId:prepared.lead.id};
+ };
+ sandbox.window.crmAcceptScopedSheetContract=async(result,expected)=>{const primary=await sandbox.window.crmReadPrimaryContractState();verifyCreatedContract(result,primary.state,expected);return{pending:0};};
+ return {db,calls,apply:async value=>{activeItem=value;return sandbox.apply(value);},sandbox};
 }
 test('real create handler adds an existing-type customer without premeeting/inflow dates; H100 confirms once',async()=>{
  const h=harness();await h.apply(item());const lead=h.db.leads[0];
@@ -69,11 +84,12 @@ test('approved existing-company October contract creates a separate stable contr
  await h.apply(found.items[0]);assert.equal(h.db.leads.length,2);
 });
 
-test('pending save failure cannot create an existing-company contract or discard its journal',async()=>{
+test('an unrelated failed save no longer blocks independently acknowledged contract creation',async()=>{
  const h=harness();h.db.leads.push({id:'old',company:'가상 기존고객',contractAt:'2026-09-01',contractAmount:100});
  h.sandbox.window.crmWaitForRemoteCommit=async()=>{throw Error('remote_save_timeout');};
  const found=await buildContractReviewItems({ok:true,schemaVersion:'contract-review-source-v1',sourceHash:'a'.repeat(64),start:'2026-08-01',rangeRows:1,rows:[{...row(),company:'가상 기존고객',paymentPercent:100,paymentAmount:0}],fetchedAt:new Date().toISOString()},h.db);
- await h.apply(found.items[0]);assert.equal(h.db.leads.length,1);assert.ok(!h.calls.includes('up'));
+ h.sandbox.contractReview={sourceHash:'a'.repeat(64)};
+ await h.apply(found.items[0]);assert.equal(h.db.leads.length,2);assert.ok(!h.calls.includes('up'));assert.ok(h.calls.includes('scopedCreate'));
 });
 
 test('standalone creation works with three prior contracts, stores explicit new type, and preserves all old records/source',async()=>{
@@ -101,14 +117,14 @@ test('standalone mode and customer classification are independent, while financi
  const denied=harness('VIEWER');await denied.apply(target);assert.equal(denied.db.leads.length,0);
 });
 
-test('fresh server duplicate/conflict and save-ACK failures still refuse standalone creation',async()=>{
- for(const kind of ['duplicate','conflict','ack']){
+test('fresh server duplicate/conflict and scoped backend failures still refuse standalone creation',async()=>{
+ for(const kind of ['duplicate','conflict','backend']){
   const h=harness(),source={...row(),company:'가상 기존고객',paymentPercent:100,paymentAmount:0};
   h.db.leads.push({id:'old',company:'가상 기존고객',contractAt:'2026-09-01',contractAmount:100});
   const report={ok:true,schemaVersion:'contract-review-source-v1',sourceHash:'a'.repeat(64),start:'2026-08-01',rangeRows:1,rows:[source],fetchedAt:new Date().toISOString()};
   const found=await buildContractReviewItems(report,h.db),candidate={...found.items[0],creationMode:'standalone',customerTypeOverride:'신규'};
   h.sandbox.contractReview={sourceHash:report.sourceHash,sourceCutoff:report.start,checkedAt:report.fetchedAt};
-  if(kind==='ack')h.sandbox.window.crmWaitForRemoteCommit=async()=>{throw Error('remote_save_timeout');};
+  if(kind==='backend')h.sandbox.window.crmCreateScopedSheetContract=async()=>{throw Error('contract_create_busy');};
   else h.sandbox.window.crmReadPrimaryContractState=async()=>({state:{leads:[{id:'fresh',company:source.company,status:'계약 완료',contractAt:source.date,contractAmount:kind==='duplicate'?source.amount:123,paid:source.amount,contractSheetContractKey:kind==='duplicate'?candidate.contractKey:undefined}]}});
   await h.apply(candidate);assert.equal(h.db.leads.length,1);assert.ok(!h.calls.includes('up'));
  }

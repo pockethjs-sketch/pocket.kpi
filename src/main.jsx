@@ -18,6 +18,7 @@ import ContractMonthlyPerformance from "./ContractMonthlyPerformance.jsx";
 import ContractBasisView from "./ContractBasisView.jsx";
 import ContractSheetPayments from './ContractSheetPayments.jsx';
 import { contractReviewPreview } from './data/contractReviewPreview.js';
+import { boundedContractOperation, contractCreateError, verifyCreatedContract, quarantineContractJournal } from './data/contractCreate.js';
 import { buildContractReviewItems, contractReviewErrorText, reviewLeadId } from './data/contractReviewMatches.js';
 import { defaultContractReviewMonth, contractReviewMonthLabel, filterContractReviewMonth, contractReviewMonthOptions } from './data/contractReviewMonth.js';
 import { CONTRACT_REVIEW_COLUMNS, contractReviewSheetCells, contractReviewSheetOrder } from './data/contractReviewSheet.js';
@@ -99,7 +100,8 @@ const isScopedReceivablesWriter = () => window.kpiEmployeeAccess?.writeProfile =
     /* React 상태 변경 뒤 700ms 저장 디바운스가 큐에 들어올 시간을 확보합니다. */
     await crmDelay(900);
     while (Date.now() < deadline) {
-      try { await (window.crmSaveQueue || Promise.resolve()); } catch (error) {}
+      try { await boundedContractOperation(window.crmSaveQueue || Promise.resolve(), Math.max(1,deadline-Date.now()),'remote_save_timeout'); }
+      catch (error) { if (error?.message==='remote_save_timeout') throw error; }
       var dirty = false;
       try { dirty = localStorage.getItem(CRM_LOCAL_DIRTY_KEY) === '1'; } catch (error) {}
       if (!dirty && Number(window.crmPendingRemoteSaves || 0) === 0) return true;
@@ -206,6 +208,8 @@ const isScopedReceivablesWriter = () => window.kpiEmployeeAccess?.writeProfile =
   window.crmReadPrimaryRevision = async function () {
     return (await crmFetchDomainAction('meta', { timeoutMs: 15000 })).revision;
   };
+  window.crmCreateScopedSheetContract = request => boundedContractOperation(
+    crmFetchDomainAction('sheet_contract_create',{method:'POST',timeoutMs:35000,body:request}),60000);
 
   function crmApplyRemoteEnvelope(payload) {
     if (!payload || typeof payload !== 'object') return;
@@ -489,6 +493,7 @@ const isScopedReceivablesWriter = () => window.kpiEmployeeAccess?.writeProfile =
     var queue = Array.isArray(window.crmPendingDbMutations) ? window.crmPendingDbMutations.slice() : [];
     var next = crmCloneValue(baseState || {}), allowed = {}, applied = 0, ids = [];
     queue.forEach(function (entry) {
+      if (entry?.blockedByConfirmedContract) return;
       var mutation = entry && entry.mutation ? entry.mutation : entry;
       if (!mutation || !mutation.changedCount) return;
       next = crmApplyMutationLocal(next, mutation);
@@ -2374,6 +2379,32 @@ function useDB() {
       throw new Error('contract_state_revision_busy');
     };
     window.crmReloadAfterContractSync = refresh;
+    const acceptContract = async (result,expected) => {
+      const remote=await window.crmReadPrimaryContractState();
+      const saved=verifyCreatedContract(result,remote.state,expected);
+      const latest=latestDbRef.current;
+      if(!latest)throw Error('contract_created_refresh_failed');
+      // Only the acknowledged contract and its own logs enter the current UI.
+      // Other local input and every old journal entry remain preserved.
+      const merged={...latest,leads:[saved,...latest.leads.filter(l=>l.id!==saved.id)]};
+      for(const key of ['contractEvents','contractStatusLogs']){
+        const rows=(remote.state[key]||[]).filter(r=>r.leadId===saved.id);
+        const ids=new Set(rows.map(r=>r.id));
+        merged[key]=[...(latest[key]||[]).filter(r=>!ids.has(r.id)),...rows];
+      }
+      window.crmPendingDbMutations=quarantineContractJournal(window.crmPendingDbMutations,saved.id);
+      crmPersistPendingMutations();
+      window.crmLastRemoteValue=JSON.stringify(remote.state);
+      window.crmOptimisticRemoteValue=JSON.stringify(merged);
+      window.crmRemoteRevision=remote.revision;
+      localStorage.setItem(CRM_REMOTE_REVISION_KEY,remote.revision);
+      clearTimeout(timer.current);skip.current=true;latestDbRef.current=merged;
+      localStorage.setItem(KEY3,JSON.stringify(merged));setDb({...merged});
+      const pending=(window.crmPendingDbMutations||[]).length;
+      setSaveState(pending?'계약 저장 확인 · 기존 미저장 입력 '+pending+'건 보존':'계약 저장 확인');
+      return {pending};
+    };
+    window.crmAcceptScopedSheetContract=acceptContract;
     // Read-only freshness checks: no CRM collection, Sheets sync, or journal clearing.
     let stopped = false, polling = false, lastPollAt = 0;
     const poll = async () => {
@@ -2397,6 +2428,7 @@ function useDB() {
       stopped = true; clearInterval(interval);
       document.removeEventListener('visibilitychange', poll); window.removeEventListener('focus', poll);
       if (window.crmReloadAfterContractSync === refresh) delete window.crmReloadAfterContractSync;
+      if(window.crmAcceptScopedSheetContract===acceptContract)delete window.crmAcceptScopedSheetContract;
     };
   }, []);
   useEffect(() => { (async () => {
@@ -3845,6 +3877,8 @@ function DealsView() {
   const [contractReviewOpen, setContractReviewOpen] = useState(false);
   const [contractReviewMonth, setContractReviewMonth] = useState(() => defaultContractReviewMonth(period, todayISO()));
   const [contractReviewBusy, setContractReviewBusy] = useState(false);
+  const [contractCreateFailure,setContractCreateFailure]=useState(null);
+  const [contractCreatePhase,setContractCreatePhase]=useState('');
   const [contractReviewError, setContractReviewError] = useState("");
   const [contractReviewTargets, setContractReviewTargets] = useState({});
   const [contractReviewChoices, setContractReviewChoices] = useState({});
@@ -4222,7 +4256,29 @@ function DealsView() {
       return;
     }
     setContractApplyingId(item.id);
+    setContractCreateFailure(null);
     try {
+      if(item.contractKey){
+        let stored=false;
+        try{
+          if(!window.crmCreateScopedSheetContract||!window.crmAcceptScopedSheetContract)throw Error('contract_create_not_deployed');
+          setContractCreatePhase('원본 재대조·서버 저장 확인 중…');
+          const expected={...preview,contractKey:item.contractKey,sourceCustomerType:item.ctype||'',actualPaidAt:item.sourceRows?.[0]?.actualPaidAt||''};
+          const result=await window.crmCreateScopedSheetContract({contractKey:item.contractKey,sourceHash:item.sourceHash,
+            reportSourceHash:contractReview.sourceHash,creationMode:preview.creationMode,customerType:preview.customerType,parentId:preview.parentId});
+          stored=!!result?.ok;
+          setContractCreatePhase('저장된 계약·입금·체크 재조회 중…');
+          const accepted=await boundedContractOperation(window.crmAcceptScopedSheetContract(result,expected),45000,'contract_created_refresh_failed');
+          removeContractReviewItem(item.id);
+          toast('계약 생성 저장 확인'+(accepted?.pending?' · 기존 미저장 입력은 보존했습니다':''));
+          void refreshContractReview(false);
+        }catch(error){
+          const code=String(error?.message||'contract_create_failed');
+          const shown=stored&&!['contract_created_verification_failed','contract_created_refresh_failed'].includes(code)?'contract_created_refresh_failed':code;
+          setContractCreateFailure({id:item.id,message:contractCreateError(shown),stored});
+        }
+        return;
+      }
       if (item.contractKey) {
         // Creation still requires an acknowledged latest server state; lookup does not.
         await window.crmWaitForRemoteCommit(45000);
@@ -4358,6 +4414,7 @@ function DealsView() {
       const reason = String(error && error.message || error || "contract_apply_failed");
       toast(reason === "remote_save_timeout" ? "업체 저장 확인이 지연되고 있습니다 · 잠시 후 다시 확인하세요" : reason === 'contract_created_verification_failed' ? '저장 후 금액 대조가 일치하지 않습니다 · 재생성하지 말고 시트를 다시 대조해주세요' : "신규 업체 저장 실패 · " + reason);
     } finally {
+      setContractCreatePhase('');
       setContractApplyingId("");
     }
   };
@@ -4732,6 +4789,8 @@ function DealsView() {
           {contractReview.databaseRevision && <p className="text-xs text-slate-500">서버 확정본 대조 · 원본 {contractReview.comparedRows}행 · 기존 계약 일치 {contractReview.represented}건 · 계약별 제외 {contractReview.excluded}건</p>}
           {contractReviewBusy && <p role="status" className="text-sm text-slate-600">계약 시트와 현재 DB를 대조하고 있습니다.</p>}
           {contractReviewError && <p role="alert" className="text-sm text-red-700">{contractReviewErrorText(contractReviewError)} · 미등록 0건으로 판정하지 않습니다.</p>}
+          {contractCreatePhase && <p role="status" aria-live="polite" className="text-sm font-bold text-indigo-700">{contractCreatePhase}</p>}
+          {contractCreateFailure && <p role="alert" className="border border-red-300 bg-red-50 p-3 text-sm font-bold text-red-800">{contractCreateFailure.message}</p>}
           {!contractReviewBusy && !contractReviewError && contractReviewVisible.length > 0 && <div className="contract-review-scroll" role="region" aria-label="시트 미등록 계약 표 · 가로 스크롤" tabIndex={0}>
             <table className="contract-review-sheet" aria-label="시트 원본 열 기준 미등록 계약">
               <colgroup>{CONTRACT_REVIEW_COLUMNS.map(([key,,width]) => <col key={key} style={{width}} />)}</colgroup>
