@@ -1,6 +1,9 @@
 # Employee authentication cutover — 2026-09-18
 
-## 2026-11-17 Scoped sheet-contract creation fix (backend verified; web release pending)
+## 2026-11-17 Scoped sheet-contract creation fix (backend and public web verified)
+
+- Release verification2026-11-17T01:11:40.703Z: web405df0ec69f7a316881b4d9e563770079c0812ea / Actions43993508592 SUCCESS01:11:19UTC. Public HTML/entry index-6Z6YxA4r.js/main-DUoRFTfY.js HTTP200; main asset-name-normalized equal tested build, scoped action/persistent error present, intelligence byte-identical. Actual employee DOM/positive business creation unverified; no real contract created.
+- Final service-role rehearsal found42501 private-schema USAGE absent. Corrected in separate scoped_sheet_contract_invoker_dates migration using built-in casts on canonical source dates, not grants or SECURITY DEFINER. Repeated entire synthetic transaction under SET LOCAL ROLE service_role:3 creates/3 idempotent retries/3 changed-request blocks/3 revision blocks/3 stale-journal blocks; financial/date/archive/unrelated-doc preservation true,110.409ms. This supersedes the earlier postgres-role-only rehearsal; no private-schema privilege change. Final function and public release evidence recorded below.
 
 - Explicit user request repairs the spinning sheet-unregistered-contract Create action. Actual domain errors at00:23:19UTC/00:23:33UTC were21000 projector fan-out and57014 full-mutation timeout. Twenty-three active source-classification mismatches are not twenty-three duplicate contracts; they are not rewritten by this release.
 - Employee-authorized sheet_contract_create rereads the fixed source CSV and current state, checks whole-source and candidate hashes, source duplicate/amount/date/archived/parent holds, then commits only the approved new contract through invoker/service-only kpi_create_sheet_contract. Contract/deal/plans/receipts/snapshot/docs/audit are one transaction; explicit receipt dates only. Current employee membership, VIEWER/premeeting scope restrictions, platform JWT and CORS unchanged. No existing financial repair, archive revival, collection execution, permission widening or cadence change.

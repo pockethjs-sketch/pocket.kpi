@@ -66,4 +66,8 @@ test('scoped creation keeps the existing employee write and page-scope gates',as
  const source=readFileSync(new URL('../supabase/functions/kpi-domain-api/index.ts',import.meta.url),'utf8');
  assert.ok(source.indexOf('if (!canEmployeeAct(access, permission)')<source.indexOf("if (action === 'sheet_contract_create')"));
  assert.ok(source.indexOf('if (!canAccessAction(access, action, body))')<source.indexOf("if (action === 'sheet_contract_create')"));
+ const migration=readFileSync(new URL('../supabase/migrations/20261117011321_scoped_sheet_contract_invoker_dates.sql',import.meta.url),'utf8');
+ assert.doesNotMatch(migration,/private\.kpi_try_date/);
+ assert.match(migration,/security invoker/i);
+ assert.doesNotMatch(migration,/grant usage|security definer/i);
 });
